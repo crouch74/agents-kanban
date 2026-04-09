@@ -1,4 +1,4 @@
-import type { BoardView, ProjectSummary, TaskSummary } from "@acp/sdk";
+import type { BoardView, ProjectSummary, RepositorySummary, TaskSummary, WorktreeSummary } from "@acp/sdk";
 
 const API_BASE = "http://127.0.0.1:8000/api/v1";
 
@@ -35,6 +35,8 @@ export type Dashboard = {
 type ProjectOverview = {
   project: ProjectSummary;
   board: BoardView;
+  repositories: RepositorySummary[];
+  worktrees: WorktreeSummary[];
 };
 
 export async function fetchJson<T>(path: string): Promise<T> {
@@ -108,3 +110,14 @@ export function createTask(payload: {
   return postJson<TaskSummary>("/tasks", payload);
 }
 
+export function createRepository(payload: { project_id: string; local_path: string; name?: string }) {
+  return postJson<RepositorySummary>("/repositories", payload);
+}
+
+export function createWorktree(payload: { repository_id: string; task_id?: string; label?: string }) {
+  return postJson<WorktreeSummary>("/worktrees", payload);
+}
+
+export function patchWorktree(worktreeId: string, payload: { status: string; lock_reason?: string }) {
+  return patchJson<WorktreeSummary>(`/worktrees/${worktreeId}`, payload);
+}
