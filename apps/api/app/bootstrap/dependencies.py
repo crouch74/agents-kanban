@@ -4,7 +4,15 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from acp_core.db import get_db
-from acp_core.services import DashboardService, DiagnosticsService, ProjectService, ServiceContext, TaskService
+from acp_core.services import (
+    DashboardService,
+    DiagnosticsService,
+    ProjectService,
+    RepositoryService,
+    ServiceContext,
+    TaskService,
+    WorktreeService,
+)
 
 
 def get_service_context(db: Session = Depends(get_db)) -> ServiceContext:
@@ -26,3 +34,10 @@ def get_diagnostics_service(context: ServiceContext = Depends(get_service_contex
 def get_dashboard_service(context: ServiceContext = Depends(get_service_context)) -> DashboardService:
     return DashboardService(context)
 
+
+def get_repository_service(context: ServiceContext = Depends(get_service_context)) -> RepositoryService:
+    return RepositoryService(context)
+
+
+def get_worktree_service(context: ServiceContext = Depends(get_service_context)) -> WorktreeService:
+    return WorktreeService(context)

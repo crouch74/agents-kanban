@@ -40,3 +40,23 @@ export interface ProjectSummary {
   slug: string;
   description?: string | null;
 }
+
+export interface RepositorySummary {
+  id: string;
+  project_id: string;
+  name: string;
+  local_path: string;
+  default_branch?: string | null;
+  metadata_json: Record<string, unknown>;
+}
+
+export interface WorktreeSummary {
+  id: string;
+  repository_id: string;
+  task_id?: string | null;
+  branch_name: string;
+  path: string;
+  status: string;
+  lock_reason?: string | null;
+  metadata_json: Record<string, unknown>;
+}

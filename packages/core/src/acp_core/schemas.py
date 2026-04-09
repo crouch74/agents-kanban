@@ -22,6 +22,24 @@ class ProjectSummary(BaseModel):
     created_at: datetime
 
 
+class RepositoryCreate(BaseModel):
+    project_id: str
+    local_path: str
+    name: str | None = Field(default=None, max_length=255)
+
+
+class RepositoryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    name: str
+    local_path: str
+    default_branch: str | None
+    metadata_json: dict[str, Any]
+    created_at: datetime
+
+
 class BoardColumnRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -72,6 +90,33 @@ class TaskRead(BaseModel):
     updated_at: datetime
 
 
+class WorktreeCreate(BaseModel):
+    repository_id: str
+    task_id: str | None = None
+    label: str | None = Field(default=None, max_length=255)
+
+
+class WorktreePatch(BaseModel):
+    status: Literal["locked", "archived", "pruned"] | None = None
+    lock_reason: str | None = None
+
+
+class WorktreeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    repository_id: str
+    task_id: str | None
+    session_id: str | None
+    branch_name: str
+    path: str
+    status: str
+    lock_reason: str | None
+    metadata_json: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+
 class BoardView(BaseModel):
     id: str
     project_id: str
@@ -83,6 +128,8 @@ class BoardView(BaseModel):
 class ProjectOverview(BaseModel):
     project: ProjectSummary
     board: BoardView
+    repositories: list[RepositoryRead]
+    worktrees: list[WorktreeRead]
 
 
 class EventRecord(BaseModel):
@@ -115,4 +162,3 @@ class DashboardRead(BaseModel):
     waiting_count: int
     blocked_count: int
     running_sessions: int
-

@@ -55,6 +55,7 @@ class Repository(TimestampMixin, Base):
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
     project: Mapped[Project] = relationship(back_populates="repositories")
+    worktrees: Mapped[list["Worktree"]] = relationship(back_populates="repository")
 
 
 class Board(TimestampMixin, Base):
@@ -108,6 +109,7 @@ class Task(TimestampMixin, Base):
     project: Mapped[Project] = relationship(back_populates="tasks")
     board_column: Mapped[BoardColumn] = relationship(back_populates="tasks")
     parent_task: Mapped["Task | None"] = relationship(remote_side="Task.id")
+    worktrees: Mapped[list["Worktree"]] = relationship(back_populates="task")
 
 
 class TaskDependency(TimestampMixin, Base):
@@ -213,6 +215,9 @@ class Worktree(TimestampMixin, Base):
     lock_reason: Mapped[str | None] = mapped_column(Text)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
+    repository: Mapped[Repository] = relationship(back_populates="worktrees")
+    task: Mapped[Task | None] = relationship(back_populates="worktrees")
+
 
 class Event(TimestampMixin, Base):
     __tablename__ = "events"
@@ -224,4 +229,3 @@ class Event(TimestampMixin, Base):
     event_type: Mapped[str] = mapped_column(String(128), nullable=False)
     correlation_id: Mapped[str | None] = mapped_column(String(255))
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
-

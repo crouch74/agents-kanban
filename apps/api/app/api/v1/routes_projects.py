@@ -22,10 +22,6 @@ def create_project(payload: ProjectCreate, service=Depends(get_project_service))
 @router.get("/{project_id}", response_model=ProjectOverview)
 def get_project(project_id: str, service=Depends(get_project_service)) -> ProjectOverview:
     try:
-        project = service.get_project(project_id)
-        board = service.get_board_view(project_id)
+        return service.get_project_overview(project_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-    return ProjectOverview(project=ProjectSummary.model_validate(project), board=board)
-

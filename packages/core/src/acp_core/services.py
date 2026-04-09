@@ -1,23 +1,41 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from re import sub
 from shutil import which
 from typing import Any
 
+from git import InvalidGitRepositoryError, NoSuchPathError, Repo
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from acp_core.constants import DEFAULT_BOARD_COLUMNS, TASK_TRANSITIONS, WORKFLOW_BY_COLUMN_KEY
 from acp_core.logging import logger
-from acp_core.models import Board, BoardColumn, Event, Project, Task
-from acp_core.schemas import BoardView, DashboardRead, DiagnosticsRead, ProjectCreate, TaskCreate, TaskPatch
+from acp_core.models import Board, BoardColumn, Event, Project, Repository, Task, Worktree
+from acp_core.schemas import (
+    BoardView,
+    DashboardRead,
+    DiagnosticsRead,
+    ProjectCreate,
+    RepositoryCreate,
+    RepositoryRead,
+    TaskCreate,
+    TaskPatch,
+    WorktreeCreate,
+    WorktreePatch,
+    WorktreeRead,
+)
 from acp_core.settings import settings
 
 
 def slugify(value: str) -> str:
     normalized = sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
     return normalized or "project"
+
+
+def task_slug(value: str) -> str:
+    return slugify(value)[:32]
 
 
 @dataclass
@@ -106,6 +124,29 @@ class ProjectService:
             name=project.board.name,
             columns=[BoardColumnRead.model_validate(column) for column in project.board.columns],
             tasks=[TaskRead.model_validate(task) for task in tasks],
+        )
+
+    def get_project_overview(self, project_id: str) -> ProjectOverview:
+        project = self.get_project(project_id)
+        board = self.get_board_view(project_id)
+        repositories = list(
+            self.context.db.scalars(
+                select(Repository).where(Repository.project_id == project_id).order_by(Repository.created_at.asc())
+            )
+        )
+        worktrees = list(
+            self.context.db.scalars(
+                select(Worktree)
+                .join(Repository, Repository.id == Worktree.repository_id)
+                .where(Repository.project_id == project_id)
+                .order_by(Worktree.created_at.desc())
+            )
+        )
+        return ProjectOverview(
+            project=ProjectSummary.model_validate(project),
+            board=board,
+            repositories=[RepositoryRead.model_validate(item) for item in repositories],
+            worktrees=[WorktreeRead.model_validate(item) for item in worktrees],
         )
 
 
@@ -222,6 +263,204 @@ class TaskService:
         return task
 
 
+class RepositoryService:
+    def __init__(self, context: ServiceContext) -> None:
+        self.context = context
+
+    def list_repositories(self, project_id: str | None = None) -> list[Repository]:
+        stmt = select(Repository).order_by(Repository.created_at.asc())
+        if project_id is not None:
+            stmt = stmt.where(Repository.project_id == project_id)
+        return list(self.context.db.scalars(stmt))
+
+    def get_repository(self, repository_id: str) -> Repository:
+        repository = self.context.db.get(Repository, repository_id)
+        if repository is None:
+            raise ValueError("Repository not found")
+        return repository
+
+    def create_repository(self, payload: RepositoryCreate) -> Repository:
+        project = self.context.db.get(Project, payload.project_id)
+        if project is None:
+            raise ValueError("Project not found")
+
+        repo_path = Path(payload.local_path).expanduser().resolve()
+        try:
+            git_repo = Repo(repo_path)
+        except (InvalidGitRepositoryError, NoSuchPathError) as exc:
+            raise ValueError("Local path must point to a git repository") from exc
+
+        default_branch = None
+        if git_repo.head.is_valid():
+            try:
+                default_branch = git_repo.active_branch.name
+            except TypeError:
+                default_branch = git_repo.head.reference.name
+
+        remotes = [remote.name for remote in git_repo.remotes]
+        metadata_json = {
+            "is_dirty": git_repo.is_dirty(untracked_files=True),
+            "head_commit": git_repo.head.commit.hexsha if git_repo.head.is_valid() else None,
+            "remotes": remotes,
+            "working_dir": str(git_repo.working_tree_dir or repo_path),
+        }
+
+        repository = Repository(
+            project_id=payload.project_id,
+            name=payload.name or repo_path.name,
+            local_path=str(repo_path),
+            default_branch=default_branch,
+            metadata_json=metadata_json,
+        )
+        self.context.db.add(repository)
+        self.context.db.flush()
+        self.context.record_event(
+            entity_type="repository",
+            entity_id=repository.id,
+            event_type="repository.created",
+            payload_json={"project_id": project.id, "local_path": repository.local_path},
+        )
+        self.context.db.commit()
+        self.context.db.refresh(repository)
+
+        logger.info("🌿 repository registered", repository_id=repository.id, path=repository.local_path)
+        return repository
+
+
+class WorktreeService:
+    def __init__(self, context: ServiceContext) -> None:
+        self.context = context
+
+    def list_worktrees(self, project_id: str | None = None) -> list[Worktree]:
+        stmt = select(Worktree).order_by(Worktree.created_at.desc())
+        if project_id is not None:
+            stmt = stmt.join(Repository, Repository.id == Worktree.repository_id).where(Repository.project_id == project_id)
+        return list(self.context.db.scalars(stmt))
+
+    def get_worktree(self, worktree_id: str) -> Worktree:
+        worktree = self.context.db.get(Worktree, worktree_id)
+        if worktree is None:
+            raise ValueError("Worktree not found")
+        return worktree
+
+    def create_worktree(self, payload: WorktreeCreate) -> Worktree:
+        repository = self.context.db.get(Repository, payload.repository_id)
+        if repository is None:
+            raise ValueError("Repository not found")
+
+        task = None
+        branch_suffix = "workspace"
+        if payload.task_id is not None:
+            task = self.context.db.get(Task, payload.task_id)
+            if task is None:
+                raise ValueError("Task not found")
+            branch_suffix = f"{task_slug(task.title)}-{task.id[:8]}"
+        elif payload.label:
+            branch_suffix = task_slug(payload.label)
+
+        repo_path = Path(repository.local_path)
+        git_repo = Repo(repo_path)
+        project = self.context.db.get(Project, repository.project_id)
+        if project is None:
+            raise ValueError("Project not found")
+
+        branch_name = f"acp/{project.slug}/{branch_suffix}"
+        root_path = settings.runtime_home / "worktrees" / project.slug
+        root_path.mkdir(parents=True, exist_ok=True)
+        worktree_path = root_path / branch_suffix
+
+        if self.context.db.scalar(select(Worktree.id).where(Worktree.path == str(worktree_path))) is not None:
+            raise ValueError("Worktree path already allocated")
+
+        if worktree_path.exists():
+            raise ValueError("Worktree directory already exists on disk")
+
+        branch_exists = branch_name in [head.name for head in git_repo.heads]
+        if branch_exists:
+            source_ref = branch_name
+            git_repo.git.worktree("add", str(worktree_path), source_ref)
+        else:
+            try:
+                active_branch = git_repo.active_branch.name if git_repo.head.is_valid() else "HEAD"
+            except TypeError:
+                active_branch = git_repo.head.reference.name if git_repo.head.is_valid() else "HEAD"
+            source_ref = repository.default_branch or active_branch
+            git_repo.git.worktree("add", "-b", branch_name, str(worktree_path), source_ref)
+
+        worktree = Worktree(
+            repository_id=repository.id,
+            task_id=task.id if task else None,
+            branch_name=branch_name,
+            path=str(worktree_path),
+            status="active",
+            metadata_json={
+                "project_slug": project.slug,
+                "source_ref": source_ref,
+                "label": payload.label,
+            },
+        )
+        self.context.db.add(worktree)
+        self.context.db.flush()
+        self.context.record_event(
+            entity_type="worktree",
+            entity_id=worktree.id,
+            event_type="worktree.created",
+            payload_json={
+                "repository_id": repository.id,
+                "task_id": task.id if task else None,
+                "branch_name": branch_name,
+                "path": worktree.path,
+            },
+        )
+        self.context.db.commit()
+        self.context.db.refresh(worktree)
+
+        logger.info("🌿 worktree allocated", worktree_id=worktree.id, branch=worktree.branch_name, path=worktree.path)
+        return worktree
+
+    def patch_worktree(self, worktree_id: str, payload: WorktreePatch) -> Worktree:
+        worktree = self.get_worktree(worktree_id)
+        repository = self.context.db.get(Repository, worktree.repository_id)
+        if repository is None:
+            raise ValueError("Repository not found")
+
+        next_status = payload.status
+        if next_status is None:
+            raise ValueError("No worktree change requested")
+
+        allowed = {
+            "active": {"locked", "archived"},
+            "locked": {"archived"},
+            "archived": {"pruned"},
+        }
+        if next_status not in allowed.get(worktree.status, set()):
+            raise ValueError(f"Invalid worktree transition from {worktree.status} to {next_status}")
+
+        git_repo = Repo(Path(repository.local_path))
+        worktree_path = Path(worktree.path)
+
+        if next_status == "locked":
+            worktree.status = "locked"
+            worktree.lock_reason = payload.lock_reason or "Locked by operator"
+        elif next_status == "archived":
+            worktree.status = "archived"
+        elif next_status == "pruned":
+            git_repo.git.worktree("remove", "--force", str(worktree_path))
+            worktree.status = "pruned"
+
+        self.context.record_event(
+            entity_type="worktree",
+            entity_id=worktree.id,
+            event_type="worktree.updated",
+            payload_json={"status": worktree.status, "lock_reason": worktree.lock_reason},
+        )
+        self.context.db.commit()
+        self.context.db.refresh(worktree)
+
+        logger.info("🌿 worktree updated", worktree_id=worktree.id, status=worktree.status)
+        return worktree
+
+
 class DiagnosticsService:
     def __init__(self, context: ServiceContext) -> None:
         self.context = context
@@ -260,4 +499,4 @@ class DashboardService:
 
 
 # Deferred imports to keep the module order straightforward.
-from acp_core.schemas import BoardColumnRead, EventRecord, ProjectSummary, TaskRead  # noqa: E402
+from acp_core.schemas import BoardColumnRead, EventRecord, ProjectOverview, ProjectSummary, TaskRead  # noqa: E402
