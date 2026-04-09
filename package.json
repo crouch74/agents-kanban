@@ -1,0 +1,21 @@
+{
+  "name": "agent-control-plane",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/web",
+    "packages/sdk"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace @acp/web run dev",
+    "build:web": "npm --workspace @acp/web run build",
+    "test:web": "npm --workspace @acp/web run test",
+    "test:e2e": "playwright test",
+    "codegen:sdk": "openapi-typescript http://127.0.0.1:8000/openapi.json -o packages/sdk/src/generated.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.2",
+    "openapi-typescript": "^7.9.1"
+  }
+}
+

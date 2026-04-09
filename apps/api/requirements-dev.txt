@@ -1,0 +1,15 @@
+-e ./packages/core
+fastapi>=0.116,<0.117
+uvicorn[standard]>=0.35,<0.36
+pydantic>=2.11,<3
+pydantic-settings>=2.10,<3
+sqlalchemy>=2.0.41,<2.1
+alembic>=1.16,<1.17
+structlog>=25.4,<26
+watchfiles>=1.1,<1.2
+gitpython>=3.1.45,<4
+libtmux>=0.46,<0.47
+ptyprocess>=0.7,<0.8
+pytest>=8.4,<9
+pytest-asyncio>=1.1,<2
+httpx>=0.28,<0.29

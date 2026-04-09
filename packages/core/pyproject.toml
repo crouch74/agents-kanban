@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "acp-core"
+version = "0.1.0"
+description = "Shared domain and services for Agent Control Plane."
+requires-python = ">=3.12"
+dependencies = [
+  "pydantic>=2.11,<3",
+  "pydantic-settings>=2.10,<3",
+  "sqlalchemy>=2.0.41,<2.1",
+  "structlog>=25.4,<26"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
