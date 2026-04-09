@@ -1,9 +1,0 @@
-Metadata-Version: 2.4
-Name: acp-core
-Version: 0.1.0
-Summary: Shared domain and services for Agent Control Plane.
-Requires-Python: >=3.12
-Requires-Dist: pydantic<3,>=2.11
-Requires-Dist: pydantic-settings<3,>=2.10
-Requires-Dist: sqlalchemy<2.1,>=2.0.41
-Requires-Dist: structlog<26,>=25.4
