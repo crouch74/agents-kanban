@@ -252,6 +252,16 @@ class TaskDependencyRead(BaseModel):
     created_at: datetime
 
 
+class TaskCompletionReadinessRead(BaseModel):
+    task_id: str
+    can_mark_done: bool
+    passing_check_count: int
+    artifact_count: int
+    blocking_dependency_count: int
+    open_waiting_question_count: int
+    missing_requirements: list[str]
+
+
 class TaskRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

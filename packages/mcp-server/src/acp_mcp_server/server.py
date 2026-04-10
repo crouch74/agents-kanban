@@ -119,6 +119,18 @@ def task_check_add(
 
 
 @mcp.tool()
+def task_artifact_add(
+    task_id: str,
+    artifact_type: str,
+    name: str,
+    uri: str,
+    client_request_id: str | None = None,
+) -> dict:
+    """Attach an artifact to a task."""
+    return handlers.task_artifact_add(task_id, artifact_type, name, uri, client_request_id)
+
+
+@mcp.tool()
 def task_next(project_id: str | None = None) -> dict | None:
     """Find the next suitable task."""
     return handlers.task_next(project_id)
@@ -128,6 +140,23 @@ def task_next(project_id: str | None = None) -> dict | None:
 def task_dependencies_get(task_id: str) -> list[dict]:
     """List dependency edges for a task."""
     return handlers.task_dependencies_get(task_id)
+
+
+@mcp.tool()
+def task_dependency_add(
+    task_id: str,
+    depends_on_task_id: str,
+    relationship_type: str = "blocks",
+    client_request_id: str | None = None,
+) -> dict:
+    """Attach a dependency edge to a task."""
+    return handlers.task_dependency_add(task_id, depends_on_task_id, relationship_type, client_request_id)
+
+
+@mcp.tool()
+def task_completion_readiness(task_id: str) -> dict:
+    """Check whether a task is ready to move to done."""
+    return handlers.task_completion_readiness(task_id)
 
 
 @mcp.tool()
@@ -218,6 +247,18 @@ def context_search(query: str, project_id: str | None = None, limit: int = 20) -
     return handlers.context_search(query, project_id, limit)
 
 
+@mcp.tool()
+def diagnostics_get() -> dict:
+    """Read local diagnostics and recovery state."""
+    return handlers.diagnostics_get()
+
+
+@mcp.tool()
+def worktree_hygiene_list(project_id: str | None = None, task_id: str | None = None) -> list[dict]:
+    """List stale or recommended worktree cleanup items."""
+    return handlers.worktree_hygiene_list(project_id, task_id)
+
+
 @mcp.resource("control-plane://projects/{project_id}/board")
 def project_board_state(project_id: str) -> dict:
     """Project board state."""
@@ -228,6 +269,12 @@ def project_board_state(project_id: str) -> dict:
 def task_detail_state(task_id: str) -> dict:
     """Task detail state."""
     return handlers.task_detail_resource(task_id)
+
+
+@mcp.resource("control-plane://tasks/{task_id}/completion")
+def task_completion_state(task_id: str) -> dict:
+    """Task completion readiness state."""
+    return handlers.task_completion_resource(task_id)
 
 
 @mcp.resource("control-plane://sessions/{session_id}/timeline")
@@ -246,6 +293,12 @@ def waiting_question_state(question_id: str) -> dict:
 def repo_inventory_state(project_id: str) -> dict:
     """Repo and worktree inventory."""
     return handlers.repo_inventory_resource(project_id)
+
+
+@mcp.resource("control-plane://diagnostics/local")
+def local_diagnostics_state() -> dict:
+    """Local diagnostics and runtime hygiene state."""
+    return handlers.diagnostics_resource()
 
 
 @mcp.resource("control-plane://events/project/{project_id}")

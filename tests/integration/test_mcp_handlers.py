@@ -50,6 +50,37 @@ def test_mcp_handlers_expose_core_control_plane_workflows() -> None:
     )
     assert check_replayed["id"] == check["id"]
 
+    artifact = handlers.task_artifact_add(
+        task_id=task_id,
+        artifact_type="diff",
+        name="Patch diff",
+        uri="git:diff:HEAD~1..HEAD",
+        client_request_id="artifact-1",
+    )
+    assert artifact["task_id"] == task_id
+    artifact_replayed = handlers.task_artifact_add(
+        task_id=task_id,
+        artifact_type="diff",
+        name="Patch diff",
+        uri="git:diff:HEAD~1..HEAD",
+        client_request_id="artifact-1",
+    )
+    assert artifact_replayed["id"] == artifact["id"]
+
+    blocker = handlers.task_create(project_id=project_id, title="Unblock dependency", client_request_id="task-2")
+    dependency = handlers.task_dependency_add(
+        task_id=task_id,
+        depends_on_task_id=blocker["id"],
+        client_request_id="dependency-1",
+    )
+    assert dependency["task_id"] == task_id
+    dependency_replayed = handlers.task_dependency_add(
+        task_id=task_id,
+        depends_on_task_id=blocker["id"],
+        client_request_id="dependency-1",
+    )
+    assert dependency_replayed["id"] == dependency["id"]
+
     question = handlers.question_open(
         task_id=task_id,
         prompt="Need a final confirmation?",
@@ -71,6 +102,16 @@ def test_mcp_handlers_expose_core_control_plane_workflows() -> None:
     search = handlers.context_search("confirmation", project_id=project_id)
     assert search["hits"]
     assert any(hit["entity_type"] == "waiting_question" for hit in search["hits"])
+
+    completion = handlers.task_completion_readiness(task_id)
+    assert completion["can_mark_done"] is False
+    assert completion["blocking_dependency_count"] == 1
+    assert completion["artifact_count"] >= 1
+    assert completion["open_waiting_question_count"] == 1
+
+    diagnostics = handlers.diagnostics_get()
+    assert "stale_worktree_count" in diagnostics
+    assert "orphan_runtime_session_count" in diagnostics
 
     events = handlers.recent_events_resource(task_id=task_id)
     assert events

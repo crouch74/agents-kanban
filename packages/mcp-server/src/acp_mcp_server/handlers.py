@@ -7,16 +7,19 @@ from typing import Any
 from sqlalchemy import select
 
 from acp_core.db import SessionLocal, init_db
-from acp_core.models import AgentSession, Event, TaskCheck, TaskComment, Worktree
+from acp_core.models import AgentSession, Event, TaskArtifact, TaskCheck, TaskComment, TaskDependency, Worktree
 from acp_core.schemas import (
     AgentSessionCreate,
     AgentSessionRead,
+    DiagnosticsRead,
     EventRecord,
     ProjectCreate,
     ProjectSummary,
     RepositoryRead,
+    TaskArtifactCreate,
     TaskCheckCreate,
     TaskCommentCreate,
+    TaskDependencyCreate,
     TaskCreate,
     TaskPatch,
     TaskRead,
@@ -27,6 +30,7 @@ from acp_core.schemas import (
     WorktreeRead,
 )
 from acp_core.services import (
+    DiagnosticsService,
     ProjectService,
     RepositoryService,
     SearchService,
@@ -34,6 +38,7 @@ from acp_core.services import (
     SessionService,
     TaskService,
     WaitingService,
+    WorktreeHygieneService,
     WorktreeService,
 )
 
@@ -96,6 +101,28 @@ def _serialize_task_check(check: TaskCheck) -> dict[str, Any]:
     }
 
 
+def _serialize_task_artifact(artifact: TaskArtifact) -> dict[str, Any]:
+    return {
+        "id": artifact.id,
+        "task_id": artifact.task_id,
+        "artifact_type": artifact.artifact_type,
+        "name": artifact.name,
+        "uri": artifact.uri,
+        "payload_json": artifact.payload_json,
+        "created_at": artifact.created_at,
+    }
+
+
+def _serialize_task_dependency(dependency: TaskDependency) -> dict[str, Any]:
+    return {
+        "id": dependency.id,
+        "task_id": dependency.task_id,
+        "depends_on_task_id": dependency.depends_on_task_id,
+        "relationship_type": dependency.relationship_type,
+        "created_at": dependency.created_at,
+    }
+
+
 def _load_idempotent_result(context: ServiceContext, event_type: str, entity_id: str) -> dict[str, Any]:
     if event_type == "project.created":
         return ProjectSummary.model_validate(ProjectService(context).get_project(entity_id)).model_dump()
@@ -111,6 +138,16 @@ def _load_idempotent_result(context: ServiceContext, event_type: str, entity_id:
         if check is None:
             raise ValueError("Task check not found")
         return _serialize_task_check(check)
+    if event_type == "task.artifact_added":
+        artifact = context.db.get(TaskArtifact, entity_id)
+        if artifact is None:
+            raise ValueError("Task artifact not found")
+        return _serialize_task_artifact(artifact)
+    if event_type == "task.dependency_added":
+        dependency = context.db.get(TaskDependency, entity_id)
+        if dependency is None:
+            raise ValueError("Task dependency not found")
+        return _serialize_task_dependency(dependency)
     if event_type == "session.spawned":
         session = context.db.get(AgentSession, entity_id)
         if session is None:
@@ -289,6 +326,24 @@ def task_check_add(
         return _serialize_task_check(check)
 
 
+def task_artifact_add(
+    task_id: str,
+    artifact_type: str,
+    name: str,
+    uri: str,
+    client_request_id: str | None = None,
+) -> dict[str, Any]:
+    with service_context(correlation_id=client_request_id) as context:
+        replay = _replay_if_exists(context, "task.artifact_added", client_request_id)
+        if replay is not None:
+            return replay
+        artifact = TaskService(context).add_artifact(
+            task_id,
+            TaskArtifactCreate(artifact_type=artifact_type, name=name, uri=uri),
+        )
+        return _serialize_task_artifact(artifact)
+
+
 def task_next(project_id: str | None = None) -> dict[str, Any] | None:
     with service_context() as context:
         task = TaskService(context).next_task(project_id=project_id)
@@ -299,6 +354,29 @@ def task_dependencies_get(task_id: str) -> list[dict[str, Any]]:
     with service_context() as context:
         dependencies = TaskService(context).get_dependencies(task_id)
         return [item.model_dump() for item in dependencies]
+
+
+def task_dependency_add(
+    task_id: str,
+    depends_on_task_id: str,
+    relationship_type: str = "blocks",
+    client_request_id: str | None = None,
+) -> dict[str, Any]:
+    with service_context(correlation_id=client_request_id) as context:
+        replay = _replay_if_exists(context, "task.dependency_added", client_request_id)
+        if replay is not None:
+            return replay
+        dependency = TaskService(context).add_dependency(
+            task_id,
+            TaskDependencyCreate(depends_on_task_id=depends_on_task_id, relationship_type=relationship_type),
+        )
+        return _serialize_task_dependency(dependency)
+
+
+def task_completion_readiness(task_id: str) -> dict[str, Any]:
+    with service_context() as context:
+        readiness = TaskService(context).get_completion_readiness(task_id)
+        return readiness.model_dump()
 
 
 def session_spawn(
@@ -409,12 +487,28 @@ def context_search(query: str, project_id: str | None = None, limit: int = 20) -
         return results.model_dump()
 
 
+def diagnostics_get() -> dict[str, Any]:
+    with service_context(actor_type="system", actor_name="mcp") as context:
+        diagnostics = DiagnosticsService(context).get_diagnostics()
+        return diagnostics.model_dump()
+
+
+def worktree_hygiene_list(project_id: str | None = None, task_id: str | None = None) -> list[dict[str, Any]]:
+    with service_context() as context:
+        issues = WorktreeHygieneService(context).list_issues(project_id=project_id, task_id=task_id)
+        return [item.model_dump() for item in issues]
+
+
 def project_board_resource(project_id: str) -> dict[str, Any]:
     return board_get(project_id)
 
 
 def task_detail_resource(task_id: str) -> dict[str, Any]:
     return task_get(task_id)
+
+
+def task_completion_resource(task_id: str) -> dict[str, Any]:
+    return task_completion_readiness(task_id)
 
 
 def session_timeline_resource(session_id: str) -> dict[str, Any]:
@@ -435,6 +529,10 @@ def repo_inventory_resource(project_id: str) -> dict[str, Any]:
             "repositories": [RepositoryRead.model_validate(item).model_dump() for item in repositories],
             "worktrees": [WorktreeRead.model_validate(item).model_dump() for item in worktrees],
         }
+
+
+def diagnostics_resource() -> dict[str, Any]:
+    return diagnostics_get()
 
 
 def recent_events_resource(project_id: str | None = None, task_id: str | None = None) -> list[dict[str, Any]]:

@@ -52,6 +52,7 @@ from acp_core.schemas import (
     TaskCheckRead,
     TaskCommentCreate,
     TaskCommentRead,
+    TaskCompletionReadinessRead,
     TaskDependencyCreate,
     TaskDependencyRead,
     WaitingQuestionCreate,
@@ -311,6 +312,14 @@ class TaskService:
         return task
 
     def _ensure_completion_evidence(self, task: Task) -> None:
+        readiness = self.get_completion_readiness(task.id)
+        if not readiness.can_mark_done:
+            raise ValueError(
+                "Task cannot move to done: " + ", ".join(readiness.missing_requirements)
+            )
+
+    def get_completion_readiness(self, task_id: str) -> TaskCompletionReadinessRead:
+        task = self.get_task(task_id)
         passing_check_count = self.context.db.scalar(
             select(func.count(TaskCheck.id)).where(
                 TaskCheck.task_id == task.id,
@@ -320,8 +329,38 @@ class TaskService:
         artifact_count = self.context.db.scalar(
             select(func.count(TaskArtifact.id)).where(TaskArtifact.task_id == task.id)
         ) or 0
+        blocking_dependency_count = self.context.db.scalar(
+            select(func.count(TaskDependency.id))
+            .join(Task, Task.id == TaskDependency.depends_on_task_id)
+            .where(
+                TaskDependency.task_id == task.id,
+                Task.workflow_state.not_in(["done", "cancelled"]),
+            )
+        ) or 0
+        open_waiting_question_count = self.context.db.scalar(
+            select(func.count(WaitingQuestion.id)).where(
+                WaitingQuestion.task_id == task.id,
+                WaitingQuestion.status == "open",
+            )
+        ) or 0
+
+        missing_requirements: list[str] = []
         if passing_check_count == 0 and artifact_count == 0:
-            raise ValueError("Task needs at least one passing check or artifact before moving to done")
+            missing_requirements.append("attach at least one passing check or artifact")
+        if blocking_dependency_count:
+            missing_requirements.append("resolve blocking dependencies")
+        if open_waiting_question_count:
+            missing_requirements.append("close open waiting questions")
+
+        return TaskCompletionReadinessRead(
+            task_id=task.id,
+            can_mark_done=not missing_requirements,
+            passing_check_count=passing_check_count,
+            artifact_count=artifact_count,
+            blocking_dependency_count=blocking_dependency_count,
+            open_waiting_question_count=open_waiting_question_count,
+            missing_requirements=missing_requirements,
+        )
 
     def patch_task(self, task_id: str, payload: TaskPatch) -> Task:
         task = self.get_task(task_id)
@@ -1181,10 +1220,12 @@ class WorktreeHygieneService:
     def __init__(self, context: ServiceContext) -> None:
         self.context = context
 
-    def list_issues(self, *, project_id: str | None = None) -> list[WorktreeHygieneIssueRead]:
+    def list_issues(self, *, project_id: str | None = None, task_id: str | None = None) -> list[WorktreeHygieneIssueRead]:
         stmt = select(Worktree).order_by(Worktree.updated_at.desc())
         if project_id is not None:
             stmt = stmt.join(Repository, Repository.id == Worktree.repository_id).where(Repository.project_id == project_id)
+        if task_id is not None:
+            stmt = stmt.where(Worktree.task_id == task_id)
 
         issues: list[WorktreeHygieneIssueRead] = []
         for worktree in self.context.db.scalars(stmt):
