@@ -111,6 +111,13 @@ export type WaitingQuestionDetail = WaitingQuestionSummary & {
 
 export type TaskDetail = TaskSummary & {
   description?: string | null;
+  dependencies: Array<{
+    id: string;
+    task_id: string;
+    depends_on_task_id: string;
+    relationship_type: string;
+    created_at: string;
+  }>;
   comments: Array<{
     id: string;
     task_id: string;
@@ -313,4 +320,11 @@ export function addTaskArtifact(
   payload: { artifact_type: string; name: string; uri: string; payload_json?: Record<string, unknown> },
 ) {
   return postJson<TaskDetail["artifacts"][number]>(`/tasks/${taskId}/artifacts`, payload);
+}
+
+export function addTaskDependency(
+  taskId: string,
+  payload: { depends_on_task_id: string; relationship_type?: string },
+) {
+  return postJson<TaskDetail["dependencies"][number]>(`/tasks/${taskId}/dependencies`, payload);
 }

@@ -21,6 +21,7 @@ import {
   addTaskArtifact,
   addTaskCheck,
   addTaskComment,
+  addTaskDependency,
   answerQuestion,
   createQuestion,
   createSession,
@@ -75,6 +76,7 @@ export function App() {
   const [draftArtifactName, setDraftArtifactName] = useState("");
   const [draftArtifactType, setDraftArtifactType] = useState("log");
   const [draftArtifactUri, setDraftArtifactUri] = useState("");
+  const [selectedDependencyTaskId, setSelectedDependencyTaskId] = useState("");
   const deferredSearch = useDeferredValue(search);
 
   const dashboardQuery = useQuery({
@@ -260,6 +262,17 @@ export function App() {
       }
       setDraftArtifactName("");
       setDraftArtifactUri("");
+    },
+  });
+
+  const addTaskDependencyMutation = useMutation({
+    mutationFn: ({ taskId, dependsOnTaskId }: { taskId: string; dependsOnTaskId: string }) =>
+      addTaskDependency(taskId, { depends_on_task_id: dependsOnTaskId }),
+    onSuccess: () => {
+      if (inspectedTaskId) {
+        queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
+      }
+      setSelectedDependencyTaskId("");
     },
   });
 
@@ -596,6 +609,59 @@ export function App() {
                       </div>
                     </div>
                     <Pill className="border-white/8 text-slate-300">{taskDetailQuery.data.workflow_state}</Pill>
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-white/7 bg-black/10 p-4">
+                    <div className="text-sm font-medium text-slate-200">Dependencies</div>
+                    <div className="mt-3 flex flex-col gap-2">
+                      {taskDetailQuery.data.dependencies.map((dependency) => {
+                        const dependencyTask = projectDetailQuery.data?.board.tasks.find(
+                          (candidate) => candidate.id === dependency.depends_on_task_id,
+                        );
+                        return (
+                          <div key={dependency.id} className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-sm font-medium text-slate-100">
+                                {dependencyTask?.title ?? dependency.depends_on_task_id}
+                              </div>
+                              <Pill className="border-white/8 text-slate-300">{dependency.relationship_type}</Pill>
+                            </div>
+                            <div className="mt-2 text-sm text-slate-400">
+                              This task depends on the linked item before it can fully complete.
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {!taskDetailQuery.data.dependencies.length ? (
+                        <div className="text-sm text-slate-500">No explicit dependencies yet.</div>
+                      ) : null}
+                    </div>
+                    <select
+                      value={selectedDependencyTaskId}
+                      onChange={(event) => setSelectedDependencyTaskId(event.target.value)}
+                      className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                    >
+                      <option value="">Select blocker task</option>
+                      {(projectDetailQuery.data?.board.tasks ?? [])
+                        .filter((candidate) => candidate.id !== taskDetailQuery.data.id)
+                        .map((candidate) => (
+                          <option key={candidate.id} value={candidate.id}>
+                            {candidate.title}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      onClick={() =>
+                        addTaskDependencyMutation.mutate({
+                          taskId: taskDetailQuery.data!.id,
+                          dependsOnTaskId: selectedDependencyTaskId,
+                        })
+                      }
+                      disabled={!selectedDependencyTaskId || addTaskDependencyMutation.isPending}
+                      className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Add dependency
+                    </button>
                   </div>
 
                   <div className="mt-5 rounded-2xl border border-white/7 bg-black/10 p-4">

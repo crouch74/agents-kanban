@@ -37,6 +37,10 @@ vi.stubGlobal(
       return new Response(JSON.stringify([]));
     }
 
+    if (input.includes("/events")) {
+      return new Response(JSON.stringify([]));
+    }
+
     return new Response(JSON.stringify({ project: null, board: null }), { status: 200 });
   }),
 );

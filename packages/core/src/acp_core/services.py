@@ -52,6 +52,7 @@ from acp_core.schemas import (
     TaskCheckRead,
     TaskCommentCreate,
     TaskCommentRead,
+    TaskDependencyCreate,
     TaskDependencyRead,
     WaitingQuestionCreate,
     WaitingQuestionDetail,
@@ -225,6 +226,11 @@ class TaskService:
 
     def get_task_detail(self, task_id: str) -> TaskDetail:
         task = self.get_task(task_id)
+        dependencies = list(
+            self.context.db.scalars(
+                select(TaskDependency).where(TaskDependency.task_id == task.id).order_by(TaskDependency.created_at.asc())
+            )
+        )
         comments = list(
             self.context.db.scalars(
                 select(TaskComment).where(TaskComment.task_id == task.id).order_by(TaskComment.created_at.asc())
@@ -247,6 +253,7 @@ class TaskService:
         )
         return TaskDetail(
             **TaskRead.model_validate(task).model_dump(),
+            dependencies=[TaskDependencyRead.model_validate(item) for item in dependencies],
             comments=[TaskCommentRead.model_validate(item) for item in comments],
             checks=[TaskCheckRead.model_validate(item) for item in checks],
             artifacts=[TaskArtifactRead.model_validate(item) for item in artifacts],
@@ -414,6 +421,46 @@ class TaskService:
         self.context.db.refresh(artifact)
         logger.info("✅ task artifact added", task_id=task.id, artifact_id=artifact.id)
         return artifact
+
+    def add_dependency(self, task_id: str, payload: TaskDependencyCreate) -> TaskDependency:
+        task = self.get_task(task_id)
+        depends_on = self.get_task(payload.depends_on_task_id)
+        if depends_on.id == task.id:
+            raise ValueError("Task cannot depend on itself")
+        if depends_on.project_id != task.project_id:
+            raise ValueError("Dependencies must stay within the same project")
+
+        duplicate = self.context.db.scalar(
+            select(TaskDependency.id).where(
+                TaskDependency.task_id == task.id,
+                TaskDependency.depends_on_task_id == depends_on.id,
+                TaskDependency.relationship_type == payload.relationship_type,
+            )
+        )
+        if duplicate is not None:
+            raise ValueError("Dependency already exists")
+
+        dependency = TaskDependency(
+            task_id=task.id,
+            depends_on_task_id=depends_on.id,
+            relationship_type=payload.relationship_type,
+        )
+        self.context.db.add(dependency)
+        self.context.db.flush()
+        self.context.record_event(
+            entity_type="task_dependency",
+            entity_id=dependency.id,
+            event_type="task.dependency_added",
+            payload_json={
+                "task_id": task.id,
+                "depends_on_task_id": depends_on.id,
+                "relationship_type": dependency.relationship_type,
+            },
+        )
+        self.context.db.commit()
+        self.context.db.refresh(dependency)
+        logger.info("🗂️ task dependency added", task_id=task.id, depends_on_task_id=depends_on.id)
+        return dependency
 
     def claim_task(self, task_id: str, *, actor_name: str, session_id: str | None = None) -> Task:
         task = self.get_task(task_id)

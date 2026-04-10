@@ -10,6 +10,8 @@ from acp_core.schemas import (
     TaskCommentCreate,
     TaskCommentRead,
     TaskCreate,
+    TaskDependencyCreate,
+    TaskDependencyRead,
     TaskDetail,
     TaskPatch,
     TaskRead,
@@ -87,3 +89,24 @@ def add_artifact(task_id: str, payload: TaskArtifactCreate, service=Depends(get_
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return TaskArtifactRead.model_validate(artifact)
+
+
+@router.get("/{task_id}/dependencies", response_model=list[TaskDependencyRead])
+def list_dependencies(task_id: str, service=Depends(get_task_service)) -> list[TaskDependencyRead]:
+    try:
+        return service.get_dependencies(task_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/{task_id}/dependencies", response_model=TaskDependencyRead, status_code=201)
+def add_dependency(
+    task_id: str,
+    payload: TaskDependencyCreate,
+    service=Depends(get_task_service),
+) -> TaskDependencyRead:
+    try:
+        dependency = service.add_dependency(task_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return TaskDependencyRead.model_validate(dependency)

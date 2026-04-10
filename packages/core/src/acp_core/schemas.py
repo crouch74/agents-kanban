@@ -237,6 +237,11 @@ class TaskArtifactRead(BaseModel):
     created_at: datetime
 
 
+class TaskDependencyCreate(BaseModel):
+    depends_on_task_id: str
+    relationship_type: Literal["blocks", "relates_to"] = "blocks"
+
+
 class TaskDependencyRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -266,6 +271,7 @@ class TaskRead(BaseModel):
 
 
 class TaskDetail(TaskRead):
+    dependencies: list[TaskDependencyRead]
     comments: list[TaskCommentRead]
     checks: list[TaskCheckRead]
     artifacts: list[TaskArtifactRead]
