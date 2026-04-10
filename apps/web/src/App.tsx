@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState, startTransition, type ReactNode } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import {
@@ -18,38 +18,48 @@ import {
   Trash2,
 } from "lucide-react";
 import type { TaskSummary } from "@acp/sdk";
-import {
-  addTaskArtifact,
-  addTaskCheck,
-  addTaskComment,
-  addTaskDependency,
-  cancelSession,
-  answerQuestion,
-  bootstrapProject,
-  createFollowUpSession,
-  createQuestion,
-  createSession,
-  createRepository,
-  createTask,
-  createWorktree,
-  getDashboard,
-  getDiagnostics,
-  getEvents,
-  getProject,
-  getProjects,
-  getQuestion,
-  getSessionTimeline,
-  getTaskDetail,
-  getSessionTail,
-  patchTask,
-  patchWorktree,
-  searchContext,
-} from "@/lib/api";
 import { ProjectBootstrapWizard } from "@/components/project-bootstrap-wizard";
 import { ColumnShell, Pill, SectionFrame, SectionTitle, StatTile } from "@/components/ui";
 import { useUIStore } from "@/store/ui";
+import { AppShell } from "@/layout/AppShell";
+import { DashboardScreen } from "@/screens/DashboardScreen";
+import { ProjectBoardScreen } from "@/screens/ProjectBoardScreen";
+import { TaskDetailScreen } from "@/screens/TaskDetailScreen";
+import { SessionDetailScreen } from "@/screens/SessionDetailScreen";
+import { WaitingInboxScreen } from "@/screens/WaitingInboxScreen";
+import { WorktreeInventoryScreen } from "@/screens/WorktreeInventoryScreen";
+import { ActivityScreen } from "@/screens/ActivityScreen";
+import { DiagnosticsScreen } from "@/screens/DiagnosticsScreen";
+import { ProjectOverviewScreen } from "@/screens/ProjectOverviewScreen";
+import {
+  useAddTaskArtifactMutation,
+  useAddTaskCheckMutation,
+  useAddTaskCommentMutation,
+  useAddTaskDependencyMutation,
+  useAnswerQuestionMutation,
+  useBootstrapProjectMutation,
+  useCancelSessionMutation,
+  useCreateFollowUpSessionMutation,
+  useCreateQuestionMutation,
+  useCreateRepositoryMutation,
+  useCreateSessionMutation,
+  useCreateTaskMutation,
+  useCreateWorktreeMutation,
+  useDashboardQuery,
+  useDiagnosticsQuery,
+  useEventsQuery,
+  useLiveInvalidationSocket,
+  usePatchTaskMutation,
+  usePatchWorktreeMutation,
+  useProjectDetailQuery,
+  useProjectsQuery,
+  useQuestionDetailQuery,
+  useSearchQuery,
+  useSessionTailQuery,
+  useSessionTimelineQuery,
+  useTaskDetailQuery,
+} from "@/features/control-plane/hooks";
 
-const WS_BASE = "ws://127.0.0.1:8000/api/v1/ws";
 
 function formatEvent(eventType: string) {
   return eventType.replaceAll(".", " ").replaceAll("_", " ");
@@ -104,27 +114,11 @@ export function App() {
   const deferredSearch = useDeferredValue(search);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
-  const dashboardQuery = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: getDashboard,
-  });
-  const diagnosticsQuery = useQuery({
-    queryKey: ["diagnostics"],
-    queryFn: getDiagnostics,
-  });
-  const eventsQuery = useQuery({
-    queryKey: ["events", selectedProjectId],
-    queryFn: () => getEvents({ projectId: selectedProjectId ?? undefined, limit: 18 }),
-  });
-  const projectsQuery = useQuery({
-    queryKey: ["projects"],
-    queryFn: getProjects,
-  });
-  const searchQuery = useQuery({
-    queryKey: ["search", deferredSearch, selectedProjectId],
-    queryFn: () => searchContext(deferredSearch, selectedProjectId ?? undefined),
-    enabled: deferredSearch.trim().length >= 2,
-  });
+  const dashboardQuery = useDashboardQuery();
+  const diagnosticsQuery = useDiagnosticsQuery();
+  const eventsQuery = useEventsQuery(selectedProjectId);
+  const projectsQuery = useProjectsQuery();
+  const searchQuery = useSearchQuery(deferredSearch, selectedProjectId);
 
   useEffect(() => {
     if (!selectedProjectId && projectsQuery.data?.[0]) {
@@ -132,59 +126,19 @@ export function App() {
     }
   }, [projectsQuery.data, selectedProjectId, setSelectedProjectId]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.WebSocket === "undefined") {
-      return;
-    }
-
-    let disposed = false;
-    let socket: WebSocket | null = null;
-    let reconnectHandle: number | undefined;
-
-    const connect = () => {
-      if (disposed) {
-        return;
-      }
-      socket = new window.WebSocket(WS_BASE);
-      socket.onmessage = (event) => {
-        const payload = JSON.parse(event.data) as { type?: string };
-        if (payload.type === "system.connected" || payload.type === "system.ping") {
-          return;
-        }
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-        queryClient.invalidateQueries({ queryKey: ["diagnostics"] });
-        queryClient.invalidateQueries({ queryKey: ["projects"] });
-        queryClient.invalidateQueries({ queryKey: ["project"] });
-        queryClient.invalidateQueries({ queryKey: ["task-detail"] });
-        queryClient.invalidateQueries({ queryKey: ["question"] });
-        queryClient.invalidateQueries({ queryKey: ["session-tail"] });
-        queryClient.invalidateQueries({ queryKey: ["session-timeline"] });
-        queryClient.invalidateQueries({ queryKey: ["events"] });
-      };
-      socket.onclose = () => {
-        if (disposed) {
-          return;
-        }
-        reconnectHandle = window.setTimeout(connect, 1500);
-      };
-    };
-
-    connect();
-
-    return () => {
-      disposed = true;
-      if (reconnectHandle) {
-        window.clearTimeout(reconnectHandle);
-      }
-      socket?.close();
-    };
-  }, [queryClient]);
-
-  const projectDetailQuery = useQuery({
-    queryKey: ["project", selectedProjectId],
-    queryFn: () => getProject(selectedProjectId!),
-    enabled: Boolean(selectedProjectId),
+  useLiveInvalidationSocket(() => {
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    queryClient.invalidateQueries({ queryKey: ["diagnostics"] });
+    queryClient.invalidateQueries({ queryKey: ["projects"] });
+    queryClient.invalidateQueries({ queryKey: ["project"] });
+    queryClient.invalidateQueries({ queryKey: ["task-detail"] });
+    queryClient.invalidateQueries({ queryKey: ["question"] });
+    queryClient.invalidateQueries({ queryKey: ["session-tail"] });
+    queryClient.invalidateQueries({ queryKey: ["session-timeline"] });
+    queryClient.invalidateQueries({ queryKey: ["events"] });
   });
+
+  const projectDetailQuery = useProjectDetailQuery(selectedProjectId);
 
   useEffect(() => {
     setSelectedRepositoryId(null);
@@ -210,8 +164,7 @@ export function App() {
     }
   }, [projectDetailQuery.data?.waiting_questions, selectedQuestionId]);
 
-  const bootstrapProjectMutation = useMutation({
-    mutationFn: bootstrapProject,
+  const bootstrapProjectMutation = useBootstrapProjectMutation({
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
@@ -232,8 +185,7 @@ export function App() {
     setSelectedSessionId(result.kickoff_session.id);
   }, [bootstrapProjectMutation.data, selectedProjectId]);
 
-  const createTaskMutation = useMutation({
-    mutationFn: createTask,
+  const createTaskMutation = useCreateTaskMutation({
     onSuccess: () => {
       if (selectedProjectId) {
         queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
@@ -243,8 +195,7 @@ export function App() {
     },
   });
 
-  const createSubtaskMutation = useMutation({
-    mutationFn: createTask,
+  const createSubtaskMutation = useCreateTaskMutation({
     onSuccess: () => {
       if (selectedProjectId) {
         queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
@@ -256,9 +207,7 @@ export function App() {
     },
   });
 
-  const patchTaskMutation = useMutation({
-    mutationFn: ({ taskId, boardColumnId }: { taskId: string; boardColumnId: string }) =>
-      patchTask(taskId, { board_column_id: boardColumnId }),
+  const patchTaskMutation = usePatchTaskMutation({
     onSuccess: () => {
       if (selectedProjectId) {
         queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
@@ -269,8 +218,7 @@ export function App() {
     },
   });
 
-  const createRepositoryMutation = useMutation({
-    mutationFn: createRepository,
+  const createRepositoryMutation = useCreateRepositoryMutation({
     onSuccess: (repository) => {
       if (selectedProjectId) {
         queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
@@ -282,8 +230,7 @@ export function App() {
     },
   });
 
-  const createWorktreeMutation = useMutation({
-    mutationFn: createWorktree,
+  const createWorktreeMutation = useCreateWorktreeMutation({
     onSuccess: () => {
       if (selectedProjectId) {
         queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
@@ -293,9 +240,7 @@ export function App() {
     },
   });
 
-  const patchWorktreeMutation = useMutation({
-    mutationFn: ({ worktreeId, status }: { worktreeId: string; status: string }) =>
-      patchWorktree(worktreeId, { status }),
+  const patchWorktreeMutation = usePatchWorktreeMutation({
     onSuccess: () => {
       if (selectedProjectId) {
         queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
@@ -303,8 +248,7 @@ export function App() {
     },
   });
 
-  const createSessionMutation = useMutation({
-    mutationFn: createSession,
+  const createSessionMutation = useCreateSessionMutation({
     onSuccess: (session) => {
       if (selectedProjectId) {
         queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
@@ -314,22 +258,7 @@ export function App() {
     },
   });
 
-  const createFollowUpSessionMutation = useMutation({
-    mutationFn: ({
-      sessionId,
-      profile,
-      followUpType,
-    }: {
-      sessionId: string;
-      profile: string;
-      followUpType?: "retry" | "review" | "verify" | "handoff";
-    }) =>
-      createFollowUpSession(sessionId, {
-        profile,
-        follow_up_type: followUpType,
-        reuse_repository: true,
-        reuse_worktree: true,
-      }),
+  const createFollowUpSessionMutation = useCreateFollowUpSessionMutation({
     onSuccess: (session) => {
       if (selectedProjectId) {
         queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
@@ -341,8 +270,7 @@ export function App() {
     },
   });
 
-  const createQuestionMutation = useMutation({
-    mutationFn: createQuestion,
+  const createQuestionMutation = useCreateQuestionMutation({
     onSuccess: (question) => {
       if (selectedProjectId) {
         queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
@@ -354,9 +282,7 @@ export function App() {
     },
   });
 
-  const answerQuestionMutation = useMutation({
-    mutationFn: ({ questionId, body }: { questionId: string; body: string }) =>
-      answerQuestion(questionId, { responder_name: "operator", body }),
+  const answerQuestionMutation = useAnswerQuestionMutation({
     onSuccess: (detail) => {
       if (selectedProjectId) {
         queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
@@ -367,9 +293,7 @@ export function App() {
     },
   });
 
-  const addTaskCommentMutation = useMutation({
-    mutationFn: ({ taskId, body }: { taskId: string; body: string }) =>
-      addTaskComment(taskId, { author_name: "operator", body }),
+  const addTaskCommentMutation = useAddTaskCommentMutation({
     onSuccess: () => {
       if (inspectedTaskId) {
         queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
@@ -378,9 +302,7 @@ export function App() {
     },
   });
 
-  const addTaskCheckMutation = useMutation({
-    mutationFn: ({ taskId, checkType, status, summary }: { taskId: string; checkType: string; status: string; summary: string }) =>
-      addTaskCheck(taskId, { check_type: checkType, status, summary }),
+  const addTaskCheckMutation = useAddTaskCheckMutation({
     onSuccess: () => {
       if (inspectedTaskId) {
         queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
@@ -389,9 +311,7 @@ export function App() {
     },
   });
 
-  const addTaskArtifactMutation = useMutation({
-    mutationFn: ({ taskId, artifactType, name, uri }: { taskId: string; artifactType: string; name: string; uri: string }) =>
-      addTaskArtifact(taskId, { artifact_type: artifactType, name, uri }),
+  const addTaskArtifactMutation = useAddTaskArtifactMutation({
     onSuccess: () => {
       if (inspectedTaskId) {
         queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
@@ -401,9 +321,7 @@ export function App() {
     },
   });
 
-  const addTaskDependencyMutation = useMutation({
-    mutationFn: ({ taskId, dependsOnTaskId }: { taskId: string; dependsOnTaskId: string }) =>
-      addTaskDependency(taskId, { depends_on_task_id: dependsOnTaskId }),
+  const addTaskDependencyMutation = useAddTaskDependencyMutation({
     onSuccess: () => {
       if (inspectedTaskId) {
         queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
@@ -412,8 +330,7 @@ export function App() {
     },
   });
 
-  const cancelSessionMutation = useMutation({
-    mutationFn: cancelSession,
+  const cancelSessionMutation = useCancelSessionMutation({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["project"] });
@@ -483,30 +400,12 @@ export function App() {
     return map;
   }, [diagnosticsQuery.data]);
 
-  const sessionTailQuery = useQuery({
-    queryKey: ["session-tail", selectedSessionId],
-    queryFn: () => getSessionTail(selectedSessionId!),
-    enabled: Boolean(selectedSessionId),
-    refetchInterval: selectedSessionId ? 2500 : false,
-  });
-  const sessionTimelineQuery = useQuery({
-    queryKey: ["session-timeline", selectedSessionId],
-    queryFn: () => getSessionTimeline(selectedSessionId!),
-    enabled: Boolean(selectedSessionId),
-    refetchInterval: selectedSessionId ? 3000 : false,
-  });
+  const sessionTailQuery = useSessionTailQuery(selectedSessionId);
+  const sessionTimelineQuery = useSessionTimelineQuery(selectedSessionId);
 
-  const questionDetailQuery = useQuery({
-    queryKey: ["question", selectedQuestionId],
-    queryFn: () => getQuestion(selectedQuestionId!),
-    enabled: Boolean(selectedQuestionId),
-  });
+  const questionDetailQuery = useQuestionDetailQuery(selectedQuestionId);
 
-  const taskDetailQuery = useQuery({
-    queryKey: ["task-detail", inspectedTaskId],
-    queryFn: () => getTaskDetail(inspectedTaskId!),
-    enabled: Boolean(inspectedTaskId),
-  });
+  const taskDetailQuery = useTaskDetailQuery(inspectedTaskId);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -526,8 +425,8 @@ export function App() {
   };
 
   return (
-    <div className="grid-shell">
-      <aside className="border-r border-white/8 px-6 py-6">
+    <AppShell
+      sidebar={<>
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Agent Control Plane</p>
@@ -620,9 +519,8 @@ export function App() {
           result={bootstrapProjectMutation.data}
           onSubmit={(payload) => bootstrapProjectMutation.mutate(payload)}
         />
-      </aside>
-
-      <main className="px-6 py-6">
+      </>}
+      header={<DashboardScreen>
         <section className="surface rounded-[32px] px-6 py-6">
           <div className="flex flex-wrap items-end justify-between gap-6">
             <div>
@@ -745,9 +643,10 @@ export function App() {
             </div>
           </div>
         </section>
-
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <SectionFrame className="px-5 py-5">
+      </DashboardScreen>
+      }
+      main={<ProjectOverviewScreen><div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <ProjectBoardScreen><SectionFrame className="px-5 py-5">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <SectionTitle>Project Board</SectionTitle>
@@ -818,10 +717,10 @@ export function App() {
                 ))}
               </div>
             </DndContext>
-          </SectionFrame>
+          </SectionFrame></ProjectBoardScreen>
 
           <div className="flex flex-col gap-6">
-            <SectionFrame className="px-5 py-5">
+            <TaskDetailScreen><SectionFrame className="px-5 py-5">
               <SectionTitle>Task Inspector</SectionTitle>
               {taskDetailQuery.data ? (
                 <div className="mt-4">
@@ -1074,9 +973,9 @@ export function App() {
               ) : (
                 <div className="mt-4 text-sm text-slate-500">Select a task card to inspect comments, checks, and artifacts.</div>
               )}
-            </SectionFrame>
+            </SectionFrame></TaskDetailScreen>
 
-            <SectionFrame className="px-5 py-5">
+            <WorktreeInventoryScreen><SectionFrame className="px-5 py-5">
               <SectionTitle>Repository Inventory</SectionTitle>
               <div className="mt-4 flex flex-col gap-3">
                 {projectDetailQuery.data?.repositories.map((repository) => (
@@ -1131,9 +1030,9 @@ export function App() {
                   </button>
                 </div>
               ) : null}
-            </SectionFrame>
+            </SectionFrame></WorktreeInventoryScreen>
 
-            <SectionFrame className="px-5 py-5">
+            <WorktreeInventoryScreen><SectionFrame className="px-5 py-5">
               <SectionTitle>Worktree Fleet</SectionTitle>
               <div className="mt-4 flex flex-col gap-3">
                 {projectDetailQuery.data?.worktrees.map((worktree) => (
@@ -1239,9 +1138,9 @@ export function App() {
                   </button>
                 </div>
               ) : null}
-            </SectionFrame>
+            </SectionFrame></WorktreeInventoryScreen>
 
-            <SectionFrame className="px-5 py-5">
+            <SessionDetailScreen><SectionFrame className="px-5 py-5">
               <SectionTitle>Session Runtime</SectionTitle>
               <div className="mt-4 flex flex-col gap-3">
                 {projectDetailQuery.data?.sessions.map((session) => (
@@ -1558,9 +1457,9 @@ export function App() {
                   Open question
                 </button>
               </div>
-            </SectionFrame>
+            </SectionFrame></SessionDetailScreen>
 
-            <SectionFrame className="px-5 py-5">
+            <WaitingInboxScreen><SectionFrame className="px-5 py-5">
               <SectionTitle>Waiting Inbox</SectionTitle>
               <div className="mt-4 flex flex-col gap-3">
                 {(projectDetailQuery.data?.waiting_questions ?? []).map((question) => (
@@ -1639,9 +1538,9 @@ export function App() {
                   <div className="mt-3 text-sm text-slate-500">Select a waiting question to inspect and answer it.</div>
                 )}
               </div>
-            </SectionFrame>
+            </SectionFrame></WaitingInboxScreen>
 
-            <SectionFrame className="px-5 py-5">
+            <DiagnosticsScreen><SectionFrame className="px-5 py-5">
               <SectionTitle>Runtime readiness</SectionTitle>
               <div className="mt-5 grid gap-3">
                 <Signal label="tmux" ready={Boolean(diagnosticsQuery.data?.tmux_available)} icon={Bot} />
@@ -1651,9 +1550,9 @@ export function App() {
                 <Signal label="audit log" ready icon={ShieldCheck} />
                 <Signal label="waiting inbox" ready icon={MessageSquareText} />
               </div>
-            </SectionFrame>
+            </SectionFrame></DiagnosticsScreen>
 
-            <SectionFrame className="px-5 py-5">
+            <DiagnosticsScreen><SectionFrame className="px-5 py-5">
               <SectionTitle>Diagnostics</SectionTitle>
               <div className="mt-4 grid gap-3">
                 <DiagRow label="DB path" value={diagnosticsQuery.data?.database_path ?? "unknown"} />
@@ -1695,9 +1594,9 @@ export function App() {
                   </div>
                 </div>
               ) : null}
-            </SectionFrame>
+            </SectionFrame></DiagnosticsScreen>
 
-            <SectionFrame className="px-5 py-5">
+            <ActivityScreen><SectionFrame className="px-5 py-5">
               <SectionTitle>Recent events</SectionTitle>
               <div className="mt-4 flex flex-col gap-3">
                 {dashboardQuery.data?.recent_events.map((event) => (
@@ -1712,11 +1611,11 @@ export function App() {
                   <div className="text-sm text-slate-500">Events will appear here as work is created and updated.</div>
                 ) : null}
               </div>
-            </SectionFrame>
+            </SectionFrame></ActivityScreen>
           </div>
-        </div>
-      </main>
-    </div>
+        </div></ProjectOverviewScreen>}
+      drawer={<></>}
+    />
   );
 }
 
