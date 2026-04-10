@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from acp_core.schemas import ProjectCreate, ProjectOverview, ProjectSummary
+from app.api.ws.events import broadcast_change
 from app.bootstrap.dependencies import get_project_service
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -14,9 +15,18 @@ def list_projects(service=Depends(get_project_service)) -> list[ProjectSummary]:
 
 
 @router.post("", response_model=ProjectSummary, status_code=201)
-def create_project(payload: ProjectCreate, service=Depends(get_project_service)) -> ProjectSummary:
+def create_project(payload: ProjectCreate, request: Request, service=Depends(get_project_service)) -> ProjectSummary:
     project = service.create_project(payload)
-    return ProjectSummary.model_validate(project)
+    response = ProjectSummary.model_validate(project)
+    broadcast_change(
+        request,
+        event_type="project.created",
+        entity_type="project",
+        entity_id=response.id,
+        project_id=response.id,
+        detail={"name": response.name},
+    )
+    return response
 
 
 @router.get("/{project_id}", response_model=ProjectOverview)

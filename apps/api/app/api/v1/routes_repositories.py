@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from acp_core.schemas import RepositoryCreate, RepositoryRead
+from app.api.ws.events import broadcast_change
 from app.bootstrap.dependencies import get_repository_service
 
 router = APIRouter(tags=["repositories"])
@@ -17,12 +18,21 @@ def list_repositories(
 
 
 @router.post("/repositories", response_model=RepositoryRead, status_code=201)
-def create_repository(payload: RepositoryCreate, service=Depends(get_repository_service)) -> RepositoryRead:
+def create_repository(payload: RepositoryCreate, request: Request, service=Depends(get_repository_service)) -> RepositoryRead:
     try:
         repository = service.create_repository(payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return RepositoryRead.model_validate(repository)
+    response = RepositoryRead.model_validate(repository)
+    broadcast_change(
+        request,
+        event_type="repository.created",
+        entity_type="repository",
+        entity_id=response.id,
+        project_id=response.project_id,
+        detail={"name": response.name},
+    )
+    return response
 
 
 @router.get("/repositories/{repository_id}", response_model=RepositoryRead)
@@ -32,4 +42,3 @@ def get_repository(repository_id: str, service=Depends(get_repository_service)) 
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return RepositoryRead.model_validate(repository)
-

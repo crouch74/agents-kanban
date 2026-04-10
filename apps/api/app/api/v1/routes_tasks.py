@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from acp_core.schemas import (
     TaskArtifactCreate,
@@ -16,6 +16,7 @@ from acp_core.schemas import (
     TaskPatch,
     TaskRead,
 )
+from app.api.ws.events import broadcast_change
 from app.bootstrap.dependencies import get_task_service
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -30,12 +31,22 @@ def list_tasks(
 
 
 @router.post("", response_model=TaskRead, status_code=201)
-def create_task(payload: TaskCreate, service=Depends(get_task_service)) -> TaskRead:
+def create_task(payload: TaskCreate, request: Request, service=Depends(get_task_service)) -> TaskRead:
     try:
         task = service.create_task(payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return TaskRead.model_validate(task)
+    response = TaskRead.model_validate(task)
+    broadcast_change(
+        request,
+        event_type="task.created",
+        entity_type="task",
+        entity_id=response.id,
+        project_id=response.project_id,
+        task_id=response.id,
+        detail={"title": response.title, "workflow_state": response.workflow_state},
+    )
+    return response
 
 
 @router.get("/{task_id}", response_model=TaskRead)
@@ -56,39 +67,82 @@ def get_task_detail(task_id: str, service=Depends(get_task_service)) -> TaskDeta
 
 
 @router.patch("/{task_id}", response_model=TaskRead)
-def patch_task(task_id: str, payload: TaskPatch, service=Depends(get_task_service)) -> TaskRead:
+def patch_task(task_id: str, payload: TaskPatch, request: Request, service=Depends(get_task_service)) -> TaskRead:
     try:
         task = service.patch_task(task_id, payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return TaskRead.model_validate(task)
+    response = TaskRead.model_validate(task)
+    broadcast_change(
+        request,
+        event_type="task.updated",
+        entity_type="task",
+        entity_id=response.id,
+        project_id=response.project_id,
+        task_id=response.id,
+        detail={"workflow_state": response.workflow_state, "waiting_for_human": response.waiting_for_human},
+    )
+    return response
 
 
 @router.post("/{task_id}/comments", response_model=TaskCommentRead, status_code=201)
-def add_comment(task_id: str, payload: TaskCommentCreate, service=Depends(get_task_service)) -> TaskCommentRead:
+def add_comment(task_id: str, payload: TaskCommentCreate, request: Request, service=Depends(get_task_service)) -> TaskCommentRead:
     try:
         comment = service.add_comment(task_id, payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return TaskCommentRead.model_validate(comment)
+    response = TaskCommentRead.model_validate(comment)
+    task = service.get_task(task_id)
+    broadcast_change(
+        request,
+        event_type="task.comment_added",
+        entity_type="task_comment",
+        entity_id=response.id,
+        project_id=task.project_id,
+        task_id=task.id,
+        detail={"author_name": response.author_name},
+    )
+    return response
 
 
 @router.post("/{task_id}/checks", response_model=TaskCheckRead, status_code=201)
-def add_check(task_id: str, payload: TaskCheckCreate, service=Depends(get_task_service)) -> TaskCheckRead:
+def add_check(task_id: str, payload: TaskCheckCreate, request: Request, service=Depends(get_task_service)) -> TaskCheckRead:
     try:
         check = service.add_check(task_id, payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return TaskCheckRead.model_validate(check)
+    response = TaskCheckRead.model_validate(check)
+    task = service.get_task(task_id)
+    broadcast_change(
+        request,
+        event_type="task.check_added",
+        entity_type="task_check",
+        entity_id=response.id,
+        project_id=task.project_id,
+        task_id=task.id,
+        detail={"status": response.status, "check_type": response.check_type},
+    )
+    return response
 
 
 @router.post("/{task_id}/artifacts", response_model=TaskArtifactRead, status_code=201)
-def add_artifact(task_id: str, payload: TaskArtifactCreate, service=Depends(get_task_service)) -> TaskArtifactRead:
+def add_artifact(task_id: str, payload: TaskArtifactCreate, request: Request, service=Depends(get_task_service)) -> TaskArtifactRead:
     try:
         artifact = service.add_artifact(task_id, payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return TaskArtifactRead.model_validate(artifact)
+    response = TaskArtifactRead.model_validate(artifact)
+    task = service.get_task(task_id)
+    broadcast_change(
+        request,
+        event_type="task.artifact_added",
+        entity_type="task_artifact",
+        entity_id=response.id,
+        project_id=task.project_id,
+        task_id=task.id,
+        detail={"artifact_type": response.artifact_type, "name": response.name},
+    )
+    return response
 
 
 @router.get("/{task_id}/dependencies", response_model=list[TaskDependencyRead])
@@ -103,10 +157,22 @@ def list_dependencies(task_id: str, service=Depends(get_task_service)) -> list[T
 def add_dependency(
     task_id: str,
     payload: TaskDependencyCreate,
+    request: Request,
     service=Depends(get_task_service),
 ) -> TaskDependencyRead:
     try:
         dependency = service.add_dependency(task_id, payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return TaskDependencyRead.model_validate(dependency)
+    response = TaskDependencyRead.model_validate(dependency)
+    task = service.get_task(task_id)
+    broadcast_change(
+        request,
+        event_type="task.dependency_added",
+        entity_type="task_dependency",
+        entity_id=response.id,
+        project_id=task.project_id,
+        task_id=task.id,
+        detail={"depends_on_task_id": response.depends_on_task_id},
+    )
+    return response

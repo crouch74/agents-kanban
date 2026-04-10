@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from acp_core.schemas import (
     HumanReplyCreate,
@@ -8,6 +8,7 @@ from acp_core.schemas import (
     WaitingQuestionDetail,
     WaitingQuestionRead,
 )
+from app.api.ws.events import broadcast_change
 from app.bootstrap.dependencies import get_waiting_service
 
 router = APIRouter(tags=["questions"])
@@ -26,12 +27,23 @@ def list_questions(
 
 
 @router.post("/questions", response_model=WaitingQuestionRead, status_code=201)
-def open_question(payload: WaitingQuestionCreate, service=Depends(get_waiting_service)) -> WaitingQuestionRead:
+def open_question(payload: WaitingQuestionCreate, request: Request, service=Depends(get_waiting_service)) -> WaitingQuestionRead:
     try:
         question = service.open_question(payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return WaitingQuestionRead.model_validate(question)
+    response = WaitingQuestionRead.model_validate(question)
+    broadcast_change(
+        request,
+        event_type="waiting_question.opened",
+        entity_type="waiting_question",
+        entity_id=response.id,
+        project_id=response.project_id,
+        task_id=response.task_id,
+        session_id=response.session_id,
+        detail={"urgency": response.urgency, "status": response.status},
+    )
+    return response
 
 
 @router.get("/questions/{question_id}", response_model=WaitingQuestionDetail)
@@ -46,10 +58,22 @@ def get_question(question_id: str, service=Depends(get_waiting_service)) -> Wait
 def answer_question(
     question_id: str,
     payload: HumanReplyCreate,
+    request: Request,
     service=Depends(get_waiting_service),
 ) -> WaitingQuestionDetail:
     try:
         service.answer_question(question_id, payload)
-        return service.get_question_detail(question_id)
+        response = service.get_question_detail(question_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    broadcast_change(
+        request,
+        event_type="waiting_question.answered",
+        entity_type="waiting_question",
+        entity_id=response.id,
+        project_id=response.project_id,
+        task_id=response.task_id,
+        session_id=response.session_id,
+        detail={"status": response.status, "reply_count": len(response.replies)},
+    )
+    return response

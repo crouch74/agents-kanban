@@ -47,6 +47,8 @@ import {
 import { ColumnShell, Pill, SectionFrame, SectionTitle, StatTile } from "@/components/ui";
 import { useUIStore } from "@/store/ui";
 
+const WS_BASE = "ws://127.0.0.1:8000/api/v1/ws";
+
 function formatEvent(eventType: string) {
   return eventType.replaceAll(".", " ").replaceAll("_", " ");
 }
@@ -110,6 +112,54 @@ export function App() {
       setSelectedProjectId(projectsQuery.data[0].id);
     }
   }, [projectsQuery.data, selectedProjectId, setSelectedProjectId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.WebSocket === "undefined") {
+      return;
+    }
+
+    let disposed = false;
+    let socket: WebSocket | null = null;
+    let reconnectHandle: number | undefined;
+
+    const connect = () => {
+      if (disposed) {
+        return;
+      }
+      socket = new window.WebSocket(WS_BASE);
+      socket.onmessage = (event) => {
+        const payload = JSON.parse(event.data) as { type?: string };
+        if (payload.type === "system.connected" || payload.type === "system.ping") {
+          return;
+        }
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        queryClient.invalidateQueries({ queryKey: ["diagnostics"] });
+        queryClient.invalidateQueries({ queryKey: ["projects"] });
+        queryClient.invalidateQueries({ queryKey: ["project"] });
+        queryClient.invalidateQueries({ queryKey: ["task-detail"] });
+        queryClient.invalidateQueries({ queryKey: ["question"] });
+        queryClient.invalidateQueries({ queryKey: ["session-tail"] });
+        queryClient.invalidateQueries({ queryKey: ["session-timeline"] });
+        queryClient.invalidateQueries({ queryKey: ["events"] });
+      };
+      socket.onclose = () => {
+        if (disposed) {
+          return;
+        }
+        reconnectHandle = window.setTimeout(connect, 1500);
+      };
+    };
+
+    connect();
+
+    return () => {
+      disposed = true;
+      if (reconnectHandle) {
+        window.clearTimeout(reconnectHandle);
+      }
+      socket?.close();
+    };
+  }, [queryClient]);
 
   const projectDetailQuery = useQuery({
     queryKey: ["project", selectedProjectId],

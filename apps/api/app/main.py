@@ -9,6 +9,7 @@ from acp_core.db import init_db
 from acp_core.logging import configure_logging, logger
 from acp_core.settings import settings
 from app.api.v1.router import router as api_router
+from app.api.ws.hub import WebSocketHub
 from app.api.ws.router import router as ws_router
 
 
@@ -17,6 +18,8 @@ async def lifespan(_app: FastAPI):
     settings.ensure_directories()
     configure_logging()
     init_db()
+    _app.state.ws_hub = WebSocketHub()
+    _app.state.ws_hub.bind_loop()
     logger.info("🧭 api booted", database=str(settings.database_path))
     yield
 
@@ -35,4 +38,3 @@ app.add_middleware(
 )
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(ws_router, prefix="/api/v1")
-

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from acp_core.schemas import AgentSessionCreate, AgentSessionRead, SessionTailRead, SessionTimelineRead
+from app.api.ws.events import broadcast_change
 from app.bootstrap.dependencies import get_session_service
 
 router = APIRouter(tags=["sessions"])
@@ -21,12 +22,23 @@ def list_sessions(
 
 
 @router.post("/sessions", response_model=AgentSessionRead, status_code=201)
-def spawn_session(payload: AgentSessionCreate, service=Depends(get_session_service)) -> AgentSessionRead:
+def spawn_session(payload: AgentSessionCreate, request: Request, service=Depends(get_session_service)) -> AgentSessionRead:
     try:
         session = service.spawn_session(payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return AgentSessionRead.model_validate(session)
+    response = AgentSessionRead.model_validate(session)
+    broadcast_change(
+        request,
+        event_type="session.spawned",
+        entity_type="session",
+        entity_id=response.id,
+        project_id=response.project_id,
+        task_id=response.task_id,
+        session_id=response.id,
+        detail={"profile": response.profile, "status": response.status},
+    )
+    return response
 
 
 @router.get("/sessions/{session_id}", response_model=AgentSessionRead)
