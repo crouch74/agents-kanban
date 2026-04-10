@@ -1,7 +1,6 @@
-import { useDeferredValue, useEffect, useMemo, useState, startTransition, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, startTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import {
   Activity,
   Bot,
@@ -27,7 +26,7 @@ import { ColumnShell, Pill, SectionFrame, SectionTitle, StatTile } from "@/compo
 import { useUIStore } from "@/store/ui";
 import { AppShell } from "@/layout/AppShell";
 import { DashboardScreen } from "@/screens/DashboardScreen";
-import { ProjectBoardScreen } from "@/screens/ProjectBoardScreen";
+import { DraggableTaskCard, DroppableBoardColumn, ProjectBoardScreen } from "@/screens/ProjectBoardScreen";
 import { TaskDetailScreen } from "@/screens/TaskDetailScreen";
 import { SessionDetailScreen } from "@/screens/SessionDetailScreen";
 import { WaitingInboxScreen } from "@/screens/WaitingInboxScreen";
@@ -407,6 +406,22 @@ export function App() {
     return map;
   }, [projectDetailQuery.data]);
 
+  const taskCardMetadata = useMemo(() => {
+    const sessionsByTask = new Map<string, number>();
+    for (const session of projectDetailQuery.data?.sessions ?? []) {
+      sessionsByTask.set(session.task_id, (sessionsByTask.get(session.task_id) ?? 0) + 1);
+    }
+
+    const worktreeByTask = new Set<string>();
+    for (const worktree of projectDetailQuery.data?.worktrees ?? []) {
+      if (worktree.task_id) {
+        worktreeByTask.add(worktree.task_id);
+      }
+    }
+
+    return { sessionsByTask, worktreeByTask };
+  }, [projectDetailQuery.data?.sessions, projectDetailQuery.data?.worktrees]);
+
   const staleWorktreesById = useMemo(() => {
     const map = new Map<string, { recommendation: string; reasons: string[] }>();
     for (const issue of diagnosticsQuery.data?.stale_worktrees ?? []) {
@@ -764,7 +779,7 @@ export function App() {
             </div>
 
             <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-              <div className="mt-6 flex gap-4 overflow-x-auto pb-2 scrollbar-thin">
+              <div className="mt-6 flex gap-6 overflow-x-auto pb-2 scrollbar-thin">
                 {projectDetailQuery.data?.board.columns.map((column) => (
                   <DroppableBoardColumn key={column.id} columnId={column.id}>
                     <ColumnShell className="flex flex-col gap-4">
@@ -788,6 +803,12 @@ export function App() {
                             task={task}
                             subtasks={subtasksByParent.get(task.id) ?? []}
                             selected={inspectedTaskId === task.id}
+                            metadata={{
+                              sessions: taskCardMetadata.sessionsByTask.get(task.id) ?? 0,
+                              worktree: taskCardMetadata.worktreeByTask.has(task.id),
+                              checks: inspectedTaskId === task.id ? (taskDetailQuery.data?.checks.length ?? 0) : 0,
+                              artifacts: inspectedTaskId === task.id ? (taskDetailQuery.data?.artifacts.length ?? 0) : 0,
+                            }}
                             onInspect={() => setInspectedTaskId(task.id)}
                           />
                         ))}
@@ -1702,94 +1723,6 @@ export function App() {
       </>}
       drawer={<></>}
     />
-  );
-}
-
-function DroppableBoardColumn({
-  columnId,
-  children,
-}: {
-  columnId: string;
-  children: ReactNode;
-}) {
-  const { isOver, setNodeRef } = useDroppable({ id: columnId });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={isOver ? "rounded-[28px] ring-2 ring-[color:var(--color-accent-primary)]/70 ring-offset-2 ring-offset-transparent" : ""}
-    >
-      {children}
-    </div>
-  );
-}
-
-function DraggableTaskCard({
-  task,
-  subtasks,
-  selected,
-  onInspect,
-}: {
-  task: TaskSummary;
-  subtasks: TaskSummary[];
-  selected: boolean;
-  onInspect: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: task.id,
-    disabled: Boolean(task.parent_task_id),
-  });
-
-  return (
-    <button
-      ref={setNodeRef}
-      type="button"
-      onClick={onInspect}
-      style={{
-        transform: transform ? CSS.Translate.toString(transform) : undefined,
-        opacity: isDragging ? 0.6 : 1,
-      }}
-      className={[
-        "w-full rounded-2xl border bg-white/4 p-4 text-left transition",
-        selected ? "border-[color:var(--color-accent-primary)]" : "border-white/8",
-        task.parent_task_id ? "cursor-default" : "cursor-grab active:cursor-grabbing",
-      ].join(" ")}
-      {...listeners}
-      {...attributes}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="text-sm font-semibold text-slate-100">{task.title}</div>
-        <Pill
-          className={
-            task.waiting_for_human
-              ? "border-amber-300/25 bg-amber-300/10 text-amber-100"
-              : task.blocked_reason
-                ? "border-rose-300/25 bg-rose-300/10 text-rose-100"
-                : "border-white/8 text-slate-300"
-          }
-        >
-          {task.waiting_for_human ? "Waiting" : task.blocked_reason ? "Blocked" : task.priority}
-        </Pill>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-        {task.tags.map((tag) => (
-          <span key={tag}>#{tag}</span>
-        ))}
-        {!task.tags.length ? <span>No tags yet</span> : null}
-      </div>
-      {subtasks.length ? (
-        <div className="mt-4 rounded-2xl border border-white/8 bg-black/15 px-3 py-3">
-          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Subtasks</div>
-          <div className="mt-2 flex flex-col gap-2">
-            {subtasks.map((subtask) => (
-              <div key={subtask.id} className="rounded-xl border border-white/8 bg-white/3 px-3 py-2 text-sm text-slate-200">
-                {subtask.title}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </button>
   );
 }
 

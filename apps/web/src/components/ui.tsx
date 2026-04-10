@@ -82,7 +82,7 @@ export function ColumnShell({
   return (
     <div
       className={cn(
-        "min-w-[250px] rounded-3xl border border-white/7 bg-black/12 px-[var(--space-card-padding)] py-[var(--space-card-padding)] [&>*+*]:mt-[var(--space-section-gap)]",
+        "min-w-[300px] rounded-3xl border border-white/7 bg-black/12 px-[var(--space-card-padding)] py-[var(--space-card-padding)] [&>*+*]:mt-[var(--space-section-gap)]",
         className,
       )}
     >
