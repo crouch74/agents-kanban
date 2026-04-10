@@ -93,6 +93,8 @@ export interface WaitingQuestionSummary {
   blocked_reason?: string | null;
   urgency?: string | null;
   options_json: Array<Record<string, unknown>>;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ProjectBootstrapResult {
