@@ -1,18 +1,5 @@
 @import "tailwindcss";
-
-:root {
-  color-scheme: dark;
-  --bg: #0b0f14;
-  --bg-elevated: #131a21;
-  --bg-soft: #18202a;
-  --fg: #edf2f7;
-  --muted: #95a2b3;
-  --line: rgba(173, 189, 207, 0.18);
-  --accent: #71d7c7;
-  --accent-soft: rgba(113, 215, 199, 0.16);
-  --warning: #f0c36d;
-  --danger: #ff8c82;
-}
+@import "./styles/tokens.css";
 
 * {
   box-sizing: border-box;
@@ -26,11 +13,8 @@ body,
 
 body {
   margin: 0;
-  background:
-    radial-gradient(circle at top left, rgba(113, 215, 199, 0.1), transparent 26%),
-    radial-gradient(circle at bottom right, rgba(73, 109, 255, 0.12), transparent 24%),
-    var(--bg);
-  color: var(--fg);
+  background: var(--color-surface-app);
+  color: var(--color-text-primary);
   font-family: "IBM Plex Sans", "Inter", sans-serif;
 }
 
@@ -47,9 +31,9 @@ textarea {
 }
 
 .surface {
-  background: rgba(19, 26, 33, 0.72);
-  border: 1px solid var(--line);
-  backdrop-filter: blur(18px);
+  background: var(--color-surface-panel);
+  border: 1px solid var(--color-stroke-default);
+  box-shadow: var(--shadow-sm);
 }
 
 .scrollbar-thin {
@@ -61,4 +45,3 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
-

@@ -457,7 +457,7 @@ export function App() {
                 className={[
                   "rounded-3xl border px-4 py-4 text-left transition",
                   selectedProjectId === project.id
-                    ? "border-[color:var(--accent)] bg-[color:var(--accent-soft)]"
+                    ? "border-[color:var(--color-accent-primary)] bg-[color:var(--color-accent-soft)]"
                     : "border-white/7 bg-white/2 hover:bg-white/5",
                 ].join(" ")}
               >
@@ -532,7 +532,7 @@ export function App() {
               </p>
             </div>
             <div className="flex items-center gap-3 text-sm text-slate-400">
-              <Activity className="h-4 w-4 text-[color:var(--accent)]" />
+              <Activity className="h-4 w-4 text-[color:var(--color-accent-primary)]" />
               {diagnosticsQuery.data?.environment ?? "development"} environment
             </div>
           </div>
@@ -1024,7 +1024,7 @@ export function App() {
                       })
                     }
                     disabled={!draftRepoPath.trim() || createRepositoryMutation.isPending}
-                    className="mt-3 rounded-full bg-[color:var(--accent)] px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-3 rounded-full bg-[color:var(--color-accent-primary)] px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Attach repo
                   </button>
@@ -1150,7 +1150,7 @@ export function App() {
                     className={[
                       "rounded-2xl border px-4 py-4 text-left",
                       selectedSessionId === session.id
-                        ? "border-[color:var(--accent)] bg-[color:var(--accent-soft)]"
+                        ? "border-[color:var(--color-accent-primary)] bg-[color:var(--color-accent-soft)]"
                         : "border-white/7 bg-white/3",
                     ].join(" ")}
                   >
@@ -1319,7 +1319,7 @@ export function App() {
                             className={[
                               "rounded-2xl border px-3 py-3 text-left",
                               relatedSession.id === selectedSessionId
-                                ? "border-[color:var(--accent)] bg-[color:var(--accent-soft)]"
+                                ? "border-[color:var(--color-accent-primary)] bg-[color:var(--color-accent-soft)]"
                                 : "border-white/8 bg-black/15",
                             ].join(" ")}
                           >
@@ -1452,7 +1452,7 @@ export function App() {
                     })
                   }
                   disabled={!selectedSessionTaskId || !draftQuestionPrompt.trim() || createQuestionMutation.isPending}
-                  className="mt-3 rounded-full bg-[color:var(--accent)] px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-3 rounded-full bg-[color:var(--color-accent-primary)] px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Open question
                 </button>
@@ -1469,7 +1469,7 @@ export function App() {
                     className={[
                       "rounded-2xl border px-4 py-4 text-left",
                       selectedQuestionId === question.id
-                        ? "border-[color:var(--accent)] bg-[color:var(--accent-soft)]"
+                        ? "border-[color:var(--color-accent-primary)] bg-[color:var(--color-accent-soft)]"
                         : "border-white/7 bg-white/3",
                     ].join(" ")}
                   >
@@ -1631,7 +1631,7 @@ function DroppableBoardColumn({
   return (
     <div
       ref={setNodeRef}
-      className={isOver ? "rounded-[28px] ring-2 ring-[color:var(--accent)]/70 ring-offset-2 ring-offset-transparent" : ""}
+      className={isOver ? "rounded-[28px] ring-2 ring-[color:var(--color-accent-primary)]/70 ring-offset-2 ring-offset-transparent" : ""}
     >
       {children}
     </div>
@@ -1665,7 +1665,7 @@ function DraggableTaskCard({
       }}
       className={[
         "w-full rounded-2xl border bg-white/4 p-4 text-left transition",
-        selected ? "border-[color:var(--accent)]" : "border-white/8",
+        selected ? "border-[color:var(--color-accent-primary)]" : "border-white/8",
         task.parent_task_id ? "cursor-default" : "cursor-grab active:cursor-grabbing",
       ].join(" ")}
       {...listeners}
