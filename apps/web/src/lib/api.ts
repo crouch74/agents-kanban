@@ -1,8 +1,10 @@
 import type {
   BoardView,
+  ProjectBootstrapResult,
   ProjectSummary,
   RepositorySummary,
   SessionSummary,
+  StackPreset,
   TaskSummary,
   WaitingQuestionSummary,
   WorktreeSummary,
@@ -168,10 +170,22 @@ export type TaskDetail = TaskSummary & {
   waiting_questions: WaitingQuestionSummary[];
 };
 
+async function readError(response: Response): Promise<Error> {
+  try {
+    const payload = (await response.json()) as { detail?: string };
+    if (payload.detail) {
+      return new Error(payload.detail);
+    }
+  } catch {
+    // fall through to the generic message below
+  }
+  return new Error(`Request failed: ${response.status}`);
+}
+
 export async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`);
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    throw await readError(response);
   }
 
   return (await response.json()) as T;
@@ -187,7 +201,7 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    throw await readError(response);
   }
 
   return (await response.json()) as T;
@@ -203,7 +217,7 @@ export async function patchJson<T>(path: string, body: unknown): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    throw await readError(response);
   }
 
   return (await response.json()) as T;
@@ -249,6 +263,19 @@ export function searchContext(query: string, projectId?: string) {
 
 export function createProject(payload: { name: string; description?: string }) {
   return postJson<ProjectSummary>("/projects", payload);
+}
+
+export function bootstrapProject(payload: {
+  name: string;
+  description?: string;
+  repo_path: string;
+  initialize_repo?: boolean;
+  stack_preset: StackPreset;
+  stack_notes?: string;
+  initial_prompt: string;
+  use_worktree?: boolean;
+}) {
+  return postJson<ProjectBootstrapResult>("/projects/bootstrap", payload);
 }
 
 export function getProject(projectId: string) {

@@ -1,0 +1,245 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+from git import Repo
+
+from app.bootstrap.dependencies import get_runtime_adapter
+from app.main import app
+from acp_core.runtime import RuntimeSessionInfo
+
+
+class FakeRuntime:
+    def __init__(self) -> None:
+        self.sessions: dict[str, dict[str, str]] = {}
+
+    def spawn_session(self, *, session_name: str, working_directory: Path, profile: str, command: str | None = None):
+        self.sessions[session_name] = {
+            "working_directory": str(working_directory),
+            "command": command or profile,
+        }
+        return RuntimeSessionInfo(
+            session_name=session_name,
+            pane_id="%3",
+            window_name="main",
+            working_directory=str(working_directory),
+            command=command or profile,
+        )
+
+    def session_exists(self, session_name: str) -> bool:
+        return session_name in self.sessions
+
+    def capture_tail(self, session_name: str, *, lines: int = 120) -> str:
+        return f"session={session_name}\nlines={lines}"
+
+    def terminate_session(self, session_name: str) -> None:
+        self.sessions.pop(session_name, None)
+
+    def list_sessions(self, *, prefix: str | None = None):
+        names = sorted(self.sessions)
+        if prefix is not None:
+            names = [name for name in names if name.startswith(prefix)]
+        return [
+            type("RuntimeSessionSummary", (), {"session_name": name, "window_name": "main"})()
+            for name in names
+        ]
+
+
+def create_git_repo(path: Path, *, with_agents: bool = False) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    repo = Repo.init(path)
+    repo.git.config("user.name", "ACP Test")
+    repo.git.config("user.email", "acp@example.test")
+    (path / "README.md").write_text("# temp repo\n", encoding="utf-8")
+    if with_agents:
+        (path / "AGENTS.md").write_text("# Existing\n\nKeep this note.\n", encoding="utf-8")
+    repo.git.add("--all")
+    repo.index.commit("init")
+    return path
+
+
+def test_bootstrap_existing_repo_in_repo_mode(tmp_path: Path) -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+    repo_path = create_git_repo(tmp_path / "existing-repo", with_agents=True)
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/projects/bootstrap",
+                json={
+                    "name": "Bootstrap Existing Repo",
+                    "repo_path": str(repo_path),
+                    "stack_preset": "node-library",
+                    "initial_prompt": "Plan the initial roadmap and create ACP tasks.",
+                },
+            )
+            assert response.status_code == 201
+            payload = response.json()
+
+            assert payload["use_worktree"] is False
+            assert payload["kickoff_worktree"] is None
+            assert payload["execution_path"] == str(repo_path)
+            assert payload["repo_initialized"] is False
+            assert payload["scaffold_applied"] is False
+            assert payload["kickoff_session"]["repository_id"] == payload["repository"]["id"]
+            assert payload["kickoff_session"]["worktree_id"] is None
+            assert "codex mcp add" in payload["kickoff_session"]["runtime_metadata"]["command"]
+
+            assert "Keep this note." in (repo_path / "AGENTS.md").read_text(encoding="utf-8")
+            assert "<!-- acp-managed:start -->" in (repo_path / "AGENTS.md").read_text(encoding="utf-8")
+            assert ".acp/" in (repo_path / ".gitignore").read_text(encoding="utf-8")
+            project_local = json.loads((repo_path / ".acp" / "project.local.json").read_text(encoding="utf-8"))
+            assert project_local["project_id"] == payload["project"]["id"]
+            assert project_local["kickoff_task_id"] == payload["kickoff_task"]["id"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bootstrap_existing_repo_with_worktree(tmp_path: Path) -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+    repo_path = create_git_repo(tmp_path / "worktree-repo")
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/projects/bootstrap",
+                json={
+                    "name": "Bootstrap Worktree Repo",
+                    "repo_path": str(repo_path),
+                    "stack_preset": "react-vite",
+                    "initial_prompt": "Break the initial work into tasks and subtasks.",
+                    "use_worktree": True,
+                },
+            )
+            assert response.status_code == 201
+            payload = response.json()
+
+            assert payload["use_worktree"] is True
+            assert payload["kickoff_worktree"] is not None
+            assert payload["kickoff_session"]["worktree_id"] == payload["kickoff_worktree"]["id"]
+            assert payload["execution_path"] == payload["kickoff_worktree"]["path"]
+            assert Path(payload["execution_path"]).exists()
+            assert (Path(payload["execution_path"]) / ".acp" / "project.local.json").exists()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bootstrap_empty_folder_with_git_init_in_repo_mode(tmp_path: Path, monkeypatch) -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+    repo_path = tmp_path / "new-repo"
+    repo_path.mkdir()
+    monkeypatch.setenv("GIT_AUTHOR_NAME", "ACP Test")
+    monkeypatch.setenv("GIT_AUTHOR_EMAIL", "acp@example.test")
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/projects/bootstrap",
+                json={
+                    "name": "Bootstrap Empty Repo",
+                    "repo_path": str(repo_path),
+                    "initialize_repo": True,
+                    "stack_preset": "fastapi-service",
+                    "initial_prompt": "Set up the first planning slice.",
+                },
+            )
+            assert response.status_code == 201
+            payload = response.json()
+
+            repo = Repo(repo_path)
+            assert repo.head.is_valid()
+            assert payload["repo_initialized"] is True
+            assert payload["scaffold_applied"] is True
+            assert payload["execution_path"] == str(repo_path)
+            assert (repo_path / "pyproject.toml").exists()
+            assert (repo_path / "app" / "main.py").exists()
+            assert (repo_path / "AGENTS.md").exists()
+            assert (repo_path / ".acp" / "bootstrap-prompt.md").exists()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bootstrap_empty_folder_with_git_init_and_worktree(tmp_path: Path, monkeypatch) -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+    repo_path = tmp_path / "new-worktree-repo"
+    repo_path.mkdir()
+    monkeypatch.setenv("GIT_AUTHOR_NAME", "ACP Test")
+    monkeypatch.setenv("GIT_AUTHOR_EMAIL", "acp@example.test")
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/projects/bootstrap",
+                json={
+                    "name": "Bootstrap Empty Worktree Repo",
+                    "repo_path": str(repo_path),
+                    "initialize_repo": True,
+                    "stack_preset": "python-package",
+                    "initial_prompt": "Create the initial ACP board layout for the package work.",
+                    "use_worktree": True,
+                },
+            )
+            assert response.status_code == 201
+            payload = response.json()
+
+            assert payload["repo_initialized"] is True
+            assert payload["kickoff_worktree"] is not None
+            assert Path(payload["kickoff_worktree"]["path"]).exists()
+            assert Path(payload["execution_path"]) == Path(payload["kickoff_worktree"]["path"])
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bootstrap_rejects_non_empty_non_repo_folder(tmp_path: Path) -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+    repo_path = tmp_path / "not-a-repo"
+    repo_path.mkdir()
+    (repo_path / "notes.txt").write_text("hello\n", encoding="utf-8")
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/projects/bootstrap",
+                json={
+                    "name": "Bad Bootstrap",
+                    "repo_path": str(repo_path),
+                    "initialize_repo": True,
+                    "stack_preset": "nextjs",
+                    "initial_prompt": "Do the work.",
+                },
+            )
+            assert response.status_code == 400
+            assert "empty directory" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bootstrap_rejects_detached_head_in_repo_mode(tmp_path: Path) -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+    repo_path = create_git_repo(tmp_path / "detached-repo")
+    repo = Repo(repo_path)
+    repo.git.checkout(repo.head.commit.hexsha)
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/projects/bootstrap",
+                json={
+                    "name": "Detached Repo",
+                    "repo_path": str(repo_path),
+                    "stack_preset": "node-library",
+                    "initial_prompt": "Plan the work.",
+                },
+            )
+            assert response.status_code == 400
+            assert "detached HEAD" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()

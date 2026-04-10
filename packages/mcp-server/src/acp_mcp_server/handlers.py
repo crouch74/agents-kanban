@@ -14,9 +14,12 @@ from acp_core.schemas import (
     AgentSessionRead,
     DiagnosticsRead,
     EventRecord,
+    ProjectBootstrapCreate,
+    ProjectBootstrapRead,
     ProjectCreate,
     ProjectSummary,
     RepositoryRead,
+    StackPreset,
     TaskArtifactCreate,
     TaskCheckCreate,
     TaskCommentCreate,
@@ -31,6 +34,7 @@ from acp_core.schemas import (
     WorktreeRead,
 )
 from acp_core.services import (
+    BootstrapService,
     DiagnosticsService,
     ProjectService,
     RepositoryService,
@@ -124,9 +128,39 @@ def _serialize_task_dependency(dependency: TaskDependency) -> dict[str, Any]:
     }
 
 
-def _load_idempotent_result(context: ServiceContext, event_type: str, entity_id: str) -> dict[str, Any]:
+def _serialize_bootstrap_result(context: ServiceContext, event: Event) -> dict[str, Any]:
+    project = ProjectService(context).get_project(event.entity_id)
+    repository_id = event.payload_json["repository_id"]
+    kickoff_task_id = event.payload_json["kickoff_task_id"]
+    kickoff_session_id = event.payload_json["kickoff_session_id"]
+    kickoff_worktree_id = event.payload_json.get("kickoff_worktree_id")
+    repository = RepositoryService(context).get_repository(repository_id)
+    kickoff_task = TaskService(context).get_task(kickoff_task_id)
+    kickoff_session = SessionService(context).get_session(kickoff_session_id)
+    kickoff_worktree = WorktreeService(context).get_worktree(kickoff_worktree_id) if kickoff_worktree_id else None
+    return ProjectBootstrapRead(
+        project=ProjectSummary.model_validate(project),
+        repository=RepositoryRead.model_validate(repository),
+        kickoff_task=TaskRead.model_validate(kickoff_task),
+        kickoff_session=AgentSessionRead.model_validate(kickoff_session),
+        kickoff_worktree=WorktreeRead.model_validate(kickoff_worktree) if kickoff_worktree else None,
+        execution_path=event.payload_json["execution_path"],
+        execution_branch=event.payload_json["execution_branch"],
+        stack_preset=StackPreset(event.payload_json["stack_preset"]),
+        stack_notes=event.payload_json.get("stack_notes"),
+        use_worktree=bool(event.payload_json["use_worktree"]),
+        repo_initialized=bool(event.payload_json["repo_initialized"]),
+        scaffold_applied=bool(event.payload_json["scaffold_applied"]),
+    ).model_dump()
+
+
+def _load_idempotent_result(context: ServiceContext, event: Event) -> dict[str, Any]:
+    event_type = event.event_type
+    entity_id = event.entity_id
     if event_type == "project.created":
         return ProjectSummary.model_validate(ProjectService(context).get_project(entity_id)).model_dump()
+    if event_type == "project.bootstrapped":
+        return _serialize_bootstrap_result(context, event)
     if event_type in {"task.created", "task.updated", "task.claimed"}:
         return TaskRead.model_validate(TaskService(context).get_task(entity_id)).model_dump()
     if event_type == "task.comment_added":
@@ -171,7 +205,7 @@ def _replay_if_exists(context: ServiceContext, event_type: str, client_request_i
     )
     if event is None:
         return None
-    return _load_idempotent_result(context, event_type, event.entity_id)
+    return _load_idempotent_result(context, event)
 
 
 def project_list() -> list[ProjectSummary]:
@@ -190,6 +224,36 @@ def project_create(
             return replay
         project = ProjectService(context).create_project(ProjectCreate(name=name, description=description))
         return ProjectSummary.model_validate(project).model_dump()
+
+
+def project_bootstrap(
+    name: str,
+    repo_path: str,
+    stack_preset: str,
+    initial_prompt: str,
+    description: str | None = None,
+    initialize_repo: bool = False,
+    stack_notes: str | None = None,
+    use_worktree: bool = False,
+    client_request_id: str | None = None,
+) -> dict[str, Any]:
+    with service_context(correlation_id=client_request_id) as context:
+        replay = _replay_if_exists(context, "project.bootstrapped", client_request_id)
+        if replay is not None:
+            return replay
+        result = BootstrapService(context).bootstrap_project(
+            ProjectBootstrapCreate(
+                name=name,
+                description=description,
+                repo_path=repo_path,
+                initialize_repo=initialize_repo,
+                stack_preset=StackPreset(stack_preset),
+                stack_notes=stack_notes,
+                initial_prompt=initial_prompt,
+                use_worktree=use_worktree,
+            )
+        )
+        return result.model_dump()
 
 
 def project_get(project_id: str) -> dict[str, Any]:

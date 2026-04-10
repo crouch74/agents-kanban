@@ -6,6 +6,13 @@ export type WorkflowState =
   | "done"
   | "cancelled";
 
+export type StackPreset =
+  | "node-library"
+  | "react-vite"
+  | "nextjs"
+  | "python-package"
+  | "fastapi-service";
+
 export interface BoardColumn {
   id: string;
   name: string;
@@ -86,4 +93,19 @@ export interface WaitingQuestionSummary {
   blocked_reason?: string | null;
   urgency?: string | null;
   options_json: Array<Record<string, unknown>>;
+}
+
+export interface ProjectBootstrapResult {
+  project: ProjectSummary;
+  repository: RepositorySummary;
+  kickoff_task: TaskSummary;
+  kickoff_session: SessionSummary;
+  kickoff_worktree?: WorktreeSummary | null;
+  execution_path: string;
+  execution_branch: string;
+  stack_preset: StackPreset;
+  stack_notes?: string | null;
+  use_worktree: boolean;
+  repo_initialized: boolean;
+  scaffold_applied: boolean;
 }

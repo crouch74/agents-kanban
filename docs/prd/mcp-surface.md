@@ -20,6 +20,7 @@ REST API.
 - `project_list`
 - `project_get`
 - `project_create`
+- `project_bootstrap`
 - `board_get`
 
 ### Task lifecycle
@@ -96,3 +97,5 @@ A common agent loop today looks like:
   reviewer workflows
 - diagnostics and worktree hygiene are intentionally exposed to agents so they
   can self-correct before a human intervenes
+- `project_bootstrap` can initialize an empty repo, add ACP guidance files, and
+  launch the kickoff Codex session in either repo mode or worktree mode

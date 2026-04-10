@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from acp_core.schemas import ProjectCreate, ProjectOverview, ProjectSummary
+from acp_core.schemas import ProjectBootstrapCreate, ProjectBootstrapRead, ProjectCreate, ProjectOverview, ProjectSummary
 from app.api.ws.events import broadcast_change
-from app.bootstrap.dependencies import get_project_service
+from app.bootstrap.dependencies import get_bootstrap_service, get_project_service
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -25,6 +25,29 @@ def create_project(payload: ProjectCreate, request: Request, service=Depends(get
         entity_id=response.id,
         project_id=response.id,
         detail={"name": response.name},
+    )
+    return response
+
+
+@router.post("/bootstrap", response_model=ProjectBootstrapRead, status_code=201)
+def bootstrap_project(
+    payload: ProjectBootstrapCreate,
+    request: Request,
+    service=Depends(get_bootstrap_service),
+) -> ProjectBootstrapRead:
+    try:
+        response = service.bootstrap_project(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    broadcast_change(
+        request,
+        event_type="project.bootstrapped",
+        entity_type="project",
+        entity_id=response.project.id,
+        project_id=response.project.id,
+        task_id=response.kickoff_task.id,
+        session_id=response.kickoff_session.id,
+        detail={"name": response.project.name, "use_worktree": response.use_worktree},
     )
     return response
 

@@ -38,6 +38,32 @@ def project_create(name: str, description: str | None = None, client_request_id:
 
 
 @mcp.tool()
+def project_bootstrap(
+    name: str,
+    repo_path: str,
+    stack_preset: str,
+    initial_prompt: str,
+    description: str | None = None,
+    initialize_repo: bool = False,
+    stack_notes: str | None = None,
+    use_worktree: bool = False,
+    client_request_id: str | None = None,
+) -> dict:
+    """Create a project, prepare the repository, and launch the kickoff session."""
+    return handlers.project_bootstrap(
+        name,
+        repo_path,
+        stack_preset,
+        initial_prompt,
+        description,
+        initialize_repo,
+        stack_notes,
+        use_worktree,
+        client_request_id,
+    )
+
+
+@mcp.tool()
 def task_create(
     project_id: str,
     title: str,

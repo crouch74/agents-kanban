@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class StackPreset(StrEnum):
+    NODE_LIBRARY = "node-library"
+    REACT_VITE = "react-vite"
+    NEXTJS = "nextjs"
+    PYTHON_PACKAGE = "python-package"
+    FASTAPI_SERVICE = "fastapi-service"
 
 
 class ProjectCreate(BaseModel):
@@ -20,6 +29,17 @@ class ProjectSummary(BaseModel):
     description: str | None
     archived: bool
     created_at: datetime
+
+
+class ProjectBootstrapCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=255)
+    description: str | None = None
+    repo_path: str = Field(min_length=1)
+    initialize_repo: bool = False
+    stack_preset: StackPreset
+    stack_notes: str | None = None
+    initial_prompt: str = Field(min_length=3)
+    use_worktree: bool = False
 
 
 class RepositoryCreate(BaseModel):
@@ -351,6 +371,21 @@ class ProjectOverview(BaseModel):
     worktrees: list[WorktreeRead]
     sessions: list[AgentSessionRead]
     waiting_questions: list[WaitingQuestionRead]
+
+
+class ProjectBootstrapRead(BaseModel):
+    project: ProjectSummary
+    repository: RepositoryRead
+    kickoff_task: TaskRead
+    kickoff_session: AgentSessionRead
+    kickoff_worktree: WorktreeRead | None
+    execution_path: str
+    execution_branch: str
+    stack_preset: StackPreset
+    stack_notes: str | None
+    use_worktree: bool
+    repo_initialized: bool
+    scaffold_applied: bool
 
 
 class EventRecord(BaseModel):

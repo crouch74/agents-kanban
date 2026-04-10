@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import os
 from pathlib import Path
 from re import sub
 from shutil import which
 import subprocess
+import sys
+import textwrap
 from typing import Any
 
 from git import InvalidGitRepositoryError, NoSuchPathError, Repo
@@ -31,22 +35,29 @@ from acp_core.models import (
     WaitingQuestion,
     Worktree,
 )
-from acp_core.runtime import RuntimeSessionSummary, TmuxRuntimeAdapter, safe_tmux_name
+from acp_core.runtime import RuntimeSessionSummary, TmuxRuntimeAdapter, safe_tmux_name, shell_join
 from acp_core.schemas import (
     AgentRunRead,
     AgentSessionCreate,
     AgentSessionFollowUpCreate,
     AgentSessionRead,
+    BoardColumnRead,
     BoardView,
     DashboardRead,
     DiagnosticsRead,
+    EventRecord,
     HumanReplyCreate,
     HumanReplyRead,
+    ProjectBootstrapCreate,
+    ProjectBootstrapRead,
     ProjectCreate,
+    ProjectOverview,
+    ProjectSummary,
     RepositoryCreate,
     RepositoryRead,
     SearchHit,
     SearchResults,
+    StackPreset,
     TaskArtifactCreate,
     TaskArtifactRead,
     TaskCheckCreate,
@@ -56,6 +67,7 @@ from acp_core.schemas import (
     TaskCompletionReadinessRead,
     TaskDependencyCreate,
     TaskDependencyRead,
+    TaskRead,
     WaitingQuestionCreate,
     WaitingQuestionDetail,
     WaitingQuestionRead,
@@ -80,6 +92,10 @@ def slugify(value: str) -> str:
 
 def task_slug(value: str) -> str:
     return slugify(value)[:32]
+
+
+ACP_AGENTS_SECTION_START = "<!-- acp-managed:start -->"
+ACP_AGENTS_SECTION_END = "<!-- acp-managed:end -->"
 
 
 @dataclass
@@ -584,6 +600,36 @@ class RepositoryService:
             raise ValueError("Repository not found")
         return repository
 
+    @staticmethod
+    def inspect_git_repository(repo_path: Path) -> tuple[str | None, dict[str, Any]]:
+        git_repo = Repo(repo_path)
+
+        default_branch = None
+        if git_repo.head.is_valid():
+            if git_repo.head.is_detached:
+                default_branch = None
+            else:
+                try:
+                    default_branch = git_repo.active_branch.name
+                except TypeError:
+                    default_branch = None
+        else:
+            try:
+                default_branch = git_repo.active_branch.name
+            except TypeError:
+                default_branch = None
+
+        remotes = [remote.name for remote in git_repo.remotes]
+        metadata_json = {
+            "is_dirty": git_repo.is_dirty(untracked_files=True),
+            "head_commit": git_repo.head.commit.hexsha if git_repo.head.is_valid() else None,
+            "remotes": remotes,
+            "working_dir": str(git_repo.working_tree_dir or repo_path),
+            "is_detached": git_repo.head.is_detached,
+            "has_commits": git_repo.head.is_valid(),
+        }
+        return default_branch, metadata_json
+
     def create_repository(self, payload: RepositoryCreate) -> Repository:
         project = self.context.db.get(Project, payload.project_id)
         if project is None:
@@ -595,20 +641,7 @@ class RepositoryService:
         except (InvalidGitRepositoryError, NoSuchPathError) as exc:
             raise ValueError("Local path must point to a git repository") from exc
 
-        default_branch = None
-        if git_repo.head.is_valid():
-            try:
-                default_branch = git_repo.active_branch.name
-            except TypeError:
-                default_branch = git_repo.head.reference.name
-
-        remotes = [remote.name for remote in git_repo.remotes]
-        metadata_json = {
-            "is_dirty": git_repo.is_dirty(untracked_files=True),
-            "head_commit": git_repo.head.commit.hexsha if git_repo.head.is_valid() else None,
-            "remotes": remotes,
-            "working_dir": str(git_repo.working_tree_dir or repo_path),
-        }
+        default_branch, metadata_json = self.inspect_git_repository(repo_path)
 
         repository = Repository(
             project_id=payload.project_id,
@@ -1140,6 +1173,496 @@ class SessionService:
 
         logger.info("⚠️ session cancelled", session_id=session.id, session_name=session.session_name)
         return session
+
+
+class BootstrapService:
+    def __init__(self, context: ServiceContext, runtime: TmuxRuntimeAdapter | None = None) -> None:
+        self.context = context
+        self.runtime = runtime or TmuxRuntimeAdapter()
+
+    @staticmethod
+    def _repo_has_user_files(repo_path: Path) -> bool:
+        for entry in repo_path.iterdir():
+            if entry.name == ".git":
+                continue
+            return True
+        return False
+
+    @staticmethod
+    def _git_identity(repo_path: Path) -> tuple[str, str]:
+        values: dict[str, str] = {}
+        for key in ("user.name", "user.email"):
+            result = subprocess.run(
+                ["git", "config", "--get", key],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            values[key] = result.stdout.strip()
+        if not values["user.name"]:
+            values["user.name"] = os.environ.get("GIT_AUTHOR_NAME", "").strip()
+        if not values["user.email"]:
+            values["user.email"] = os.environ.get("GIT_AUTHOR_EMAIL", "").strip()
+        if not values["user.name"] or not values["user.email"]:
+            raise ValueError("Git user.name and user.email must be configured before ACP can create the initial commit")
+        return values["user.name"], values["user.email"]
+
+    @staticmethod
+    def _ensure_line(path: Path, line: str) -> None:
+        existing = path.read_text(encoding="utf-8") if path.exists() else ""
+        lines = [item.strip() for item in existing.splitlines()]
+        if line in lines:
+            return
+        content = existing.rstrip()
+        if content:
+            content += "\n"
+        content += f"{line}\n"
+        path.write_text(content, encoding="utf-8")
+
+    def _render_agents_section(self) -> str:
+        return textwrap.dedent(
+            f"""
+            {ACP_AGENTS_SECTION_START}
+            # Agent Control Plane Workflow
+
+            - Treat the ACP board as the source of truth for planning and execution state.
+            - Use the Agent Control Plane MCP server named `{settings.bootstrap_agent_mcp_name}` to read project state.
+            - Create top-level tasks with `task_create` and one-level subtasks with `subtask_create`.
+            - Keep task progress current with `task_update`, `task_comment_add`, `task_check_add`, and `task_artifact_add`.
+            - Ask operators for missing requirements through `question_open` instead of leaving ambiguity in local notes.
+            - Do not mark tasks done until ACP readiness is satisfied.
+            - Read `.acp/project.local.json` for the active ACP project, task, and execution context.
+            {ACP_AGENTS_SECTION_END}
+            """
+        ).strip()
+
+    def _ensure_agents_file(self, repo_path: Path) -> None:
+        path = repo_path / "AGENTS.md"
+        section = self._render_agents_section()
+        if not path.exists():
+            path.write_text(f"# AGENTS.md\n\n{section}\n", encoding="utf-8")
+            return
+
+        existing = path.read_text(encoding="utf-8")
+        if ACP_AGENTS_SECTION_START in existing and ACP_AGENTS_SECTION_END in existing:
+            start = existing.index(ACP_AGENTS_SECTION_START)
+            end = existing.index(ACP_AGENTS_SECTION_END) + len(ACP_AGENTS_SECTION_END)
+            updated = f"{existing[:start].rstrip()}\n\n{section}\n"
+            suffix = existing[end:].lstrip()
+            if suffix:
+                updated = f"{updated}\n{suffix}"
+            path.write_text(updated, encoding="utf-8")
+            return
+
+        content = existing.rstrip()
+        if content:
+            content += "\n\n"
+        content += f"{section}\n"
+        path.write_text(content, encoding="utf-8")
+
+    def _write_file_if_missing(self, path: Path, content: str) -> bool:
+        if path.exists():
+            return False
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        return True
+
+    def _scaffold_repo(
+        self,
+        repo_path: Path,
+        *,
+        project_name: str,
+        description: str | None,
+        stack_preset: StackPreset,
+    ) -> bool:
+        changed = False
+        readme_body = f"# {project_name}\n\n{description or 'Bootstrapped with Agent Control Plane.'}\n"
+        changed |= self._write_file_if_missing(repo_path / "README.md", readme_body)
+
+        if stack_preset == StackPreset.NODE_LIBRARY:
+            changed |= self._write_file_if_missing(
+                repo_path / "package.json",
+                json.dumps(
+                    {
+                        "name": slugify(project_name),
+                        "version": "0.1.0",
+                        "private": True,
+                        "type": "module",
+                        "scripts": {"build": "echo \"Add your build\"", "test": "echo \"Add your tests\""},
+                    },
+                    indent=2,
+                )
+                + "\n",
+            )
+            changed |= self._write_file_if_missing(
+                repo_path / "src" / "index.js",
+                "export function main() {\n  return \"hello from Agent Control Plane\";\n}\n",
+            )
+        elif stack_preset == StackPreset.REACT_VITE:
+            changed |= self._write_file_if_missing(
+                repo_path / "package.json",
+                json.dumps(
+                    {
+                        "name": slugify(project_name),
+                        "version": "0.1.0",
+                        "private": True,
+                        "type": "module",
+                        "scripts": {"dev": "vite", "build": "vite build", "test": "echo \"Add your tests\""},
+                        "dependencies": {"react": "^19.1.0", "react-dom": "^19.1.0"},
+                        "devDependencies": {
+                            "@vitejs/plugin-react": "^4.6.0",
+                            "typescript": "^5.8.3",
+                            "vite": "^7.0.0",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+            )
+            changed |= self._write_file_if_missing(
+                repo_path / "tsconfig.json",
+                '{\n  "compilerOptions": {\n    "target": "ES2020",\n    "module": "ESNext",\n    "jsx": "react-jsx"\n  },\n  "include": ["src"]\n}\n',
+            )
+            changed |= self._write_file_if_missing(
+                repo_path / "vite.config.ts",
+                'import { defineConfig } from "vite";\nimport react from "@vitejs/plugin-react";\n\nexport default defineConfig({ plugins: [react()] });\n',
+            )
+            changed |= self._write_file_if_missing(
+                repo_path / "src" / "main.tsx",
+                'import React from "react";\nimport ReactDOM from "react-dom/client";\nimport { App } from "./App";\n\nReactDOM.createRoot(document.getElementById("root")!).render(\n  <React.StrictMode>\n    <App />\n  </React.StrictMode>,\n);\n',
+            )
+            changed |= self._write_file_if_missing(
+                repo_path / "src" / "App.tsx",
+                f'export function App() {{\n  return <main>{project_name}</main>;\n}}\n',
+            )
+        elif stack_preset == StackPreset.NEXTJS:
+            changed |= self._write_file_if_missing(
+                repo_path / "package.json",
+                json.dumps(
+                    {
+                        "name": slugify(project_name),
+                        "version": "0.1.0",
+                        "private": True,
+                        "scripts": {"dev": "next dev", "build": "next build", "start": "next start"},
+                        "dependencies": {"next": "^15.0.0", "react": "^19.1.0", "react-dom": "^19.1.0"},
+                        "devDependencies": {"typescript": "^5.8.3"},
+                    },
+                    indent=2,
+                )
+                + "\n",
+            )
+            changed |= self._write_file_if_missing(
+                repo_path / "tsconfig.json",
+                '{\n  "compilerOptions": {\n    "target": "ES2020",\n    "module": "ESNext",\n    "jsx": "preserve"\n  },\n  "include": ["app"]\n}\n',
+            )
+            changed |= self._write_file_if_missing(
+                repo_path / "next.config.ts",
+                "import type { NextConfig } from \"next\";\n\nconst nextConfig: NextConfig = {};\n\nexport default nextConfig;\n",
+            )
+            changed |= self._write_file_if_missing(
+                repo_path / "app" / "page.tsx",
+                f"export default function Page() {{\n  return <main>{project_name}</main>;\n}}\n",
+            )
+        elif stack_preset == StackPreset.PYTHON_PACKAGE:
+            changed |= self._write_file_if_missing(
+                repo_path / "pyproject.toml",
+                textwrap.dedent(
+                    f"""
+                    [project]
+                    name = "{slugify(project_name)}"
+                    version = "0.1.0"
+                    description = "{description or 'Bootstrapped with Agent Control Plane.'}"
+                    requires-python = ">=3.12"
+                    """
+                ).lstrip(),
+            )
+            package_name = slugify(project_name).replace("-", "_")
+            changed |= self._write_file_if_missing(
+                repo_path / package_name / "__init__.py",
+                '__all__ = ["hello"]\n\n\ndef hello() -> str:\n    return "hello from Agent Control Plane"\n',
+            )
+            changed |= self._write_file_if_missing(
+                repo_path / "tests" / "test_smoke.py",
+                f"from {package_name} import hello\n\n\ndef test_hello() -> None:\n    assert hello() == \"hello from Agent Control Plane\"\n",
+            )
+        elif stack_preset == StackPreset.FASTAPI_SERVICE:
+            changed |= self._write_file_if_missing(
+                repo_path / "pyproject.toml",
+                textwrap.dedent(
+                    f"""
+                    [project]
+                    name = "{slugify(project_name)}"
+                    version = "0.1.0"
+                    description = "{description or 'Bootstrapped with Agent Control Plane.'}"
+                    requires-python = ">=3.12"
+                    dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1"]
+                    """
+                ).lstrip(),
+            )
+            changed |= self._write_file_if_missing(
+                repo_path / "app" / "main.py",
+                'from fastapi import FastAPI\n\napp = FastAPI()\n\n\n@app.get("/health")\ndef health() -> dict[str, str]:\n    return {"status": "ok"}\n',
+            )
+            changed |= self._write_file_if_missing(
+                repo_path / "tests" / "test_health.py",
+                'from fastapi.testclient import TestClient\n\nfrom app.main import app\n\n\ndef test_health() -> None:\n    client = TestClient(app)\n    assert client.get("/health").json() == {"status": "ok"}\n',
+            )
+
+        return changed
+
+    def _commit_initial_state(self, repo_path: Path) -> None:
+        self._git_identity(repo_path)
+        git_repo = Repo(repo_path)
+        git_repo.git.add("--all")
+        if not git_repo.is_dirty(untracked_files=True) and git_repo.head.is_valid():
+            return
+        git_repo.index.commit("chore: bootstrap project")
+
+    @staticmethod
+    def _current_branch_name(git_repo: Repo) -> str | None:
+        if git_repo.head.is_detached:
+            return None
+        try:
+            return git_repo.active_branch.name
+        except TypeError:
+            return None
+
+    def _default_repo_branch(self, git_repo: Repo) -> str:
+        branch_name = self._current_branch_name(git_repo)
+        if branch_name:
+            return branch_name
+        raise ValueError("Repository is in detached HEAD; check out a branch or enable worktree kickoff")
+
+    def _write_project_local_files(
+        self,
+        *,
+        repository_root: Path,
+        execution_root: Path,
+        project: Project,
+        repository: Repository,
+        kickoff_task: Task,
+        payload: ProjectBootstrapCreate,
+    ) -> None:
+        local_payload = {
+            "project_id": project.id,
+            "api_base_url": settings.api_base_url,
+            "stack_preset": payload.stack_preset.value,
+            "stack_notes": payload.stack_notes,
+            "repo_path": str(repository_root),
+            "kickoff_task_id": kickoff_task.id,
+            "use_worktree": payload.use_worktree,
+            "execution_path": str(execution_root),
+        }
+        prompt_body = textwrap.dedent(
+            f"""
+            You are the kickoff coding agent for the project "{project.name}".
+
+            Start by reading `AGENTS.md` and `.acp/project.local.json`.
+
+            The Agent Control Plane MCP server named `{settings.bootstrap_agent_mcp_name}` is available for board updates.
+            Use it to:
+            - inspect project and board state
+            - create top-level tasks and one-level subtasks
+            - open waiting questions when requirements are unclear
+            - add comments, checks, and artifacts as planning evidence
+            - keep the kickoff task updated while you break down the work
+
+            Focus on planning first:
+            - inspect the repository and scaffold
+            - clarify missing requirements with the operator through ACP waiting questions
+            - create or refine the ACP task tree for the initial scope
+            - keep the board aligned with the real work
+
+            Operator kickoff prompt:
+            {payload.initial_prompt}
+
+            Stack preset: {payload.stack_preset.value}
+            Stack notes: {payload.stack_notes or "None"}
+            Kickoff task id: {kickoff_task.id}
+            """
+        ).strip() + "\n"
+
+        targets = {repository_root}
+        if execution_root != repository_root:
+            targets.add(execution_root)
+        for target in targets:
+            acp_dir = target / ".acp"
+            acp_dir.mkdir(parents=True, exist_ok=True)
+            (acp_dir / "project.local.json").write_text(json.dumps(local_payload, indent=2) + "\n", encoding="utf-8")
+            (acp_dir / "bootstrap-prompt.md").write_text(prompt_body, encoding="utf-8")
+
+    def _build_session_command(self, execution_root: Path) -> str:
+        prompt_file = execution_root / ".acp" / "bootstrap-prompt.md"
+        mcp_pythonpath = ":".join(
+            [
+                str(settings.control_plane_root / "packages" / "core" / "src"),
+                str(settings.control_plane_root / "packages" / "mcp-server" / "src"),
+            ]
+        )
+        template_values = {
+            "mcp_name": shell_join([settings.bootstrap_agent_mcp_name]),
+            "mcp_pythonpath": shell_join([mcp_pythonpath]),
+            "python_executable": shell_join([sys.executable]),
+            "prompt_file": shell_join([str(prompt_file)]),
+        }
+        return settings.bootstrap_agent_command_template.format(**template_values)
+
+    def bootstrap_project(self, payload: ProjectBootstrapCreate) -> ProjectBootstrapRead:
+        repo_path = Path(payload.repo_path).expanduser().resolve()
+        if not repo_path.exists() or not repo_path.is_dir():
+            raise ValueError("Repo path must point to an existing directory")
+
+        repo_initialized = False
+        try:
+            git_repo = Repo(repo_path)
+        except (InvalidGitRepositoryError, NoSuchPathError):
+            if not payload.initialize_repo:
+                raise ValueError("Repo path must already be a git repository or enable Initialize repo with git")
+            if any(repo_path.iterdir()):
+                raise ValueError("Initialize repo with git is only available for an empty directory")
+            Repo.init(repo_path)
+            git_repo = Repo(repo_path)
+            repo_initialized = True
+
+        if git_repo.head.is_valid() and not payload.use_worktree and git_repo.head.is_detached:
+            raise ValueError("Repository is in detached HEAD; check out a branch or enable worktree kickoff")
+
+        project = ProjectService(self.context).create_project(
+            ProjectCreate(name=payload.name, description=payload.description)
+        )
+
+        scaffold_applied = False
+        if not git_repo.head.is_valid():
+            scaffold_applied = self._scaffold_repo(
+                repo_path,
+                project_name=payload.name,
+                description=payload.description,
+                stack_preset=payload.stack_preset,
+            )
+            self._ensure_line(repo_path / ".gitignore", ".acp/")
+            self._ensure_agents_file(repo_path)
+            self._commit_initial_state(repo_path)
+            git_repo = Repo(repo_path)
+        else:
+            self._ensure_line(repo_path / ".gitignore", ".acp/")
+            self._ensure_agents_file(repo_path)
+            git_repo = Repo(repo_path)
+
+        repository = RepositoryService(self.context).create_repository(
+            RepositoryCreate(project_id=project.id, local_path=str(repo_path), name=repo_path.name)
+        )
+
+        task_description = textwrap.dedent(
+            f"""
+            Initial operator prompt:
+
+            {payload.initial_prompt}
+
+            Stack preset: {payload.stack_preset.value}
+            Stack notes: {payload.stack_notes or "None"}
+            """
+        ).strip()
+        kickoff_task = TaskService(self.context).create_task(
+            TaskCreate(
+                project_id=project.id,
+                title="Kick off planning and board setup",
+                description=task_description,
+                board_column_key="in_progress",
+            )
+        )
+
+        kickoff_worktree = None
+        execution_path = repo_path
+        execution_branch = ""
+        if payload.use_worktree:
+            kickoff_worktree = WorktreeService(self.context).create_worktree(
+                WorktreeCreate(repository_id=repository.id, task_id=kickoff_task.id)
+            )
+            execution_path = Path(kickoff_worktree.path)
+            execution_branch = kickoff_worktree.branch_name
+        else:
+            execution_branch = self._default_repo_branch(git_repo)
+
+        self._write_project_local_files(
+            repository_root=repo_path,
+            execution_root=execution_path,
+            project=project,
+            repository=repository,
+            kickoff_task=kickoff_task,
+            payload=payload,
+        )
+        session = SessionService(self.context, runtime=self.runtime).spawn_session(
+            AgentSessionCreate(
+                task_id=kickoff_task.id,
+                profile="executor",
+                repository_id=repository.id if not payload.use_worktree else None,
+                worktree_id=kickoff_worktree.id if kickoff_worktree else None,
+                command=self._build_session_command(execution_path),
+            )
+        )
+
+        project.settings_json = {
+            **project.settings_json,
+            "bootstrap": {
+                "stack_preset": payload.stack_preset.value,
+                "stack_notes": payload.stack_notes,
+                "repository_id": repository.id,
+                "kickoff_task_id": kickoff_task.id,
+                "kickoff_session_id": session.id,
+                "kickoff_worktree_id": kickoff_worktree.id if kickoff_worktree else None,
+                "use_worktree": payload.use_worktree,
+                "execution_path": str(execution_path),
+            },
+        }
+        self.context.record_event(
+            entity_type="project",
+            entity_id=project.id,
+            event_type="project.bootstrapped",
+            payload_json={
+                "repository_id": repository.id,
+                "kickoff_task_id": kickoff_task.id,
+                "kickoff_session_id": session.id,
+                "kickoff_worktree_id": kickoff_worktree.id if kickoff_worktree else None,
+                "execution_path": str(execution_path),
+                "execution_branch": execution_branch,
+                "stack_preset": payload.stack_preset.value,
+                "stack_notes": payload.stack_notes,
+                "use_worktree": payload.use_worktree,
+                "repo_initialized": repo_initialized,
+                "scaffold_applied": scaffold_applied,
+            },
+        )
+        self.context.db.commit()
+        self.context.db.refresh(project)
+        self.context.db.refresh(repository)
+        self.context.db.refresh(kickoff_task)
+        self.context.db.refresh(session)
+        if kickoff_worktree is not None:
+            self.context.db.refresh(kickoff_worktree)
+
+        logger.info(
+            "🧭 project bootstrapped",
+            project_id=project.id,
+            repository_id=repository.id,
+            kickoff_task_id=kickoff_task.id,
+            session_id=session.id,
+            use_worktree=payload.use_worktree,
+        )
+        return ProjectBootstrapRead(
+            project=ProjectSummary.model_validate(project),
+            repository=RepositoryRead.model_validate(repository),
+            kickoff_task=TaskRead.model_validate(kickoff_task),
+            kickoff_session=AgentSessionRead.model_validate(session),
+            kickoff_worktree=WorktreeRead.model_validate(kickoff_worktree) if kickoff_worktree else None,
+            execution_path=str(execution_path),
+            execution_branch=execution_branch,
+            stack_preset=payload.stack_preset,
+            stack_notes=payload.stack_notes,
+            use_worktree=payload.use_worktree,
+            repo_initialized=repo_initialized,
+            scaffold_applied=scaffold_applied,
+        )
 
 
 class WaitingService:

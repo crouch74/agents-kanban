@@ -5,6 +5,7 @@ from pathlib import Path
 from app.main import app
 from acp_mcp_server import handlers
 from acp_core.runtime import RuntimeSessionInfo
+from git import Repo
 
 
 class FakeRuntime:
@@ -43,19 +44,50 @@ class FakeRuntime:
         ]
 
 
-def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch) -> None:
+def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path: Path) -> None:
     fake_runtime = FakeRuntime()
     original_session_service = handlers.SessionService
+    original_bootstrap_service = handlers.BootstrapService
     monkeypatch.setattr(
         handlers,
         "SessionService",
         lambda context: original_session_service(context, runtime=fake_runtime),
+    )
+    monkeypatch.setattr(
+        handlers,
+        "BootstrapService",
+        lambda context: original_bootstrap_service(context, runtime=fake_runtime),
     )
 
     project = handlers.project_create("MCP Ops", "Agent-facing surface", client_request_id="project-1")
     project_id = project["id"]
     project_replayed = handlers.project_create("MCP Ops", "Agent-facing surface", client_request_id="project-1")
     assert project_replayed["id"] == project_id
+
+    repo_path = tmp_path / "mcp-bootstrap"
+    repo_path.mkdir()
+    repo = Repo.init(repo_path)
+    repo.git.config("user.name", "ACP Test")
+    repo.git.config("user.email", "acp@example.test")
+    (repo_path / "README.md").write_text("# mcp bootstrap\n", encoding="utf-8")
+    repo.git.add("--all")
+    repo.index.commit("init")
+    bootstrap = handlers.project_bootstrap(
+        name="Bootstrap MCP Ops",
+        repo_path=str(repo_path.resolve()),
+        stack_preset="python-package",
+        initial_prompt="Plan the first project tasks.",
+        client_request_id="bootstrap-1",
+    )
+    assert bootstrap["kickoff_session"]["status"] == "running"
+    bootstrap_replayed = handlers.project_bootstrap(
+        name="Bootstrap MCP Ops",
+        repo_path=str(repo_path.resolve()),
+        stack_preset="python-package",
+        initial_prompt="Plan the first project tasks.",
+        client_request_id="bootstrap-1",
+    )
+    assert bootstrap_replayed["project"]["id"] == bootstrap["project"]["id"]
 
     board = handlers.board_get(project_id)
     assert board["project_id"] == project_id

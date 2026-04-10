@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from acp_core.db import get_db
 from acp_core.runtime import TmuxRuntimeAdapter
 from acp_core.services import (
+    BootstrapService,
     DashboardService,
     DiagnosticsService,
     EventService,
@@ -35,6 +36,13 @@ def get_task_service(context: ServiceContext = Depends(get_service_context)) -> 
 
 def get_runtime_adapter() -> TmuxRuntimeAdapter:
     return TmuxRuntimeAdapter()
+
+
+def get_bootstrap_service(
+    context: ServiceContext = Depends(get_service_context),
+    runtime: TmuxRuntimeAdapter = Depends(get_runtime_adapter),
+) -> BootstrapService:
+    return BootstrapService(context, runtime=runtime)
 
 
 def get_diagnostics_service(

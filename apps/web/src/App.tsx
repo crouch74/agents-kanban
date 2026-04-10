@@ -4,7 +4,6 @@ import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSe
 import { CSS } from "@dnd-kit/utilities";
 import {
   Activity,
-  ArrowRight,
   Bot,
   CircleDashed,
   FolderGit2,
@@ -26,10 +25,10 @@ import {
   addTaskDependency,
   cancelSession,
   answerQuestion,
+  bootstrapProject,
   createFollowUpSession,
   createQuestion,
   createSession,
-  createProject,
   createRepository,
   createTask,
   createWorktree,
@@ -46,6 +45,7 @@ import {
   patchWorktree,
   searchContext,
 } from "@/lib/api";
+import { ProjectBootstrapWizard } from "@/components/project-bootstrap-wizard";
 import { ColumnShell, Pill, SectionFrame, SectionTitle, StatTile } from "@/components/ui";
 import { useUIStore } from "@/store/ui";
 
@@ -76,7 +76,6 @@ export function App() {
   const queryClient = useQueryClient();
   const { selectedProjectId, setSelectedProjectId } = useUIStore();
   const [search, setSearch] = useState("");
-  const [draftProjectName, setDraftProjectName] = useState("");
   const [draftTaskTitle, setDraftTaskTitle] = useState("");
   const [draftRepoPath, setDraftRepoPath] = useState("");
   const [draftRepoName, setDraftRepoName] = useState("");
@@ -211,17 +210,27 @@ export function App() {
     }
   }, [projectDetailQuery.data?.waiting_questions, selectedQuestionId]);
 
-  const createProjectMutation = useMutation({
-    mutationFn: createProject,
-    onSuccess: (project) => {
+  const bootstrapProjectMutation = useMutation({
+    mutationFn: bootstrapProject,
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["project", result.project.id] });
       startTransition(() => {
-        setSelectedProjectId(project.id);
-        setDraftProjectName("");
+        setSelectedProjectId(result.project.id);
       });
     },
   });
+
+  useEffect(() => {
+    const result = bootstrapProjectMutation.data;
+    if (!result || result.project.id !== selectedProjectId) {
+      return;
+    }
+    setSelectedRepositoryId(result.repository.id);
+    setInspectedTaskId(result.kickoff_task.id);
+    setSelectedSessionId(result.kickoff_session.id);
+  }, [bootstrapProjectMutation.data, selectedProjectId]);
 
   const createTaskMutation = useMutation({
     mutationFn: createTask,
@@ -605,23 +614,12 @@ export function App() {
           </div>
         </div>
 
-        <div className="mt-8 rounded-3xl border border-white/7 bg-white/2 p-4">
-          <SectionTitle>Create Project</SectionTitle>
-          <input
-            value={draftProjectName}
-            onChange={(event) => setDraftProjectName(event.target.value)}
-            placeholder="Acme migration program"
-            className="mt-4 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
-          />
-          <button
-            onClick={() => createProjectMutation.mutate({ name: draftProjectName })}
-            disabled={!draftProjectName.trim() || createProjectMutation.isPending}
-            className="mt-3 inline-flex items-center gap-2 rounded-full bg-[color:var(--accent)] px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Create
-            <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
+        <ProjectBootstrapWizard
+          isPending={bootstrapProjectMutation.isPending}
+          errorMessage={bootstrapProjectMutation.error instanceof Error ? bootstrapProjectMutation.error.message : undefined}
+          result={bootstrapProjectMutation.data}
+          onSubmit={(payload) => bootstrapProjectMutation.mutate(payload)}
+        />
       </aside>
 
       <main className="px-6 py-6">

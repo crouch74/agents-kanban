@@ -15,6 +15,7 @@ the shared domain services in `packages/core`.
 
 - `GET /projects`
 - `POST /projects`
+- `POST /projects/bootstrap`
 - `GET /projects/{project_id}`
 - `GET /projects/{project_id}/board`
 
@@ -26,6 +27,11 @@ the shared domain services in `packages/core`.
 - worktrees
 - sessions
 - open waiting questions
+
+`POST /projects/bootstrap` creates the project, prepares the repository,
+creates a kickoff planning task, and starts the kickoff session. Default
+execution stays on the repository's current branch; kickoff worktrees are
+optional.
 
 ## Tasks
 
