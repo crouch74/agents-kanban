@@ -42,6 +42,15 @@ class FakeRuntime:
     def terminate_session(self, session_name: str) -> None:
         self.sessions.pop(session_name, None)
 
+    def list_sessions(self, *, prefix: str | None = None):
+        names = sorted(self.sessions)
+        if prefix is not None:
+            names = [name for name in names if name.startswith(prefix)]
+        return [
+            type("RuntimeSessionSummary", (), {"session_name": name, "window_name": "main"})()
+            for name in names
+        ]
+
 
 def create_git_repo(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)

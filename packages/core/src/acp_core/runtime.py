@@ -25,6 +25,12 @@ class RuntimeSessionInfo:
     command: str
 
 
+@dataclass(frozen=True)
+class RuntimeSessionSummary:
+    session_name: str
+    window_name: str
+
+
 class TmuxRuntimeAdapter:
     def __init__(self) -> None:
         self.server = Server()
@@ -76,6 +82,20 @@ class TmuxRuntimeAdapter:
         session = self.server.find_where({"session_name": session_name})
         if session is not None:
             session.kill_session()
+
+    def list_sessions(self, *, prefix: str | None = None) -> list[RuntimeSessionSummary]:
+        sessions: list[RuntimeSessionSummary] = []
+        for session in self.server.sessions:
+            session_name = session.get("session_name")
+            if prefix is not None and not session_name.startswith(prefix):
+                continue
+            sessions.append(
+                RuntimeSessionSummary(
+                    session_name=session_name,
+                    window_name=session.attached_window.get("window_name"),
+                )
+            )
+        return sessions
 
 
 def safe_tmux_name(raw_name: str) -> str:

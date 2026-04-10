@@ -40,6 +40,9 @@ def test_search_and_diagnostics_surface_operational_state() -> None:
         assert diagnostics["current_task_count"] >= 1
         assert diagnostics["current_open_question_count"] >= 1
         assert "database_path" in diagnostics
+        assert "runtime_managed_session_count" in diagnostics
+        assert "orphan_runtime_session_count" in diagnostics
+        assert "orphan_runtime_sessions" in diagnostics
 
         dashboard_response = client.get("/api/v1/dashboard")
         assert dashboard_response.status_code == 200

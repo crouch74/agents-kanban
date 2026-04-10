@@ -357,6 +357,10 @@ class DiagnosticsRead(BaseModel):
     runtime_home: str
     tmux_available: bool
     tmux_server_running: bool
+    runtime_managed_session_count: int
+    orphan_runtime_session_count: int
+    orphan_runtime_sessions: list[str]
+    reconciled_session_count: int
     git_available: bool
     current_project_count: int
     current_repository_count: int

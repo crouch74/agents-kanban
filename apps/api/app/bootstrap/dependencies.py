@@ -10,6 +10,7 @@ from acp_core.services import (
     DiagnosticsService,
     EventService,
     ProjectService,
+    RecoveryService,
     RepositoryService,
     SearchService,
     SessionService,
@@ -32,8 +33,15 @@ def get_task_service(context: ServiceContext = Depends(get_service_context)) -> 
     return TaskService(context)
 
 
-def get_diagnostics_service(context: ServiceContext = Depends(get_service_context)) -> DiagnosticsService:
-    return DiagnosticsService(context)
+def get_runtime_adapter() -> TmuxRuntimeAdapter:
+    return TmuxRuntimeAdapter()
+
+
+def get_diagnostics_service(
+    context: ServiceContext = Depends(get_service_context),
+    runtime: TmuxRuntimeAdapter = Depends(get_runtime_adapter),
+) -> DiagnosticsService:
+    return DiagnosticsService(context, runtime=runtime)
 
 
 def get_dashboard_service(context: ServiceContext = Depends(get_service_context)) -> DashboardService:
@@ -46,10 +54,6 @@ def get_repository_service(context: ServiceContext = Depends(get_service_context
 
 def get_worktree_service(context: ServiceContext = Depends(get_service_context)) -> WorktreeService:
     return WorktreeService(context)
-
-
-def get_runtime_adapter() -> TmuxRuntimeAdapter:
-    return TmuxRuntimeAdapter()
 
 
 def get_session_service(
@@ -72,3 +76,10 @@ def get_search_service(context: ServiceContext = Depends(get_service_context)) -
 
 def get_event_service(context: ServiceContext = Depends(get_service_context)) -> EventService:
     return EventService(context)
+
+
+def get_recovery_service(
+    context: ServiceContext = Depends(get_service_context),
+    runtime: TmuxRuntimeAdapter = Depends(get_runtime_adapter),
+) -> RecoveryService:
+    return RecoveryService(context, runtime=runtime)

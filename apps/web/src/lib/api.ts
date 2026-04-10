@@ -17,6 +17,10 @@ type Diagnostics = {
   runtime_home: string;
   tmux_available: boolean;
   tmux_server_running: boolean;
+  runtime_managed_session_count: number;
+  orphan_runtime_session_count: number;
+  orphan_runtime_sessions: string[];
+  reconciled_session_count: number;
   git_available: boolean;
   current_project_count: number;
   current_repository_count: number;

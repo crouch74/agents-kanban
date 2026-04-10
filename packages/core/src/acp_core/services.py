@@ -31,7 +31,7 @@ from acp_core.models import (
     WaitingQuestion,
     Worktree,
 )
-from acp_core.runtime import TmuxRuntimeAdapter, safe_tmux_name
+from acp_core.runtime import RuntimeSessionSummary, TmuxRuntimeAdapter, safe_tmux_name
 from acp_core.schemas import (
     AgentRunRead,
     AgentSessionCreate,
@@ -1110,9 +1110,57 @@ class EventService:
         return [EventRecord.model_validate(item) for item in self.context.db.scalars(stmt)]
 
 
-class DiagnosticsService:
-    def __init__(self, context: ServiceContext) -> None:
+class RecoveryService:
+    def __init__(self, context: ServiceContext, runtime: TmuxRuntimeAdapter | None = None) -> None:
         self.context = context
+        self.runtime = runtime or TmuxRuntimeAdapter()
+
+    def reconcile_runtime_sessions(self) -> dict[str, Any]:
+        tracked_runtime_sessions = {
+            session.session_name: session
+            for session in self.context.db.scalars(
+                select(AgentSession).where(AgentSession.status.in_(["running", "waiting_human", "blocked"]))
+            )
+        }
+        runtime_sessions = self.runtime.list_sessions(prefix="acp-")
+        runtime_session_names = {item.session_name for item in runtime_sessions}
+        reconciled = 0
+
+        for session_name, session in tracked_runtime_sessions.items():
+            next_status = None
+            if session.status == "waiting_human" and session_name in runtime_session_names:
+                next_status = "waiting_human"
+            elif session_name in runtime_session_names:
+                next_status = "running"
+            elif session.status != "cancelled":
+                next_status = "done"
+
+            if next_status is not None and session.status != next_status:
+                session.status = next_status
+                self.context.record_event(
+                    entity_type="session",
+                    entity_id=session.id,
+                    event_type="session.reconciled",
+                    payload_json={"status": next_status, "session_name": session.session_name},
+                )
+                reconciled += 1
+
+        if reconciled:
+            self.context.db.commit()
+
+        orphan_runtime_sessions = sorted(runtime_session_names.difference(tracked_runtime_sessions.keys()))
+        return {
+            "reconciled_session_count": reconciled,
+            "runtime_managed_session_count": len(runtime_sessions),
+            "orphan_runtime_session_count": len(orphan_runtime_sessions),
+            "orphan_runtime_sessions": orphan_runtime_sessions,
+        }
+
+
+class DiagnosticsService:
+    def __init__(self, context: ServiceContext, runtime: TmuxRuntimeAdapter | None = None) -> None:
+        self.context = context
+        self.runtime = runtime or TmuxRuntimeAdapter()
 
     def get_diagnostics(self) -> DiagnosticsRead:
         project_count = self.context.db.scalar(select(func.count(Project.id))) or 0
@@ -1133,6 +1181,7 @@ class DiagnosticsService:
                 check=False,
             )
             tmux_server_running = result.returncode == 0
+        recovery = RecoveryService(self.context, runtime=self.runtime).reconcile_runtime_sessions()
         return DiagnosticsRead(
             app_name=settings.app_name,
             environment=settings.app_env,
@@ -1140,6 +1189,10 @@ class DiagnosticsService:
             runtime_home=str(settings.runtime_home),
             tmux_available=which("tmux") is not None,
             tmux_server_running=tmux_server_running,
+            runtime_managed_session_count=recovery["runtime_managed_session_count"],
+            orphan_runtime_session_count=recovery["orphan_runtime_session_count"],
+            orphan_runtime_sessions=recovery["orphan_runtime_sessions"],
+            reconciled_session_count=recovery["reconciled_session_count"],
             git_available=which("git") is not None,
             current_project_count=project_count,
             current_repository_count=repository_count,

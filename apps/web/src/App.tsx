@@ -1438,6 +1438,7 @@ export function App() {
                 <Signal label="tmux" ready={Boolean(diagnosticsQuery.data?.tmux_available)} icon={Bot} />
                 <Signal label="tmux server" ready={Boolean(diagnosticsQuery.data?.tmux_server_running)} icon={Terminal} />
                 <Signal label="git" ready={Boolean(diagnosticsQuery.data?.git_available)} icon={FolderGit2} />
+                <Signal label="runtime orphans" ready={!Boolean(diagnosticsQuery.data?.orphan_runtime_session_count)} icon={Activity} />
                 <Signal label="audit log" ready icon={ShieldCheck} />
                 <Signal label="waiting inbox" ready icon={MessageSquareText} />
               </div>
@@ -1451,9 +1452,24 @@ export function App() {
                 <DiagRow label="Repositories" value={String(diagnosticsQuery.data?.current_repository_count ?? 0)} />
                 <DiagRow label="Worktrees" value={String(diagnosticsQuery.data?.current_worktree_count ?? 0)} />
                 <DiagRow label="Sessions" value={String(diagnosticsQuery.data?.current_session_count ?? 0)} />
+                <DiagRow label="Runtime sessions" value={String(diagnosticsQuery.data?.runtime_managed_session_count ?? 0)} />
+                <DiagRow label="Reconciled on check" value={String(diagnosticsQuery.data?.reconciled_session_count ?? 0)} />
+                <DiagRow label="Orphan tmux sessions" value={String(diagnosticsQuery.data?.orphan_runtime_session_count ?? 0)} />
                 <DiagRow label="Open questions" value={String(diagnosticsQuery.data?.current_open_question_count ?? 0)} />
                 <DiagRow label="Events" value={String(diagnosticsQuery.data?.current_event_count ?? 0)} />
               </div>
+              {diagnosticsQuery.data?.orphan_runtime_sessions.length ? (
+                <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-4">
+                  <div className="text-sm font-medium text-amber-100">Orphan runtime sessions</div>
+                  <div className="mt-2 flex flex-col gap-2">
+                    {diagnosticsQuery.data.orphan_runtime_sessions.map((sessionName) => (
+                      <div key={sessionName} className="text-sm text-amber-50">
+                        {sessionName}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </SectionFrame>
 
             <SectionFrame className="px-5 py-5">
