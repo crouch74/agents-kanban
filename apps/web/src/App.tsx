@@ -21,7 +21,6 @@ import {
   GitBranch,
   GitFork,
   Home,
-  Lock,
   MessageSquareText,
   Plus,
   Play,
@@ -29,7 +28,6 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Terminal,
-  Trash2,
 } from "lucide-react";
 import type { TaskSummary } from "@acp/sdk";
 import { ProjectBootstrapWizard } from "@/components/project-bootstrap-wizard";
@@ -87,6 +85,7 @@ import {
 function formatEvent(eventType: string) {
   return eventType.replaceAll(".", " ").replaceAll("_", " ");
 }
+
 
 function getSessionRelationLabel(
   session: {
@@ -494,19 +493,31 @@ export function App() {
     return { sessionsByTask, worktreeByTask };
   }, [projectDetailQuery.data?.sessions, projectDetailQuery.data?.worktrees]);
 
-  const staleWorktreesById = useMemo(() => {
-    const map = new Map<
-      string,
-      { recommendation: string; reasons: string[] }
-    >();
-    for (const issue of diagnosticsQuery.data?.stale_worktrees ?? []) {
-      map.set(issue.worktree_id, {
-        recommendation: issue.recommendation,
-        reasons: issue.reasons,
-      });
-    }
-    return map;
-  }, [diagnosticsQuery.data]);
+  const activityProjectOptions = useMemo(
+    () =>
+      projectDetailQuery.data?.project
+        ? [{ value: projectDetailQuery.data.project.id, label: projectDetailQuery.data.project.name }]
+        : [],
+    [projectDetailQuery.data?.project],
+  );
+
+  const activityTaskOptions = useMemo(
+    () =>
+      topLevelTasks.map((task) => ({
+        value: task.id,
+        label: task.title,
+      })),
+    [topLevelTasks],
+  );
+
+  const activitySessionOptions = useMemo(
+    () =>
+      (projectDetailQuery.data?.sessions ?? []).map((session) => ({
+        value: session.id,
+        label: session.session_name,
+      })),
+    [projectDetailQuery.data?.sessions],
+  );
 
   const sessionTailQuery = useSessionTailQuery(selectedSessionId);
   const sessionTimelineQuery = useSessionTimelineQuery(selectedSessionId);
@@ -1581,75 +1592,53 @@ export function App() {
                     )
                   ) : null}
 
-                  <WorktreeInventoryScreen>
-                    {activeSection === "worktrees" ? (
-                      <SectionFrame className="px-5 py-5">
-                        <SectionTitle>Repository Inventory</SectionTitle>
-                        <div className="mt-4 flex flex-col gap-3">
-                          {projectDetailQuery.data?.repositories.map(
-                            (repository) => (
-                              <div
-                                key={repository.id}
-                                className="rounded-2xl border border-white/7 bg-white/3 px-4 py-4"
-                              >
-                                <div className="flex items-start justify-between gap-3">
-                                  <div>
-                                    <div className="text-sm font-semibold text-slate-100">
-                                      {repository.name}
-                                    </div>
-                                    <div className="mt-1 break-all text-xs text-slate-500">
-                                      {repository.local_path}
-                                    </div>
-                                  </div>
-                                  <Pill className="border-white/8 text-slate-300">
-                                    {repository.default_branch ?? "detached"}
-                                  </Pill>
-                                </div>
-                                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-                                  <span>
-                                    dirty:{" "}
-                                    {String(
-                                      repository.metadata_json.is_dirty ??
-                                        false,
-                                    )}
-                                  </span>
-                                  <span>
-                                    remotes:{" "}
-                                    {Array.isArray(
-                                      repository.metadata_json.remotes,
-                                    )
-                                      ? repository.metadata_json.remotes.length
-                                      : 0}
-                                  </span>
-                                </div>
-                              </div>
-                            ),
-                          )}
-                          {!projectDetailQuery.data?.repositories.length ? (
-                            <div className="text-sm text-slate-500">
-                              Attach a local git repo to unlock worktrees.
-                            </div>
-                          ) : null}
-                        </div>
-
-                        {selectedProjectId ? (
-                          <div className="mt-5 rounded-2xl border border-white/7 bg-black/10 p-4">
-                            <div className="text-sm font-medium text-slate-200">
-                              Attach repository
-                            </div>
+                  <WorktreeInventoryScreen
+                    active={activeSection === "worktrees"}
+                    repositories={projectDetailQuery.data?.repositories ?? []}
+                    worktrees={projectDetailQuery.data?.worktrees ?? []}
+                    tasks={topLevelTasks}
+                    sessions={projectDetailQuery.data?.sessions ?? []}
+                    events={eventsQuery.data ?? []}
+                    loading={projectDetailQuery.isLoading || eventsQuery.isLoading}
+                    error={
+                      projectDetailQuery.error instanceof Error
+                        ? projectDetailQuery.error.message
+                        : eventsQuery.error instanceof Error
+                          ? eventsQuery.error.message
+                          : null
+                    }
+                    onLock={(worktreeId) =>
+                      patchWorktreeMutation.mutate({
+                        worktreeId,
+                        status: "locked",
+                      })
+                    }
+                    onArchive={(worktreeId) =>
+                      patchWorktreeMutation.mutate({
+                        worktreeId,
+                        status: "archived",
+                      })
+                    }
+                    onPrune={(worktreeId) =>
+                      patchWorktreeMutation.mutate({
+                        worktreeId,
+                        status: "pruned",
+                      })
+                    }
+                    controls={
+                      selectedProjectId ? (
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          <div className="rounded-2xl border border-white/7 bg-black/10 p-4">
+                            <div className="text-sm font-medium text-slate-200">Attach repository</div>
                             <input
                               value={draftRepoPath}
-                              onChange={(event) =>
-                                setDraftRepoPath(event.target.value)
-                              }
+                              onChange={(event) => setDraftRepoPath(event.target.value)}
                               placeholder="/absolute/path/to/repo"
                               className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
                             />
                             <input
                               value={draftRepoName}
-                              onChange={(event) =>
-                                setDraftRepoName(event.target.value)
-                              }
+                              onChange={(event) => setDraftRepoName(event.target.value)}
                               placeholder="Optional display name"
                               className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
                             />
@@ -1661,147 +1650,30 @@ export function App() {
                                   name: draftRepoName || undefined,
                                 })
                               }
-                              disabled={
-                                !draftRepoPath.trim() ||
-                                createRepositoryMutation.isPending
-                              }
+                              disabled={!draftRepoPath.trim() || createRepositoryMutation.isPending}
                               className="mt-3 rounded-full bg-[color:var(--color-accent-primary)] px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               Attach repo
                             </button>
                           </div>
-                        ) : null}
-                      </SectionFrame>
-                    ) : null}
-                  </WorktreeInventoryScreen>
 
-                  <WorktreeInventoryScreen>
-                    {activeSection === "worktrees" ? (
-                      <SectionFrame className="px-5 py-5">
-                        <SectionTitle>Worktree Fleet</SectionTitle>
-                        <div className="mt-4 flex flex-col gap-3">
-                          {projectDetailQuery.data?.worktrees.map(
-                            (worktree) => (
-                              <div
-                                key={worktree.id}
-                                className="rounded-2xl border border-white/7 bg-white/3 px-4 py-4"
-                              >
-                                {staleWorktreesById.get(worktree.id) ? (
-                                  <div className="mb-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
-                                    Recommended:{" "}
-                                    {
-                                      staleWorktreesById.get(worktree.id)
-                                        ?.recommendation
-                                    }
-                                    {" · "}
-                                    {(
-                                      staleWorktreesById.get(worktree.id)
-                                        ?.reasons ?? []
-                                    ).join(", ")}
-                                  </div>
-                                ) : null}
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
-                                      <GitBranch className="h-4 w-4 text-slate-400" />
-                                      <span className="truncate">
-                                        {worktree.branch_name}
-                                      </span>
-                                    </div>
-                                    <div className="mt-1 break-all text-xs text-slate-500">
-                                      {worktree.path}
-                                    </div>
-                                  </div>
-                                  <Pill className="border-white/8 text-slate-300">
-                                    {worktree.status}
-                                  </Pill>
-                                </div>
-                                <div className="mt-3 flex gap-2">
-                                  {worktree.status === "active" ? (
-                                    <>
-                                      <button
-                                        onClick={() =>
-                                          patchWorktreeMutation.mutate({
-                                            worktreeId: worktree.id,
-                                            status: "locked",
-                                          })
-                                        }
-                                        className="inline-flex items-center gap-2 rounded-full border border-white/8 px-3 py-1.5 text-xs text-slate-200"
-                                      >
-                                        <Lock className="h-3.5 w-3.5" />
-                                        Lock
-                                      </button>
-                                      <button
-                                        onClick={() =>
-                                          patchWorktreeMutation.mutate({
-                                            worktreeId: worktree.id,
-                                            status: "archived",
-                                          })
-                                        }
-                                        className="inline-flex items-center gap-2 rounded-full border border-white/8 px-3 py-1.5 text-xs text-slate-200"
-                                      >
-                                        <GitFork className="h-3.5 w-3.5" />
-                                        Archive
-                                      </button>
-                                    </>
-                                  ) : null}
-                                  {worktree.status === "locked" ||
-                                  worktree.status === "archived" ? (
-                                    <button
-                                      onClick={() =>
-                                        patchWorktreeMutation.mutate({
-                                          worktreeId: worktree.id,
-                                          status: "pruned",
-                                        })
-                                      }
-                                      className="inline-flex items-center gap-2 rounded-full border border-rose-300/20 px-3 py-1.5 text-xs text-rose-100"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                      Prune
-                                    </button>
-                                  ) : null}
-                                </div>
-                              </div>
-                            ),
-                          )}
-                          {!projectDetailQuery.data?.worktrees.length ? (
-                            <div className="text-sm text-slate-500">
-                              No worktrees allocated yet.
-                            </div>
-                          ) : null}
-                        </div>
-
-                        {selectedProjectId ? (
-                          <div className="mt-5 rounded-2xl border border-white/7 bg-black/10 p-4">
-                            <div className="text-sm font-medium text-slate-200">
-                              Allocate worktree
-                            </div>
+                          <div className="rounded-2xl border border-white/7 bg-black/10 p-4">
+                            <div className="text-sm font-medium text-slate-200">Allocate worktree</div>
                             <select
                               value={selectedRepositoryId ?? ""}
-                              onChange={(event) =>
-                                setSelectedRepositoryId(
-                                  event.target.value || null,
-                                )
-                              }
+                              onChange={(event) => setSelectedRepositoryId(event.target.value || null)}
                               className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
                             >
                               <option value="">Choose repository</option>
-                              {(
-                                projectDetailQuery.data?.repositories ?? []
-                              ).map((repository) => (
-                                <option
-                                  key={repository.id}
-                                  value={repository.id}
-                                >
+                              {(projectDetailQuery.data?.repositories ?? []).map((repository) => (
+                                <option key={repository.id} value={repository.id}>
                                   {repository.name}
                                 </option>
                               ))}
                             </select>
                             <select
                               value={selectedTaskId}
-                              onChange={(event) =>
-                                setSelectedTaskId(event.target.value)
-                              }
+                              onChange={(event) => setSelectedTaskId(event.target.value)}
                               className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
                             >
                               <option value="">No task linkage</option>
@@ -1813,9 +1685,7 @@ export function App() {
                             </select>
                             <input
                               value={draftWorktreeLabel}
-                              onChange={(event) =>
-                                setDraftWorktreeLabel(event.target.value)
-                              }
+                              onChange={(event) => setDraftWorktreeLabel(event.target.value)}
                               placeholder="Optional label for an unlinked worktree"
                               className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
                             />
@@ -1824,24 +1694,19 @@ export function App() {
                                 createWorktreeMutation.mutate({
                                   repository_id: selectedRepositoryId!,
                                   task_id: selectedTaskId || undefined,
-                                  label: selectedTaskId
-                                    ? undefined
-                                    : draftWorktreeLabel || undefined,
+                                  label: selectedTaskId ? undefined : draftWorktreeLabel || undefined,
                                 })
                               }
-                              disabled={
-                                !selectedRepositoryId ||
-                                createWorktreeMutation.isPending
-                              }
+                              disabled={!selectedRepositoryId || createWorktreeMutation.isPending}
                               className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               Allocate
                             </button>
                           </div>
-                        ) : null}
-                      </SectionFrame>
-                    ) : null}
-                  </WorktreeInventoryScreen>
+                        </div>
+                      ) : null
+                    }
+                  />
 
                   {activeSection === "sessions" ? (
                     <SectionFrame className="px-5 py-5">
@@ -2471,34 +2336,19 @@ export function App() {
                     ) : null}
                   </DiagnosticsScreen>
 
-                  <ActivityScreen>
-                    {activeSection === "activity" ? (
-                      <SectionFrame className="px-5 py-5">
-                        <SectionTitle>Recent events</SectionTitle>
-                        <div className="mt-4 flex flex-col gap-3">
-                          {dashboardQuery.data?.recent_events.map((event) => (
-                            <div
-                              key={event.id}
-                              className="rounded-2xl border border-white/7 bg-white/3 px-4 py-3"
-                            >
-                              <div className="text-sm font-medium text-slate-100">
-                                {formatEvent(event.event_type)}
-                              </div>
-                              <div className="mt-1 text-sm text-slate-500">
-                                {event.actor_name} on {event.entity_type}
-                              </div>
-                            </div>
-                          ))}
-                          {!dashboardQuery.data?.recent_events.length ? (
-                            <div className="text-sm text-slate-500">
-                              Events will appear here as work is created and
-                              updated.
-                            </div>
-                          ) : null}
-                        </div>
-                      </SectionFrame>
-                    ) : null}
-                  </ActivityScreen>
+                  <ActivityScreen
+                    active={activeSection === "activity"}
+                    events={eventsQuery.data ?? []}
+                    loading={eventsQuery.isLoading}
+                    error={
+                      eventsQuery.error instanceof Error
+                        ? eventsQuery.error.message
+                        : null
+                    }
+                    projectOptions={activityProjectOptions}
+                    taskOptions={activityTaskOptions}
+                    sessionOptions={activitySessionOptions}
+                  />
                 </div>
               </div>
             </ProjectOverviewScreen>
