@@ -4,10 +4,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from re import sub
 from shutil import which
+import subprocess
 from typing import Any
 
 from git import InvalidGitRepositoryError, NoSuchPathError, Repo
-from sqlalchemy import func, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from acp_core.constants import DEFAULT_BOARD_COLUMNS, TASK_TRANSITIONS, WORKFLOW_BY_COLUMN_KEY
@@ -22,9 +23,9 @@ from acp_core.models import (
     Project,
     Repository,
     SessionMessage,
-    Task,
     TaskArtifact,
     TaskCheck,
+    Task,
     TaskComment,
     WaitingQuestion,
     Worktree,
@@ -41,6 +42,8 @@ from acp_core.schemas import (
     ProjectCreate,
     RepositoryCreate,
     RepositoryRead,
+    SearchHit,
+    SearchResults,
     TaskArtifactCreate,
     TaskArtifactRead,
     TaskCheckCreate,
@@ -892,16 +895,38 @@ class DiagnosticsService:
 
     def get_diagnostics(self) -> DiagnosticsRead:
         project_count = self.context.db.scalar(select(func.count(Project.id))) or 0
+        repository_count = self.context.db.scalar(select(func.count(Repository.id))) or 0
         task_count = self.context.db.scalar(select(func.count(Task.id))) or 0
+        worktree_count = self.context.db.scalar(select(func.count(Worktree.id))) or 0
+        session_count = self.context.db.scalar(select(func.count(AgentSession.id))) or 0
+        open_question_count = (
+            self.context.db.scalar(select(func.count(WaitingQuestion.id)).where(WaitingQuestion.status == "open")) or 0
+        )
+        event_count = self.context.db.scalar(select(func.count(Event.id))) or 0
+        tmux_server_running = False
+        if which("tmux") is not None:
+            result = subprocess.run(
+                ["tmux", "list-sessions"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            tmux_server_running = result.returncode == 0
         return DiagnosticsRead(
             app_name=settings.app_name,
             environment=settings.app_env,
             database_path=str(settings.database_path),
             runtime_home=str(settings.runtime_home),
             tmux_available=which("tmux") is not None,
+            tmux_server_running=tmux_server_running,
             git_available=which("git") is not None,
             current_project_count=project_count,
+            current_repository_count=repository_count,
             current_task_count=task_count,
+            current_worktree_count=worktree_count,
+            current_session_count=session_count,
+            current_open_question_count=open_question_count,
+            current_event_count=event_count,
         )
 
 
@@ -922,6 +947,158 @@ class DashboardService:
             blocked_count=blocked_count,
             running_sessions=running_sessions,
         )
+
+
+class SearchService:
+    def __init__(self, context: ServiceContext) -> None:
+        self.context = context
+
+    def search(self, query: str, project_id: str | None = None, limit: int = 20) -> SearchResults:
+        needle = query.strip()
+        if not needle:
+            return SearchResults(query=query, hits=[])
+
+        pattern = f"%{needle.lower()}%"
+        hits: list[SearchHit] = []
+
+        project_stmt = select(Project).where(
+            or_(
+                func.lower(Project.name).like(pattern),
+                func.lower(func.coalesce(Project.description, "")).like(pattern),
+                func.lower(Project.slug).like(pattern),
+            )
+        )
+        if project_id is not None:
+            project_stmt = project_stmt.where(Project.id == project_id)
+        for project in self.context.db.scalars(project_stmt.limit(5)):
+            hits.append(
+                SearchHit(
+                    entity_type="project",
+                    entity_id=project.id,
+                    project_id=project.id,
+                    title=project.name,
+                    snippet=project.description or project.slug,
+                    secondary="project",
+                    created_at=project.created_at,
+                )
+            )
+
+        task_stmt = select(Task).where(
+            or_(
+                func.lower(Task.title).like(pattern),
+                func.lower(func.coalesce(Task.description, "")).like(pattern),
+                func.lower(cast(Task.tags, String)).like(pattern),
+            )
+        )
+        if project_id is not None:
+            task_stmt = task_stmt.where(Task.project_id == project_id)
+        for task in self.context.db.scalars(task_stmt.limit(8)):
+            hits.append(
+                SearchHit(
+                    entity_type="task",
+                    entity_id=task.id,
+                    project_id=task.project_id,
+                    title=task.title,
+                    snippet=task.description or task.workflow_state,
+                    secondary=task.priority,
+                    created_at=task.created_at,
+                )
+            )
+
+        comment_stmt = (
+            select(TaskComment, Task.project_id, Task.title)
+            .join(Task, Task.id == TaskComment.task_id)
+            .where(func.lower(TaskComment.body).like(pattern))
+        )
+        if project_id is not None:
+            comment_stmt = comment_stmt.where(Task.project_id == project_id)
+        for comment, comment_project_id, task_title in self.context.db.execute(comment_stmt.limit(5)):
+            hits.append(
+                SearchHit(
+                    entity_type="task_comment",
+                    entity_id=comment.id,
+                    project_id=comment_project_id,
+                    title=f"Comment on {task_title}",
+                    snippet=comment.body,
+                    secondary=comment.author_name,
+                    created_at=comment.created_at,
+                )
+            )
+
+        question_stmt = select(WaitingQuestion).where(
+            or_(
+                func.lower(WaitingQuestion.prompt).like(pattern),
+                func.lower(func.coalesce(WaitingQuestion.blocked_reason, "")).like(pattern),
+            )
+        )
+        if project_id is not None:
+            question_stmt = question_stmt.where(WaitingQuestion.project_id == project_id)
+        for question in self.context.db.scalars(question_stmt.limit(5)):
+            hits.append(
+                SearchHit(
+                    entity_type="waiting_question",
+                    entity_id=question.id,
+                    project_id=question.project_id,
+                    title=question.prompt,
+                    snippet=question.blocked_reason or question.status,
+                    secondary=question.urgency,
+                    created_at=question.created_at,
+                )
+            )
+
+        session_stmt = select(AgentSession).where(
+            or_(
+                func.lower(AgentSession.session_name).like(pattern),
+                func.lower(AgentSession.profile).like(pattern),
+                func.lower(cast(AgentSession.runtime_metadata, String)).like(pattern),
+            )
+        )
+        if project_id is not None:
+            session_stmt = session_stmt.where(AgentSession.project_id == project_id)
+        for session in self.context.db.scalars(session_stmt.limit(5)):
+            hits.append(
+                SearchHit(
+                    entity_type="session",
+                    entity_id=session.id,
+                    project_id=session.project_id,
+                    title=session.session_name,
+                    snippet=session.runtime_metadata.get("working_directory", session.status),
+                    secondary=session.profile,
+                    created_at=session.created_at,
+                )
+            )
+
+        event_stmt = select(Event).where(
+            or_(
+                func.lower(Event.event_type).like(pattern),
+                func.lower(cast(Event.payload_json, String)).like(pattern),
+            )
+        )
+        if project_id is not None:
+            event_stmt = event_stmt.where(
+                or_(
+                    Event.entity_id == project_id,
+                    cast(Event.payload_json, String).like(f'%"{project_id}"%'),
+                )
+            )
+        for event in self.context.db.scalars(event_stmt.limit(5)):
+            inferred_project_id = None
+            if event.entity_type == "project":
+                inferred_project_id = event.entity_id
+            hits.append(
+                SearchHit(
+                    entity_type="event",
+                    entity_id=event.id,
+                    project_id=inferred_project_id,
+                    title=event.event_type,
+                    snippet=str(event.payload_json),
+                    secondary=event.actor_name,
+                    created_at=event.created_at,
+                )
+            )
+
+        ordered = sorted(hits, key=lambda item: item.created_at, reverse=True)[:limit]
+        return SearchResults(query=query, hits=ordered)
 
 
 # Deferred imports to keep the module order straightforward.

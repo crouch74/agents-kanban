@@ -10,6 +10,7 @@ from acp_core.services import (
     DiagnosticsService,
     ProjectService,
     RepositoryService,
+    SearchService,
     SessionService,
     ServiceContext,
     TaskService,
@@ -62,3 +63,7 @@ def get_waiting_service(
     runtime: TmuxRuntimeAdapter = Depends(get_runtime_adapter),
 ) -> WaitingService:
     return WaitingService(context, runtime=runtime)
+
+
+def get_search_service(context: ServiceContext = Depends(get_service_context)) -> SearchService:
+    return SearchService(context)

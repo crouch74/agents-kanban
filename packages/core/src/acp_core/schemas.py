@@ -311,15 +311,36 @@ class EventRecord(BaseModel):
     created_at: datetime
 
 
+class SearchHit(BaseModel):
+    entity_type: str
+    entity_id: str
+    project_id: str | None
+    title: str
+    snippet: str
+    secondary: str | None
+    created_at: datetime
+
+
+class SearchResults(BaseModel):
+    query: str
+    hits: list[SearchHit]
+
+
 class DiagnosticsRead(BaseModel):
     app_name: str
     environment: str
     database_path: str
     runtime_home: str
     tmux_available: bool
+    tmux_server_running: bool
     git_available: bool
     current_project_count: int
+    current_repository_count: int
     current_task_count: int
+    current_worktree_count: int
+    current_session_count: int
+    current_open_question_count: int
+    current_event_count: int
 
 
 class DashboardRead(BaseModel):
