@@ -46,9 +46,10 @@ Canonical commands (used by local development, Codex Cloud, and GitHub Actions):
    ```
 
 CI workflow (`.github/workflows/ci.yml`) runs on pull requests and pushes to
-`main`, bootstraps from scratch, runs `scripts/verify.sh`, and uploads coverage
-(`coverage.xml`) plus Playwright artifacts (`playwright-report/`,
-`test-results/`).
+`main`. On pull requests, CI first enforces screenshot evidence by requiring at
+least two screenshot references in PR comments. CI then bootstraps from
+scratch, runs `scripts/verify.sh`, and uploads coverage (`coverage.xml`) plus
+Playwright artifacts (`playwright-report/`, `test-results/`).
 
 ## Current State
 
