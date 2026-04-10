@@ -27,7 +27,7 @@ type Diagnostics = {
   current_event_count: number;
 };
 
-type EventRecord = {
+export type EventRecord = {
   id: string;
   actor_type: string;
   actor_name: string;
@@ -80,6 +80,22 @@ export type SessionTail = {
     payload_json: Record<string, unknown>;
     created_at: string;
   }>;
+};
+
+export type SessionTimeline = {
+  session: SessionSummary;
+  runs: Array<{
+    id: string;
+    session_id: string;
+    attempt_number: number;
+    status: string;
+    summary?: string | null;
+    runtime_metadata: Record<string, unknown>;
+    created_at: string;
+  }>;
+  messages: SessionTail["recent_messages"];
+  waiting_questions: WaitingQuestionSummary[];
+  events: EventRecord[];
 };
 
 export type WaitingQuestionDetail = WaitingQuestionSummary & {
@@ -170,6 +186,24 @@ export function getDashboard() {
   return fetchJson<Dashboard>("/dashboard");
 }
 
+export function getEvents(params?: { projectId?: string; taskId?: string; sessionId?: string; limit?: number }) {
+  const search = new URLSearchParams();
+  if (params?.projectId) {
+    search.set("project_id", params.projectId);
+  }
+  if (params?.taskId) {
+    search.set("task_id", params.taskId);
+  }
+  if (params?.sessionId) {
+    search.set("session_id", params.sessionId);
+  }
+  if (params?.limit) {
+    search.set("limit", String(params.limit));
+  }
+  const suffix = search.size ? `?${search.toString()}` : "";
+  return fetchJson<EventRecord[]>(`/events${suffix}`);
+}
+
 export function getDiagnostics() {
   return fetchJson<Diagnostics>("/diagnostics");
 }
@@ -228,6 +262,10 @@ export function createSession(payload: {
 
 export function getSessionTail(sessionId: string) {
   return fetchJson<SessionTail>(`/sessions/${sessionId}/tail`);
+}
+
+export function getSessionTimeline(sessionId: string) {
+  return fetchJson<SessionTimeline>(`/sessions/${sessionId}/timeline`);
 }
 
 export function createQuestion(payload: {

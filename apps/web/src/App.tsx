@@ -30,9 +30,11 @@ import {
   createWorktree,
   getDashboard,
   getDiagnostics,
+  getEvents,
   getProject,
   getProjects,
   getQuestion,
+  getSessionTimeline,
   getTaskDetail,
   getSessionTail,
   patchWorktree,
@@ -82,6 +84,10 @@ export function App() {
   const diagnosticsQuery = useQuery({
     queryKey: ["diagnostics"],
     queryFn: getDiagnostics,
+  });
+  const eventsQuery = useQuery({
+    queryKey: ["events", selectedProjectId],
+    queryFn: () => getEvents({ projectId: selectedProjectId ?? undefined, limit: 18 }),
   });
   const projectsQuery = useQuery({
     queryKey: ["projects"],
@@ -300,6 +306,12 @@ export function App() {
     enabled: Boolean(selectedSessionId),
     refetchInterval: selectedSessionId ? 2500 : false,
   });
+  const sessionTimelineQuery = useQuery({
+    queryKey: ["session-timeline", selectedSessionId],
+    queryFn: () => getSessionTimeline(selectedSessionId!),
+    enabled: Boolean(selectedSessionId),
+    refetchInterval: selectedSessionId ? 3000 : false,
+  });
 
   const questionDetailQuery = useQuery({
     queryKey: ["question", selectedQuestionId],
@@ -443,6 +455,37 @@ export function App() {
             <StatTile label="Waiting" value={dashboardQuery.data?.waiting_count ?? 0} />
             <StatTile label="Blocked" value={dashboardQuery.data?.blocked_count ?? 0} />
             <StatTile label="Running Sessions" value={dashboardQuery.data?.running_sessions ?? 0} />
+          </div>
+
+          <div className="mt-8 rounded-[28px] border border-white/8 bg-black/10 p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <SectionTitle>Activity Feed</SectionTitle>
+                <div className="mt-2 text-sm text-slate-500">
+                  Recent audit events for {projectDetailQuery.data?.project.name ?? "the control plane"}.
+                </div>
+              </div>
+              <Pill className="border-white/8 text-slate-300">{eventsQuery.data?.length ?? 0} visible</Pill>
+            </div>
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              {(eventsQuery.data ?? []).map((event) => (
+                <div key={event.id} className="rounded-2xl border border-white/7 bg-white/3 px-4 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold text-slate-100">{formatEvent(event.event_type)}</div>
+                    <Pill className="border-white/8 text-slate-300">{event.entity_type}</Pill>
+                  </div>
+                  <div className="mt-2 text-sm text-slate-400">
+                    {event.actor_name} updated {event.entity_type} {event.entity_id.slice(0, 8)}
+                  </div>
+                  <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-600">
+                    {new Date(event.created_at).toLocaleString()}
+                  </div>
+                </div>
+              ))}
+              {!eventsQuery.data?.length ? (
+                <div className="text-sm text-slate-500">No events recorded yet for this scope.</div>
+              ) : null}
+            </div>
           </div>
         </section>
 
@@ -957,6 +1000,70 @@ export function App() {
                   </pre>
                 ) : (
                   <div className="mt-3 text-sm text-slate-500">Select a session to inspect recent runtime output.</div>
+                )}
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-white/7 bg-black/15 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-slate-200">Session timeline</div>
+                  {sessionTimelineQuery.data ? (
+                    <Pill className="border-white/8 text-slate-300">
+                      {sessionTimelineQuery.data.runs.length} runs
+                    </Pill>
+                  ) : null}
+                </div>
+                {sessionTimelineQuery.data ? (
+                  <div className="mt-4 space-y-4">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3">
+                        <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Messages</div>
+                        <div className="mt-3 flex flex-col gap-2">
+                          {sessionTimelineQuery.data.messages.slice(0, 4).map((message) => (
+                            <div key={message.id} className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3">
+                              <div className="text-xs uppercase tracking-[0.18em] text-slate-500">{message.source}</div>
+                              <div className="mt-2 text-sm text-slate-200">{message.body}</div>
+                            </div>
+                          ))}
+                          {!sessionTimelineQuery.data.messages.length ? (
+                            <div className="text-sm text-slate-500">No structured session messages yet.</div>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3">
+                        <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Events</div>
+                        <div className="mt-3 flex flex-col gap-2">
+                          {sessionTimelineQuery.data.events.slice(0, 4).map((event) => (
+                            <div key={event.id} className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3">
+                              <div className="text-sm font-medium text-slate-100">{formatEvent(event.event_type)}</div>
+                              <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+                                {new Date(event.created_at).toLocaleString()}
+                              </div>
+                            </div>
+                          ))}
+                          {!sessionTimelineQuery.data.events.length ? (
+                            <div className="text-sm text-slate-500">No session events recorded yet.</div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                    {sessionTimelineQuery.data.waiting_questions.length ? (
+                      <div className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3">
+                        <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Waiting state</div>
+                        <div className="mt-3 flex flex-col gap-2">
+                          {sessionTimelineQuery.data.waiting_questions.slice(0, 3).map((question) => (
+                            <div key={question.id} className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3">
+                              <div className="text-sm font-medium text-slate-100">{question.prompt}</div>
+                              <div className="mt-2 text-sm text-slate-400">
+                                {question.blocked_reason ?? "Waiting on operator input."}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="mt-3 text-sm text-slate-500">Select a session to inspect its runs, events, and waiting state.</div>
                 )}
               </div>
 

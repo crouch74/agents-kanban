@@ -91,6 +91,13 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
             payload = tail_response.json()
             assert "Session booted" in "\n".join(payload["lines"])
             assert payload["session"]["session_name"] == session["session_name"]
+
+            timeline_response = client.get(f"/api/v1/sessions/{session['id']}/timeline")
+            assert timeline_response.status_code == 200
+            timeline = timeline_response.json()
+            assert timeline["session"]["id"] == session["id"]
+            assert timeline["runs"][0]["status"] == "running"
+            assert timeline["messages"]
+            assert any(event["event_type"] == "session.spawned" for event in timeline["events"])
     finally:
         app.dependency_overrides.clear()
-

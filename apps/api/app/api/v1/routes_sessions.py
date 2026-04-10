@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from acp_core.schemas import AgentSessionCreate, AgentSessionRead, SessionTailRead
+from acp_core.schemas import AgentSessionCreate, AgentSessionRead, SessionTailRead, SessionTimelineRead
 from app.bootstrap.dependencies import get_session_service
 
 router = APIRouter(tags=["sessions"])
@@ -46,5 +46,13 @@ def tail_session(
 ) -> SessionTailRead:
     try:
         return service.tail_session(session_id, lines=lines)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/sessions/{session_id}/timeline", response_model=SessionTimelineRead)
+def session_timeline(session_id: str, service=Depends(get_session_service)) -> SessionTimelineRead:
+    try:
+        return service.get_session_timeline(session_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -33,6 +33,7 @@ from acp_core.models import (
 )
 from acp_core.runtime import TmuxRuntimeAdapter, safe_tmux_name
 from acp_core.schemas import (
+    AgentRunRead,
     AgentSessionCreate,
     AgentSessionRead,
     BoardView,
@@ -983,6 +984,43 @@ class WaitingService:
         detail = WaitingQuestionDetail.model_validate(question)
         detail.replies = [HumanReplyRead.model_validate(item) for item in replies]
         return detail
+
+
+class EventService:
+    def __init__(self, context: ServiceContext) -> None:
+        self.context = context
+
+    def list_events(
+        self,
+        *,
+        project_id: str | None = None,
+        task_id: str | None = None,
+        session_id: str | None = None,
+        limit: int = 50,
+    ) -> list[EventRecord]:
+        stmt = select(Event).order_by(Event.created_at.desc()).limit(limit)
+        if project_id is not None:
+            stmt = stmt.where(
+                or_(
+                    (Event.entity_type == "project") & (Event.entity_id == project_id),
+                    cast(Event.payload_json, String).like(f'%"{project_id}"%'),
+                )
+            )
+        if task_id is not None:
+            stmt = stmt.where(
+                or_(
+                    (Event.entity_type == "task") & (Event.entity_id == task_id),
+                    cast(Event.payload_json, String).like(f'%"{task_id}"%'),
+                )
+            )
+        if session_id is not None:
+            stmt = stmt.where(
+                or_(
+                    (Event.entity_type == "session") & (Event.entity_id == session_id),
+                    cast(Event.payload_json, String).like(f'%"{session_id}"%'),
+                )
+            )
+        return [EventRecord.model_validate(item) for item in self.context.db.scalars(stmt)]
 
 
 class DiagnosticsService:

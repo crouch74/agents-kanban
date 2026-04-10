@@ -41,3 +41,8 @@ def test_search_and_diagnostics_surface_operational_state() -> None:
         assert diagnostics["current_open_question_count"] >= 1
         assert "database_path" in diagnostics
 
+        events_response = client.get(f"/api/v1/events?project_id={project_id}")
+        assert events_response.status_code == 200
+        events = events_response.json()
+        assert events
+        assert any(event["event_type"] == "task.created" for event in events)

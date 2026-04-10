@@ -8,6 +8,7 @@ from acp_core.runtime import TmuxRuntimeAdapter
 from acp_core.services import (
     DashboardService,
     DiagnosticsService,
+    EventService,
     ProjectService,
     RepositoryService,
     SearchService,
@@ -67,3 +68,7 @@ def get_waiting_service(
 
 def get_search_service(context: ServiceContext = Depends(get_service_context)) -> SearchService:
     return SearchService(context)
+
+
+def get_event_service(context: ServiceContext = Depends(get_service_context)) -> EventService:
+    return EventService(context)
