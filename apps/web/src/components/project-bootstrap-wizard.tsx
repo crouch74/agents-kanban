@@ -138,7 +138,7 @@ export function ProjectBootstrapWizard({
       <button
         type="submit"
         disabled={!name.trim() || !repoPath.trim() || !initialPrompt.trim() || isPending}
-        className="mt-4 inline-flex items-center gap-2 rounded-full bg-[color:var(--accent)] px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+        className="mt-4 inline-flex items-center gap-2 rounded-full bg-[color:var(--color-accent-primary)] px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
       >
         Launch bootstrap
         <ArrowRight className="h-4 w-4" />
