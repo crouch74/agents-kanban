@@ -12,8 +12,11 @@ from sqlalchemy.orm import Session
 
 from acp_core.constants import DEFAULT_BOARD_COLUMNS, TASK_TRANSITIONS, WORKFLOW_BY_COLUMN_KEY
 from acp_core.logging import logger
-from acp_core.models import Board, BoardColumn, Event, Project, Repository, Task, Worktree
+from acp_core.models import AgentRun, AgentSession, Board, BoardColumn, Event, Project, Repository, SessionMessage, Task, Worktree
+from acp_core.runtime import TmuxRuntimeAdapter, safe_tmux_name
 from acp_core.schemas import (
+    AgentSessionCreate,
+    AgentSessionRead,
     BoardView,
     DashboardRead,
     DiagnosticsRead,
@@ -22,6 +25,8 @@ from acp_core.schemas import (
     RepositoryRead,
     TaskCreate,
     TaskPatch,
+    SessionTailRead,
+    SessionMessageRead,
     WorktreeCreate,
     WorktreePatch,
     WorktreeRead,
@@ -142,11 +147,17 @@ class ProjectService:
                 .order_by(Worktree.created_at.desc())
             )
         )
+        sessions = list(
+            self.context.db.scalars(
+                select(AgentSession).where(AgentSession.project_id == project_id).order_by(AgentSession.created_at.desc())
+            )
+        )
         return ProjectOverview(
             project=ProjectSummary.model_validate(project),
             board=board,
             repositories=[RepositoryRead.model_validate(item) for item in repositories],
             worktrees=[WorktreeRead.model_validate(item) for item in worktrees],
+            sessions=[AgentSessionRead.model_validate(item) for item in sessions],
         )
 
 
@@ -461,6 +472,154 @@ class WorktreeService:
         return worktree
 
 
+class SessionService:
+    def __init__(self, context: ServiceContext, runtime: TmuxRuntimeAdapter | None = None) -> None:
+        self.context = context
+        self.runtime = runtime or TmuxRuntimeAdapter()
+
+    def list_sessions(self, project_id: str | None = None, task_id: str | None = None) -> list[AgentSession]:
+        stmt = select(AgentSession).order_by(AgentSession.created_at.desc())
+        if project_id is not None:
+            stmt = stmt.where(AgentSession.project_id == project_id)
+        if task_id is not None:
+            stmt = stmt.where(AgentSession.task_id == task_id)
+        return list(self.context.db.scalars(stmt))
+
+    def get_session(self, session_id: str) -> AgentSession:
+        session = self.context.db.get(AgentSession, session_id)
+        if session is None:
+            raise ValueError("Session not found")
+        return session
+
+    def spawn_session(self, payload: AgentSessionCreate) -> AgentSession:
+        task = self.context.db.get(Task, payload.task_id)
+        if task is None:
+            raise ValueError("Task not found")
+
+        repository_id = payload.repository_id
+        worktree = None
+        if payload.worktree_id is not None:
+            worktree = self.context.db.get(Worktree, payload.worktree_id)
+            if worktree is None:
+                raise ValueError("Worktree not found")
+            repository_id = worktree.repository_id
+
+        working_directory = settings.runtime_home
+        if worktree is not None:
+            working_directory = Path(worktree.path)
+        elif repository_id is not None:
+            repository = self.context.db.get(Repository, repository_id)
+            if repository is None:
+                raise ValueError("Repository not found")
+            working_directory = Path(repository.local_path)
+
+        attempt_number = 1
+        existing = self.list_sessions(task_id=task.id)
+        if existing:
+            attempt_number = len(existing) + 1
+
+        session_name = safe_tmux_name(f"acp-{task.project_id[:6]}-{task.id[:8]}-{payload.profile}-{attempt_number}")
+        runtime_info = self.runtime.spawn_session(
+            session_name=session_name,
+            working_directory=working_directory,
+            profile=payload.profile,
+            command=payload.command,
+        )
+
+        session = AgentSession(
+            project_id=task.project_id,
+            task_id=task.id,
+            repository_id=repository_id,
+            worktree_id=payload.worktree_id,
+            profile=payload.profile,
+            status="running",
+            session_name=runtime_info.session_name,
+            runtime_metadata={
+                "pane_id": runtime_info.pane_id,
+                "window_name": runtime_info.window_name,
+                "working_directory": runtime_info.working_directory,
+                "command": runtime_info.command,
+            },
+        )
+        self.context.db.add(session)
+        self.context.db.flush()
+
+        run = AgentRun(
+            session_id=session.id,
+            attempt_number=attempt_number,
+            status="running",
+            summary=f"{payload.profile} session launched",
+            runtime_metadata=session.runtime_metadata,
+        )
+        self.context.db.add(run)
+        self.context.db.add(
+            SessionMessage(
+                session_id=session.id,
+                message_type="system",
+                source="control-plane",
+                body=f"📡 Spawned {payload.profile} session in {runtime_info.working_directory}",
+                payload_json={"session_name": runtime_info.session_name},
+            )
+        )
+
+        if worktree is not None:
+            worktree.session_id = session.id
+
+        self.context.record_event(
+            entity_type="session",
+            entity_id=session.id,
+            event_type="session.spawned",
+            payload_json={
+                "task_id": task.id,
+                "profile": payload.profile,
+                "session_name": session.session_name,
+            },
+        )
+        self.context.db.commit()
+        self.context.db.refresh(session)
+
+        logger.info("📡 session spawned", session_id=session.id, session_name=session.session_name)
+        return session
+
+    def refresh_session_status(self, session_id: str) -> AgentSession:
+        session = self.get_session(session_id)
+        exists = self.runtime.session_exists(session.session_name)
+        next_status = "running" if exists else "done"
+        if session.status != next_status:
+            session.status = next_status
+            self.context.record_event(
+                entity_type="session",
+                entity_id=session.id,
+                event_type="session.status_refreshed",
+                payload_json={"status": next_status},
+            )
+            self.context.db.commit()
+            self.context.db.refresh(session)
+        return session
+
+    def tail_session(self, session_id: str, *, lines: int = 80) -> SessionTailRead:
+        session = self.refresh_session_status(session_id)
+        capture_lines: list[str]
+        if session.status == "running":
+            capture_lines = self.runtime.capture_tail(session.session_name, lines=lines).splitlines()
+        else:
+            capture_lines = ["📡 Session is not currently running."]
+
+        recent_messages = list(
+            self.context.db.scalars(
+                select(SessionMessage)
+                .where(SessionMessage.session_id == session.id)
+                .order_by(SessionMessage.created_at.desc())
+                .limit(12)
+            )
+        )
+        return SessionTailRead(
+            session=AgentSessionRead.model_validate(session),
+            lines=capture_lines[-lines:],
+            recent_messages=[SessionMessageRead.model_validate(item) for item in recent_messages],
+        )
+
+
 class DiagnosticsService:
     def __init__(self, context: ServiceContext) -> None:
         self.context = context
@@ -489,12 +648,13 @@ class DashboardService:
         events = list(self.context.db.scalars(select(Event).order_by(Event.created_at.desc()).limit(12)))
         waiting_count = self.context.db.scalar(select(func.count(Task.id)).where(Task.waiting_for_human.is_(True))) or 0
         blocked_count = self.context.db.scalar(select(func.count(Task.id)).where(Task.blocked_reason.is_not(None))) or 0
+        running_sessions = self.context.db.scalar(select(func.count(AgentSession.id)).where(AgentSession.status == "running")) or 0
         return DashboardRead(
             projects=[ProjectSummary.model_validate(project) for project in projects],
             recent_events=[EventRecord.model_validate(event) for event in events],
             waiting_count=waiting_count,
             blocked_count=blocked_count,
-            running_sessions=0,
+            running_sessions=running_sessions,
         )
 
 

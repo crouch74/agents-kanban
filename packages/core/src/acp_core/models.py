@@ -110,6 +110,7 @@ class Task(TimestampMixin, Base):
     board_column: Mapped[BoardColumn] = relationship(back_populates="tasks")
     parent_task: Mapped["Task | None"] = relationship(remote_side="Task.id")
     worktrees: Mapped[list["Worktree"]] = relationship(back_populates="task")
+    sessions: Mapped[list["AgentSession"]] = relationship(back_populates="task")
 
 
 class TaskDependency(TimestampMixin, Base):
@@ -159,7 +160,12 @@ class AgentSession(TimestampMixin, Base):
     worktree_id: Mapped[str | None] = mapped_column(ForeignKey("worktrees.id"))
     profile: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="queued")
+    session_name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     runtime_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+
+    task: Mapped[Task] = relationship(back_populates="sessions")
+    runs: Mapped[list["AgentRun"]] = relationship(back_populates="session")
+    messages: Mapped[list["SessionMessage"]] = relationship(back_populates="session")
 
 
 class AgentRun(TimestampMixin, Base):
@@ -169,6 +175,9 @@ class AgentRun(TimestampMixin, Base):
     attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(String(64), nullable=False)
     summary: Mapped[str | None] = mapped_column(Text)
+    runtime_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+
+    session: Mapped[AgentSession] = relationship(back_populates="runs")
 
 
 class SessionMessage(TimestampMixin, Base):
@@ -179,6 +188,8 @@ class SessionMessage(TimestampMixin, Base):
     source: Mapped[str] = mapped_column(String(64), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+
+    session: Mapped[AgentSession] = relationship(back_populates="messages")
 
 
 class WaitingQuestion(TimestampMixin, Base):

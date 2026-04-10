@@ -40,6 +40,60 @@ class RepositoryRead(BaseModel):
     created_at: datetime
 
 
+class AgentSessionCreate(BaseModel):
+    task_id: str
+    profile: Literal["executor", "reviewer", "verifier", "research", "docs"] = "executor"
+    repository_id: str | None = None
+    worktree_id: str | None = None
+    command: str | None = None
+
+
+class AgentSessionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    task_id: str
+    repository_id: str | None
+    worktree_id: str | None
+    profile: str
+    status: str
+    session_name: str
+    runtime_metadata: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+
+class AgentRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    session_id: str
+    attempt_number: int
+    status: str
+    summary: str | None
+    runtime_metadata: dict[str, Any]
+    created_at: datetime
+
+
+class SessionMessageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    session_id: str
+    message_type: str
+    source: str
+    body: str
+    payload_json: dict[str, Any]
+    created_at: datetime
+
+
+class SessionTailRead(BaseModel):
+    session: AgentSessionRead
+    lines: list[str]
+    recent_messages: list[SessionMessageRead]
+
+
 class BoardColumnRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -130,6 +184,7 @@ class ProjectOverview(BaseModel):
     board: BoardView
     repositories: list[RepositoryRead]
     worktrees: list[WorktreeRead]
+    sessions: list[AgentSessionRead]
 
 
 class EventRecord(BaseModel):

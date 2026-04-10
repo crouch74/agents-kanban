@@ -4,11 +4,13 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from acp_core.db import get_db
+from acp_core.runtime import TmuxRuntimeAdapter
 from acp_core.services import (
     DashboardService,
     DiagnosticsService,
     ProjectService,
     RepositoryService,
+    SessionService,
     ServiceContext,
     TaskService,
     WorktreeService,
@@ -41,3 +43,14 @@ def get_repository_service(context: ServiceContext = Depends(get_service_context
 
 def get_worktree_service(context: ServiceContext = Depends(get_service_context)) -> WorktreeService:
     return WorktreeService(context)
+
+
+def get_runtime_adapter() -> TmuxRuntimeAdapter:
+    return TmuxRuntimeAdapter()
+
+
+def get_session_service(
+    context: ServiceContext = Depends(get_service_context),
+    runtime: TmuxRuntimeAdapter = Depends(get_runtime_adapter),
+) -> SessionService:
+    return SessionService(context, runtime=runtime)

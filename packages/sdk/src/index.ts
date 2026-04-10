@@ -60,3 +60,15 @@ export interface WorktreeSummary {
   lock_reason?: string | null;
   metadata_json: Record<string, unknown>;
 }
+
+export interface SessionSummary {
+  id: string;
+  project_id: string;
+  task_id: string;
+  repository_id?: string | null;
+  worktree_id?: string | null;
+  profile: string;
+  status: string;
+  session_name: string;
+  runtime_metadata: Record<string, unknown>;
+}
