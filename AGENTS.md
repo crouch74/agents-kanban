@@ -183,4 +183,4 @@ Prefer shared service logic over duplicating behavior in handlers or UI code.
 - Python tests must run via interpreter invocation (`.venv/bin/python -m pytest ...`).
 - Browser verification is repo-owned through Playwright (`npm run test:e2e` / `scripts/test_ui.sh`).
 - CI artifacts come from `coverage.xml`, `playwright-report/`, and `test-results/`.
-- PR screenshot evidence is pipeline-owned: GitHub Actions captures screenshots, uploads `.artifacts/pr-screenshots/` as an artifact, and maintains a sticky PR comment with the artifact link.
+- PR screenshot evidence is pipeline-owned: GitHub Actions captures screenshots, uploads `.artifacts/pr-screenshots/` as an artifact, and maintains a sticky PR comment with inline screenshot previews and the artifact link.

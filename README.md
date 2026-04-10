@@ -49,7 +49,7 @@ CI workflow (`.github/workflows/ci.yml`) runs on pull requests and pushes to
 `main`. On pull requests, it first runs an automated screenshot-evidence job
 that starts the web app, captures three desktop screenshots (`home`,
 `projects`, `activity`), uploads `.artifacts/pr-screenshots/`, and creates or
-updates a sticky PR comment with the artifact link. The existing verify job then
+updates a sticky PR comment with inline screenshot previews plus the workflow artifact link. The existing verify job then
 bootstraps from scratch, runs `scripts/verify.sh`, and uploads coverage
 (`coverage.xml`) plus Playwright artifacts (`playwright-report/`,
 `test-results/`).
