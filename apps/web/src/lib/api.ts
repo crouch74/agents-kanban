@@ -247,6 +247,7 @@ export function createTask(payload: {
   title: string;
   description?: string;
   priority?: string;
+  parent_task_id?: string;
   board_column_key?: string;
 }) {
   return postJson<TaskSummary>("/tasks", payload);

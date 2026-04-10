@@ -83,6 +83,7 @@ export function App() {
   const [draftArtifactType, setDraftArtifactType] = useState("log");
   const [draftArtifactUri, setDraftArtifactUri] = useState("");
   const [selectedDependencyTaskId, setSelectedDependencyTaskId] = useState("");
+  const [draftSubtaskTitle, setDraftSubtaskTitle] = useState("");
   const deferredSearch = useDeferredValue(search);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -212,6 +213,19 @@ export function App() {
       }
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       setDraftTaskTitle("");
+    },
+  });
+
+  const createSubtaskMutation = useMutation({
+    mutationFn: createTask,
+    onSuccess: () => {
+      if (selectedProjectId) {
+        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
+      }
+      if (inspectedTaskId) {
+        queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
+      }
+      setDraftSubtaskTitle("");
     },
   });
 
@@ -379,6 +393,9 @@ export function App() {
     const map = new Map<string, TaskSummary[]>();
     board.columns.forEach((column) => map.set(column.id, []));
     board.tasks.forEach((task) => {
+      if (task.parent_task_id) {
+        return;
+      }
       const entry = map.get(task.board_column_id);
       if (entry) {
         entry.push(task);
@@ -389,6 +406,19 @@ export function App() {
 
   const topLevelTasks = useMemo(() => {
     return (projectDetailQuery.data?.board.tasks ?? []).filter((task) => !task.parent_task_id);
+  }, [projectDetailQuery.data]);
+
+  const subtasksByParent = useMemo(() => {
+    const map = new Map<string, TaskSummary[]>();
+    for (const task of projectDetailQuery.data?.board.tasks ?? []) {
+      if (!task.parent_task_id) {
+        continue;
+      }
+      const entry = map.get(task.parent_task_id) ?? [];
+      entry.push(task);
+      map.set(task.parent_task_id, entry);
+    }
+    return map;
   }, [projectDetailQuery.data]);
 
   const sessionTailQuery = useQuery({
@@ -721,6 +751,7 @@ export function App() {
                           <DraggableTaskCard
                             key={task.id}
                             task={task}
+                            subtasks={subtasksByParent.get(task.id) ?? []}
                             selected={inspectedTaskId === task.id}
                             onInspect={() => setInspectedTaskId(task.id)}
                           />
@@ -751,6 +782,47 @@ export function App() {
                       </div>
                     </div>
                     <Pill className="border-white/8 text-slate-300">{taskDetailQuery.data.workflow_state}</Pill>
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-white/7 bg-black/10 p-4">
+                    <div className="text-sm font-medium text-slate-200">Subtasks</div>
+                    <div className="mt-3 flex flex-col gap-2">
+                      {(subtasksByParent.get(taskDetailQuery.data.id) ?? []).map((subtask) => (
+                        <button
+                          key={subtask.id}
+                          onClick={() => setInspectedTaskId(subtask.id)}
+                          className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3 text-left"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-medium text-slate-100">{subtask.title}</div>
+                            <Pill className="border-white/8 text-slate-300">{subtask.workflow_state}</Pill>
+                          </div>
+                        </button>
+                      ))}
+                      {!(subtasksByParent.get(taskDetailQuery.data.id) ?? []).length ? (
+                        <div className="text-sm text-slate-500">No subtasks yet.</div>
+                      ) : null}
+                    </div>
+                    <input
+                      value={draftSubtaskTitle}
+                      onChange={(event) => setDraftSubtaskTitle(event.target.value)}
+                      placeholder="Add a subtask under this task"
+                      className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                    />
+                    <button
+                      onClick={() =>
+                        createSubtaskMutation.mutate({
+                          project_id: taskDetailQuery.data.project_id,
+                          title: draftSubtaskTitle,
+                          parent_task_id: taskDetailQuery.data.id,
+                          board_column_key: "backlog",
+                        })
+                      }
+                      disabled={!draftSubtaskTitle.trim() || createSubtaskMutation.isPending}
+                      className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Add subtask
+                    </button>
                   </div>
 
                   <div className="mt-5 rounded-2xl border border-white/7 bg-black/10 p-4">
@@ -1516,10 +1588,12 @@ function DroppableBoardColumn({
 
 function DraggableTaskCard({
   task,
+  subtasks,
   selected,
   onInspect,
 }: {
   task: TaskSummary;
+  subtasks: TaskSummary[];
   selected: boolean;
   onInspect: () => void;
 }) {
@@ -1565,6 +1639,18 @@ function DraggableTaskCard({
         ))}
         {!task.tags.length ? <span>No tags yet</span> : null}
       </div>
+      {subtasks.length ? (
+        <div className="mt-4 rounded-2xl border border-white/8 bg-black/15 px-3 py-3">
+          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Subtasks</div>
+          <div className="mt-2 flex flex-col gap-2">
+            {subtasks.map((subtask) => (
+              <div key={subtask.id} className="rounded-xl border border-white/8 bg-white/3 px-3 py-2 text-sm text-slate-200">
+                {subtask.title}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </button>
   );
 }

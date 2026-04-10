@@ -36,3 +36,29 @@ def test_create_and_move_task_through_valid_workflow() -> None:
         assert invalid_response.status_code == 400
         assert "Invalid workflow transition" in invalid_response.json()["detail"]
 
+
+def test_create_subtask_under_parent_task() -> None:
+    with TestClient(app) as client:
+        project_id = client.post("/api/v1/projects", json={"name": "Subtask Flow"}).json()["id"]
+        parent_task = client.post(
+            "/api/v1/tasks",
+            json={"project_id": project_id, "title": "Parent task", "board_column_key": "ready"},
+        ).json()
+
+        subtask_response = client.post(
+            "/api/v1/tasks",
+            json={
+                "project_id": project_id,
+                "title": "Child subtask",
+                "parent_task_id": parent_task["id"],
+                "board_column_key": "backlog",
+            },
+        )
+        assert subtask_response.status_code == 201
+        subtask = subtask_response.json()
+        assert subtask["parent_task_id"] == parent_task["id"]
+
+        board_response = client.get(f"/api/v1/projects/{project_id}/board")
+        assert board_response.status_code == 200
+        board = board_response.json()
+        assert any(task["id"] == subtask["id"] and task["parent_task_id"] == parent_task["id"] for task in board["tasks"])
