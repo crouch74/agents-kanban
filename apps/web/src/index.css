@@ -16,12 +16,22 @@ body {
   background: var(--color-surface-app);
   color: var(--color-text-primary);
   font-family: "IBM Plex Sans", "Inter", sans-serif;
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line-height);
 }
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
+  line-height: var(--type-body-line-height);
+}
+
+button,
+input,
+select {
+  min-height: var(--space-row-height);
 }
 
 .grid-shell {

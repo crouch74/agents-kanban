@@ -46,6 +46,26 @@
   --space-5: 1.25rem;
   --space-6: 1.5rem;
 
+  --space-page-gutter: clamp(1rem, 2vw, 1.5rem);
+  --space-section-gap: clamp(1rem, 1.6vw, 1.25rem);
+  --space-card-padding: clamp(0.875rem, 1.4vw, 1.25rem);
+  --space-row-height: 2rem;
+  --space-form-gap: 0.75rem;
+
+  /* typography */
+  --type-display-size: clamp(1.75rem, 1.9vw, 2.25rem);
+  --type-display-line-height: 1.2;
+  --type-page-title-size: clamp(1.3rem, 1.45vw, 1.6rem);
+  --type-page-title-line-height: 1.3;
+  --type-section-title-size: 0.76rem;
+  --type-section-title-line-height: 1.35;
+  --type-body-size: 0.95rem;
+  --type-body-line-height: 1.55;
+  --type-caption-size: 0.78rem;
+  --type-caption-line-height: 1.4;
+  --type-metadata-size: 0.69rem;
+  --type-metadata-line-height: 1.35;
+
   /* z-index */
   --z-base: 0;
   --z-floating: 20;
