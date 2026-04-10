@@ -112,6 +112,9 @@ class Task(TimestampMixin, Base):
     worktrees: Mapped[list["Worktree"]] = relationship(back_populates="task")
     sessions: Mapped[list["AgentSession"]] = relationship(back_populates="task")
     waiting_questions: Mapped[list["WaitingQuestion"]] = relationship(back_populates="task")
+    comments: Mapped[list["TaskComment"]] = relationship(back_populates="task")
+    checks: Mapped[list["TaskCheck"]] = relationship(back_populates="task")
+    artifacts: Mapped[list["TaskArtifact"]] = relationship(back_populates="task")
 
 
 class TaskDependency(TimestampMixin, Base):
@@ -131,6 +134,8 @@ class TaskComment(TimestampMixin, Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
+    task: Mapped[Task] = relationship(back_populates="comments")
+
 
 class TaskCheck(TimestampMixin, Base):
     __tablename__ = "task_checks"
@@ -141,6 +146,8 @@ class TaskCheck(TimestampMixin, Base):
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
+    task: Mapped[Task] = relationship(back_populates="checks")
+
 
 class TaskArtifact(TimestampMixin, Base):
     __tablename__ = "task_artifacts"
@@ -150,6 +157,8 @@ class TaskArtifact(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     uri: Mapped[str] = mapped_column(Text, nullable=False)
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+
+    task: Mapped[Task] = relationship(back_populates="artifacts")
 
 
 class AgentSession(TimestampMixin, Base):

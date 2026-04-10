@@ -172,6 +172,63 @@ class TaskPatch(BaseModel):
     waiting_for_human: bool | None = None
 
 
+class TaskCommentCreate(BaseModel):
+    author_type: Literal["human", "agent", "system"] = "human"
+    author_name: str = Field(min_length=2, max_length=255)
+    body: str = Field(min_length=1)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class TaskCommentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    task_id: str
+    author_type: str
+    author_name: str
+    body: str
+    metadata_json: dict[str, Any]
+    created_at: datetime
+
+
+class TaskCheckCreate(BaseModel):
+    check_type: str = Field(min_length=2, max_length=64)
+    status: Literal["pending", "passed", "failed", "warning"] = "pending"
+    summary: str = Field(min_length=1)
+    payload_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class TaskCheckRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    task_id: str
+    check_type: str
+    status: str
+    summary: str
+    payload_json: dict[str, Any]
+    created_at: datetime
+
+
+class TaskArtifactCreate(BaseModel):
+    artifact_type: str = Field(min_length=2, max_length=64)
+    name: str = Field(min_length=2, max_length=255)
+    uri: str = Field(min_length=1)
+    payload_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class TaskArtifactRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    task_id: str
+    artifact_type: str
+    name: str
+    uri: str
+    payload_json: dict[str, Any]
+    created_at: datetime
+
+
 class TaskRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -188,6 +245,13 @@ class TaskRead(BaseModel):
     waiting_for_human: bool
     created_at: datetime
     updated_at: datetime
+
+
+class TaskDetail(TaskRead):
+    comments: list[TaskCommentRead]
+    checks: list[TaskCheckRead]
+    artifacts: list[TaskArtifactRead]
+    waiting_questions: list[WaitingQuestionRead]
 
 
 class WorktreeCreate(BaseModel):

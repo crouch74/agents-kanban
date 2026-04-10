@@ -23,6 +23,9 @@ from acp_core.models import (
     Repository,
     SessionMessage,
     Task,
+    TaskArtifact,
+    TaskCheck,
+    TaskComment,
     WaitingQuestion,
     Worktree,
 )
@@ -38,10 +41,17 @@ from acp_core.schemas import (
     ProjectCreate,
     RepositoryCreate,
     RepositoryRead,
+    TaskArtifactCreate,
+    TaskArtifactRead,
+    TaskCheckCreate,
+    TaskCheckRead,
+    TaskCommentCreate,
+    TaskCommentRead,
     WaitingQuestionCreate,
     WaitingQuestionDetail,
     WaitingQuestionRead,
     TaskCreate,
+    TaskDetail,
     TaskPatch,
     SessionTailRead,
     SessionMessageRead,
@@ -203,6 +213,36 @@ class TaskService:
             raise ValueError("Task not found")
         return task
 
+    def get_task_detail(self, task_id: str) -> TaskDetail:
+        task = self.get_task(task_id)
+        comments = list(
+            self.context.db.scalars(
+                select(TaskComment).where(TaskComment.task_id == task.id).order_by(TaskComment.created_at.asc())
+            )
+        )
+        checks = list(
+            self.context.db.scalars(
+                select(TaskCheck).where(TaskCheck.task_id == task.id).order_by(TaskCheck.created_at.asc())
+            )
+        )
+        artifacts = list(
+            self.context.db.scalars(
+                select(TaskArtifact).where(TaskArtifact.task_id == task.id).order_by(TaskArtifact.created_at.asc())
+            )
+        )
+        waiting_questions = list(
+            self.context.db.scalars(
+                select(WaitingQuestion).where(WaitingQuestion.task_id == task.id).order_by(WaitingQuestion.created_at.desc())
+            )
+        )
+        return TaskDetail(
+            **TaskRead.model_validate(task).model_dump(),
+            comments=[TaskCommentRead.model_validate(item) for item in comments],
+            checks=[TaskCheckRead.model_validate(item) for item in checks],
+            artifacts=[TaskArtifactRead.model_validate(item) for item in artifacts],
+            waiting_questions=[WaitingQuestionRead.model_validate(item) for item in waiting_questions],
+        )
+
     def create_task(self, payload: TaskCreate) -> Task:
         board_stmt = select(Board).where(Board.project_id == payload.project_id)
         board = self.context.db.scalar(board_stmt)
@@ -298,6 +338,72 @@ class TaskService:
 
         logger.info("🗂️ task updated", task_id=task.id, workflow_state=task.workflow_state)
         return task
+
+    def add_comment(self, task_id: str, payload: TaskCommentCreate) -> TaskComment:
+        task = self.get_task(task_id)
+        comment = TaskComment(
+            task_id=task.id,
+            author_type=payload.author_type,
+            author_name=payload.author_name,
+            body=payload.body,
+            metadata_json=payload.metadata_json,
+        )
+        self.context.db.add(comment)
+        self.context.db.flush()
+        self.context.record_event(
+            entity_type="task_comment",
+            entity_id=comment.id,
+            event_type="task.comment_added",
+            payload_json={"task_id": task.id, "author_name": comment.author_name},
+        )
+        self.context.db.commit()
+        self.context.db.refresh(comment)
+        logger.info("🗂️ task comment added", task_id=task.id, comment_id=comment.id)
+        return comment
+
+    def add_check(self, task_id: str, payload: TaskCheckCreate) -> TaskCheck:
+        task = self.get_task(task_id)
+        check = TaskCheck(
+            task_id=task.id,
+            check_type=payload.check_type,
+            status=payload.status,
+            summary=payload.summary,
+            payload_json=payload.payload_json,
+        )
+        self.context.db.add(check)
+        self.context.db.flush()
+        self.context.record_event(
+            entity_type="task_check",
+            entity_id=check.id,
+            event_type="task.check_added",
+            payload_json={"task_id": task.id, "check_type": check.check_type, "status": check.status},
+        )
+        self.context.db.commit()
+        self.context.db.refresh(check)
+        logger.info("✅ task check added", task_id=task.id, check_id=check.id, status=check.status)
+        return check
+
+    def add_artifact(self, task_id: str, payload: TaskArtifactCreate) -> TaskArtifact:
+        task = self.get_task(task_id)
+        artifact = TaskArtifact(
+            task_id=task.id,
+            artifact_type=payload.artifact_type,
+            name=payload.name,
+            uri=payload.uri,
+            payload_json=payload.payload_json,
+        )
+        self.context.db.add(artifact)
+        self.context.db.flush()
+        self.context.record_event(
+            entity_type="task_artifact",
+            entity_id=artifact.id,
+            event_type="task.artifact_added",
+            payload_json={"task_id": task.id, "artifact_type": artifact.artifact_type, "uri": artifact.uri},
+        )
+        self.context.db.commit()
+        self.context.db.refresh(artifact)
+        logger.info("✅ task artifact added", task_id=task.id, artifact_id=artifact.id)
+        return artifact
 
 
 class RepositoryService:
