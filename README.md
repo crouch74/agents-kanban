@@ -48,7 +48,8 @@ Canonical commands (used by local development, Codex Cloud, and GitHub Actions):
 CI workflow (`.github/workflows/ci.yml`) runs on pull requests and pushes to
 `main` inside a repo-owned Docker image (`Dockerfile.ci`), bootstraps from
 scratch, runs `scripts/verify.sh`, and uploads coverage (`coverage.xml`) plus
-Playwright artifacts (`playwright-report/`, `test-results/`).
+Playwright artifacts (`playwright-report/`, `test-results/`) and captured UI
+screenshots (`ui-screenshots` artifact).
 
 ## Current State
 
