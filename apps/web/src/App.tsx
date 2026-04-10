@@ -24,6 +24,7 @@ import {
   addTaskCheck,
   addTaskComment,
   addTaskDependency,
+  cancelSession,
   answerQuestion,
   createQuestion,
   createSession,
@@ -340,6 +341,16 @@ export function App() {
         queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
       }
       setSelectedDependencyTaskId("");
+    },
+  });
+
+  const cancelSessionMutation = useMutation({
+    mutationFn: cancelSession,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["project"] });
+      queryClient.invalidateQueries({ queryKey: ["session-tail"] });
+      queryClient.invalidateQueries({ queryKey: ["session-timeline"] });
     },
   });
 
@@ -1191,6 +1202,15 @@ export function App() {
                   <CircleDashed className="h-4 w-4 text-slate-400" />
                   Recent tail
                 </div>
+                {selectedSessionId && sessionTailQuery.data?.session.status === "running" ? (
+                  <button
+                    onClick={() => cancelSessionMutation.mutate(selectedSessionId)}
+                    disabled={cancelSessionMutation.isPending}
+                    className="mt-3 rounded-full border border-rose-300/25 px-4 py-2 text-sm font-semibold text-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancel session
+                  </button>
+                ) : null}
                 {sessionTailQuery.data ? (
                   <pre className="mt-3 max-h-56 overflow-auto rounded-2xl bg-black/25 p-3 text-xs leading-5 text-slate-300">
                     {sessionTailQuery.data.lines.join("\n")}

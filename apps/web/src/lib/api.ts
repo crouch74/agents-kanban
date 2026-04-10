@@ -292,6 +292,10 @@ export function getSessionTimeline(sessionId: string) {
   return fetchJson<SessionTimeline>(`/sessions/${sessionId}/timeline`);
 }
 
+export function cancelSession(sessionId: string) {
+  return postJson<SessionSummary>(`/sessions/${sessionId}/cancel`, {});
+}
+
 export function createQuestion(payload: {
   task_id: string;
   session_id?: string;

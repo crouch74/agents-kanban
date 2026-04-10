@@ -817,6 +817,8 @@ class SessionService:
 
     def refresh_session_status(self, session_id: str) -> AgentSession:
         session = self.get_session(session_id)
+        if session.status in {"cancelled", "failed"}:
+            return session
         exists = self.runtime.session_exists(session.session_name)
         if session.status == "waiting_human" and exists:
             next_status = "waiting_human"
@@ -900,6 +902,44 @@ class SessionService:
             waiting_questions=[WaitingQuestionRead.model_validate(item) for item in waiting_questions],
             events=[EventRecord.model_validate(item) for item in events],
         )
+
+    def cancel_session(self, session_id: str) -> AgentSession:
+        session = self.get_session(session_id)
+        if session.status in {"done", "failed", "cancelled"}:
+            return session
+
+        self.runtime.terminate_session(session.session_name)
+        session.status = "cancelled"
+
+        latest_run = self.context.db.scalar(
+            select(AgentRun)
+            .where(AgentRun.session_id == session.id)
+            .order_by(AgentRun.attempt_number.desc(), AgentRun.created_at.desc())
+        )
+        if latest_run is not None:
+            latest_run.status = "cancelled"
+            latest_run.summary = "Session cancelled by operator"
+
+        self.context.db.add(
+            SessionMessage(
+                session_id=session.id,
+                message_type="system",
+                source="control-plane",
+                body="⚠️ Session cancelled by operator",
+                payload_json={},
+            )
+        )
+        self.context.record_event(
+            entity_type="session",
+            entity_id=session.id,
+            event_type="session.cancelled",
+            payload_json={"task_id": session.task_id, "session_name": session.session_name},
+        )
+        self.context.db.commit()
+        self.context.db.refresh(session)
+
+        logger.info("⚠️ session cancelled", session_id=session.id, session_name=session.session_name)
+        return session
 
 
 class WaitingService:

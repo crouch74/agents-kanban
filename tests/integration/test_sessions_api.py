@@ -39,6 +39,9 @@ class FakeRuntime:
             ]
         )
 
+    def terminate_session(self, session_name: str) -> None:
+        self.sessions.pop(session_name, None)
+
 
 def create_git_repo(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
@@ -99,5 +102,14 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
             assert timeline["runs"][0]["status"] == "running"
             assert timeline["messages"]
             assert any(event["event_type"] == "session.spawned" for event in timeline["events"])
+
+            cancel_response = client.post(f"/api/v1/sessions/{session['id']}/cancel")
+            assert cancel_response.status_code == 200
+            cancelled = cancel_response.json()
+            assert cancelled["status"] == "cancelled"
+
+            refreshed_response = client.get(f"/api/v1/sessions/{session['id']}")
+            assert refreshed_response.status_code == 200
+            assert refreshed_response.json()["status"] == "cancelled"
     finally:
         app.dependency_overrides.clear()

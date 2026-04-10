@@ -68,3 +68,23 @@ def session_timeline(session_id: str, service=Depends(get_session_service)) -> S
         return service.get_session_timeline(session_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/sessions/{session_id}/cancel", response_model=AgentSessionRead)
+def cancel_session(session_id: str, request: Request, service=Depends(get_session_service)) -> AgentSessionRead:
+    try:
+        session = service.cancel_session(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    response = AgentSessionRead.model_validate(session)
+    broadcast_change(
+        request,
+        event_type="session.cancelled",
+        entity_type="session",
+        entity_id=response.id,
+        project_id=response.project_id,
+        task_id=response.task_id,
+        session_id=response.id,
+        detail={"status": response.status},
+    )
+    return response
