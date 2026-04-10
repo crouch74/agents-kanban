@@ -179,6 +179,28 @@ def session_status(session_id: str) -> dict:
 
 
 @mcp.tool()
+def session_follow_up(
+    session_id: str,
+    profile: str = "verifier",
+    follow_up_type: str | None = None,
+    reuse_worktree: bool = True,
+    reuse_repository: bool = True,
+    command: str | None = None,
+    client_request_id: str | None = None,
+) -> dict:
+    """Start a retry, reviewer, or verifier session linked to an existing session chain."""
+    return handlers.session_follow_up(
+        session_id,
+        profile,
+        follow_up_type,
+        reuse_worktree,
+        reuse_repository,
+        command,
+        client_request_id,
+    )
+
+
+@mcp.tool()
 def session_tail(session_id: str, lines: int = 80) -> dict:
     """Read recent session output."""
     return handlers.session_tail(session_id, lines)

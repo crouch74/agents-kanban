@@ -35,6 +35,7 @@ from acp_core.runtime import RuntimeSessionSummary, TmuxRuntimeAdapter, safe_tmu
 from acp_core.schemas import (
     AgentRunRead,
     AgentSessionCreate,
+    AgentSessionFollowUpCreate,
     AgentSessionRead,
     BoardView,
     DashboardRead,
@@ -784,79 +785,128 @@ class SessionService:
             raise ValueError("Session not found")
         return session
 
-    def spawn_session(self, payload: AgentSessionCreate) -> AgentSession:
-        task = self.context.db.get(Task, payload.task_id)
-        if task is None:
-            raise ValueError("Task not found")
+    @staticmethod
+    def _session_family_id(session: AgentSession) -> str:
+        family_id = session.runtime_metadata.get("session_family_id")
+        if isinstance(family_id, str) and family_id:
+            return family_id
+        return session.id
 
-        repository_id = payload.repository_id
+    def _resolve_session_target(
+        self,
+        *,
+        repository_id: str | None,
+        worktree_id: str | None,
+    ) -> tuple[str | None, Worktree | None, Path]:
+        resolved_repository_id = repository_id
         worktree = None
-        if payload.worktree_id is not None:
-            worktree = self.context.db.get(Worktree, payload.worktree_id)
+        working_directory = settings.runtime_home
+
+        if worktree_id is not None:
+            worktree = self.context.db.get(Worktree, worktree_id)
             if worktree is None:
                 raise ValueError("Worktree not found")
-            repository_id = worktree.repository_id
-
-        working_directory = settings.runtime_home
-        if worktree is not None:
+            resolved_repository_id = worktree.repository_id
             working_directory = Path(worktree.path)
-        elif repository_id is not None:
-            repository = self.context.db.get(Repository, repository_id)
+        elif resolved_repository_id is not None:
+            repository = self.context.db.get(Repository, resolved_repository_id)
             if repository is None:
                 raise ValueError("Repository not found")
             working_directory = Path(repository.local_path)
 
-        attempt_number = 1
-        existing = self.list_sessions(task_id=task.id)
-        if existing:
-            attempt_number = len(existing) + 1
+        return resolved_repository_id, worktree, working_directory
 
-        session_name = safe_tmux_name(f"acp-{task.project_id[:6]}-{task.id[:8]}-{payload.profile}-{attempt_number}")
+    def _next_attempt_number(self, task_id: str) -> int:
+        existing = self.list_sessions(task_id=task_id)
+        if existing:
+            return len(existing) + 1
+        return 1
+
+    def _spawn_session_record(
+        self,
+        *,
+        task: Task,
+        profile: str,
+        repository_id: str | None = None,
+        worktree_id: str | None = None,
+        command: str | None = None,
+        runtime_metadata_extra: dict[str, Any] | None = None,
+        run_summary: str | None = None,
+        message_body: str | None = None,
+    ) -> AgentSession:
+        repository_id, worktree, working_directory = self._resolve_session_target(
+            repository_id=repository_id,
+            worktree_id=worktree_id,
+        )
+        attempt_number = self._next_attempt_number(task.id)
+        session_name = safe_tmux_name(f"acp-{task.project_id[:6]}-{task.id[:8]}-{profile}-{attempt_number}")
         runtime_info = self.runtime.spawn_session(
             session_name=session_name,
             working_directory=working_directory,
-            profile=payload.profile,
-            command=payload.command,
+            profile=profile,
+            command=command,
         )
+
+        runtime_metadata = {
+            "pane_id": runtime_info.pane_id,
+            "window_name": runtime_info.window_name,
+            "working_directory": runtime_info.working_directory,
+            "command": runtime_info.command,
+        }
+        if runtime_metadata_extra:
+            runtime_metadata.update(runtime_metadata_extra)
 
         session = AgentSession(
             project_id=task.project_id,
             task_id=task.id,
             repository_id=repository_id,
-            worktree_id=payload.worktree_id,
-            profile=payload.profile,
+            worktree_id=worktree_id,
+            profile=profile,
             status="running",
             session_name=runtime_info.session_name,
-            runtime_metadata={
-                "pane_id": runtime_info.pane_id,
-                "window_name": runtime_info.window_name,
-                "working_directory": runtime_info.working_directory,
-                "command": runtime_info.command,
-            },
+            runtime_metadata=runtime_metadata,
         )
         self.context.db.add(session)
         self.context.db.flush()
 
-        run = AgentRun(
-            session_id=session.id,
-            attempt_number=attempt_number,
-            status="running",
-            summary=f"{payload.profile} session launched",
-            runtime_metadata=session.runtime_metadata,
+        self.context.db.add(
+            AgentRun(
+                session_id=session.id,
+                attempt_number=attempt_number,
+                status="running",
+                summary=run_summary or f"{profile} session launched",
+                runtime_metadata=runtime_metadata,
+            )
         )
-        self.context.db.add(run)
         self.context.db.add(
             SessionMessage(
                 session_id=session.id,
                 message_type="system",
                 source="control-plane",
-                body=f"📡 Spawned {payload.profile} session in {runtime_info.working_directory}",
+                body=message_body or f"📡 Spawned {profile} session in {runtime_info.working_directory}",
                 payload_json={"session_name": runtime_info.session_name},
             )
         )
 
         if worktree is not None:
             worktree.session_id = session.id
+
+        return session
+
+    def spawn_session(self, payload: AgentSessionCreate) -> AgentSession:
+        task = self.context.db.get(Task, payload.task_id)
+        if task is None:
+            raise ValueError("Task not found")
+
+        session = self._spawn_session_record(
+            task=task,
+            profile=payload.profile,
+            repository_id=payload.repository_id,
+            worktree_id=payload.worktree_id,
+            command=payload.command,
+            runtime_metadata_extra={"session_family_id": None},
+        )
+        session.runtime_metadata = {**session.runtime_metadata, "session_family_id": session.id}
 
         self.context.record_event(
             entity_type="session",
@@ -872,6 +922,86 @@ class SessionService:
         self.context.db.refresh(session)
 
         logger.info("📡 session spawned", session_id=session.id, session_name=session.session_name)
+        return session
+
+    def spawn_follow_up_session(self, source_session_id: str, payload: AgentSessionFollowUpCreate) -> AgentSession:
+        source = self.get_session(source_session_id)
+        task = self.context.db.get(Task, source.task_id)
+        if task is None:
+            raise ValueError("Task not found")
+
+        follow_up_type = payload.follow_up_type
+        if follow_up_type is None:
+            if payload.profile == source.profile:
+                follow_up_type = "retry"
+            elif payload.profile == "reviewer":
+                follow_up_type = "review"
+            elif payload.profile == "verifier":
+                follow_up_type = "verify"
+            else:
+                follow_up_type = "handoff"
+
+        repository_id = source.repository_id if payload.reuse_repository else None
+        worktree_id = source.worktree_id if payload.reuse_worktree else None
+        family_id = self._session_family_id(source)
+        session = self._spawn_session_record(
+            task=task,
+            profile=payload.profile,
+            repository_id=repository_id,
+            worktree_id=worktree_id,
+            command=payload.command,
+            runtime_metadata_extra={
+                "session_family_id": family_id,
+                "follow_up_of_session_id": source.id,
+                "follow_up_type": follow_up_type,
+                "source_profile": source.profile,
+            },
+            run_summary=f"{payload.profile} {follow_up_type} session launched from {source.profile}",
+            message_body=(
+                f"🧭 Spawned {payload.profile} {follow_up_type} session from {source.session_name}"
+            ),
+        )
+
+        self.context.db.add(
+            SessionMessage(
+                session_id=source.id,
+                message_type="system",
+                source="control-plane",
+                body=f"🧭 Follow-up {payload.profile} session queued as {session.session_name}",
+                payload_json={"follow_up_session_id": session.id, "follow_up_type": follow_up_type},
+            )
+        )
+        self.context.record_event(
+            entity_type="session",
+            entity_id=source.id,
+            event_type="session.follow_up_requested",
+            payload_json={
+                "follow_up_session_id": session.id,
+                "follow_up_type": follow_up_type,
+                "profile": payload.profile,
+            },
+        )
+        self.context.record_event(
+            entity_type="session",
+            entity_id=session.id,
+            event_type="session.follow_up_spawned",
+            payload_json={
+                "task_id": task.id,
+                "source_session_id": source.id,
+                "follow_up_type": follow_up_type,
+                "profile": payload.profile,
+                "session_family_id": family_id,
+            },
+        )
+        self.context.db.commit()
+        self.context.db.refresh(session)
+
+        logger.info(
+            "🧭 session follow-up spawned",
+            session_id=session.id,
+            source_session_id=source.id,
+            follow_up_type=follow_up_type,
+        )
         return session
 
     def refresh_session_status(self, session_id: str) -> AgentSession:
@@ -919,6 +1049,7 @@ class SessionService:
 
     def get_session_timeline(self, session_id: str, *, message_limit: int = 40, event_limit: int = 20) -> SessionTimelineRead:
         session = self.refresh_session_status(session_id)
+        family_id = self._session_family_id(session)
         runs = list(
             self.context.db.scalars(
                 select(AgentRun)
@@ -954,12 +1085,22 @@ class SessionService:
                 .limit(event_limit)
             )
         )
+        related_sessions = [
+            item
+            for item in self.context.db.scalars(
+                select(AgentSession)
+                .where(AgentSession.task_id == session.task_id)
+                .order_by(AgentSession.created_at.asc())
+            )
+            if self._session_family_id(item) == family_id
+        ]
         return SessionTimelineRead(
             session=AgentSessionRead.model_validate(session),
             runs=[AgentRunRead.model_validate(item) for item in runs],
             messages=[SessionMessageRead.model_validate(item) for item in messages],
             waiting_questions=[WaitingQuestionRead.model_validate(item) for item in waiting_questions],
             events=[EventRecord.model_validate(item) for item in events],
+            related_sessions=[AgentSessionRead.model_validate(item) for item in related_sessions],
         )
 
     def cancel_session(self, session_id: str) -> AgentSession:

@@ -115,6 +115,7 @@ export type SessionTimeline = {
   messages: SessionTail["recent_messages"];
   waiting_questions: WaitingQuestionSummary[];
   events: EventRecord[];
+  related_sessions: SessionSummary[];
 };
 
 export type WaitingQuestionDetail = WaitingQuestionSummary & {
@@ -299,6 +300,19 @@ export function createSession(payload: {
   command?: string;
 }) {
   return postJson<SessionSummary>("/sessions", payload);
+}
+
+export function createFollowUpSession(
+  sessionId: string,
+  payload: {
+    profile: string;
+    follow_up_type?: "retry" | "review" | "verify" | "handoff";
+    reuse_worktree?: boolean;
+    reuse_repository?: boolean;
+    command?: string;
+  },
+) {
+  return postJson<SessionSummary>(`/sessions/${sessionId}/follow-up`, payload);
 }
 
 export function getSessionTail(sessionId: string) {

@@ -111,6 +111,25 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
             assert timeline["runs"][0]["status"] == "running"
             assert timeline["messages"]
             assert any(event["event_type"] == "session.spawned" for event in timeline["events"])
+            assert len(timeline["related_sessions"]) == 1
+
+            follow_up_response = client.post(
+                f"/api/v1/sessions/{session['id']}/follow-up",
+                json={"profile": "verifier", "follow_up_type": "verify"},
+            )
+            assert follow_up_response.status_code == 201
+            follow_up = follow_up_response.json()
+            assert follow_up["task_id"] == task_id
+            assert follow_up["worktree_id"] == worktree_id
+            assert follow_up["runtime_metadata"]["follow_up_of_session_id"] == session["id"]
+            assert follow_up["runtime_metadata"]["follow_up_type"] == "verify"
+
+            follow_up_timeline_response = client.get(f"/api/v1/sessions/{follow_up['id']}/timeline")
+            assert follow_up_timeline_response.status_code == 200
+            follow_up_timeline = follow_up_timeline_response.json()
+            assert len(follow_up_timeline["related_sessions"]) == 2
+            assert any(item["id"] == session["id"] for item in follow_up_timeline["related_sessions"])
+            assert any(event["event_type"] == "session.follow_up_spawned" for event in follow_up_timeline["events"])
 
             cancel_response = client.post(f"/api/v1/sessions/{session['id']}/cancel")
             assert cancel_response.status_code == 200
@@ -120,6 +139,10 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
             refreshed_response = client.get(f"/api/v1/sessions/{session['id']}")
             assert refreshed_response.status_code == 200
             assert refreshed_response.json()["status"] == "cancelled"
+
+            follow_up_cancel_response = client.post(f"/api/v1/sessions/{follow_up['id']}/cancel")
+            assert follow_up_cancel_response.status_code == 200
+            assert follow_up_cancel_response.json()["status"] == "cancelled"
 
             diagnostics_response = client.get("/api/v1/diagnostics")
             assert diagnostics_response.status_code == 200

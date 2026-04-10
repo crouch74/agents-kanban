@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from acp_core.schemas import AgentSessionCreate, AgentSessionRead, SessionTailRead, SessionTimelineRead
+from acp_core.schemas import AgentSessionCreate, AgentSessionFollowUpCreate, AgentSessionRead, SessionTailRead, SessionTimelineRead
 from app.api.ws.events import broadcast_change
 from app.bootstrap.dependencies import get_session_service
 
@@ -31,6 +31,31 @@ def spawn_session(payload: AgentSessionCreate, request: Request, service=Depends
     broadcast_change(
         request,
         event_type="session.spawned",
+        entity_type="session",
+        entity_id=response.id,
+        project_id=response.project_id,
+        task_id=response.task_id,
+        session_id=response.id,
+        detail={"profile": response.profile, "status": response.status},
+    )
+    return response
+
+
+@router.post("/sessions/{session_id}/follow-up", response_model=AgentSessionRead, status_code=201)
+def spawn_follow_up_session(
+    session_id: str,
+    payload: AgentSessionFollowUpCreate,
+    request: Request,
+    service=Depends(get_session_service),
+) -> AgentSessionRead:
+    try:
+        session = service.spawn_follow_up_session(session_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    response = AgentSessionRead.model_validate(session)
+    broadcast_change(
+        request,
+        event_type="session.follow_up_spawned",
         entity_type="session",
         entity_id=response.id,
         project_id=response.project_id,

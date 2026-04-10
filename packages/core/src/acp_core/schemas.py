@@ -48,6 +48,14 @@ class AgentSessionCreate(BaseModel):
     command: str | None = None
 
 
+class AgentSessionFollowUpCreate(BaseModel):
+    profile: Literal["executor", "reviewer", "verifier", "research", "docs"] = "verifier"
+    follow_up_type: Literal["retry", "review", "verify", "handoff"] | None = None
+    reuse_worktree: bool = True
+    reuse_repository: bool = True
+    command: str | None = None
+
+
 class AgentSessionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -146,6 +154,7 @@ class SessionTimelineRead(BaseModel):
     messages: list[SessionMessageRead]
     waiting_questions: list[WaitingQuestionRead]
     events: list["EventRecord"]
+    related_sessions: list[AgentSessionRead]
 
 
 class BoardColumnRead(BaseModel):

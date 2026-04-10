@@ -26,6 +26,7 @@ import {
   addTaskDependency,
   cancelSession,
   answerQuestion,
+  createFollowUpSession,
   createQuestion,
   createSession,
   createProject,
@@ -52,6 +53,23 @@ const WS_BASE = "ws://127.0.0.1:8000/api/v1/ws";
 
 function formatEvent(eventType: string) {
   return eventType.replaceAll(".", " ").replaceAll("_", " ");
+}
+
+function getSessionRelationLabel(session: {
+  id: string;
+  profile: string;
+  runtime_metadata: Record<string, unknown>;
+}, selectedSessionId: string | null) {
+  if (session.id === selectedSessionId) {
+    return "selected";
+  }
+
+  const followUpType = session.runtime_metadata.follow_up_type;
+  if (typeof followUpType === "string" && followUpType.length > 0) {
+    return followUpType;
+  }
+
+  return "origin";
 }
 
 export function App() {
@@ -283,6 +301,33 @@ export function App() {
         queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
         queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       }
+      setSelectedSessionId(session.id);
+    },
+  });
+
+  const createFollowUpSessionMutation = useMutation({
+    mutationFn: ({
+      sessionId,
+      profile,
+      followUpType,
+    }: {
+      sessionId: string;
+      profile: string;
+      followUpType?: "retry" | "review" | "verify" | "handoff";
+    }) =>
+      createFollowUpSession(sessionId, {
+        profile,
+        follow_up_type: followUpType,
+        reuse_repository: true,
+        reuse_worktree: true,
+      }),
+    onSuccess: (session) => {
+      if (selectedProjectId) {
+        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["session-tail"] });
+      queryClient.invalidateQueries({ queryKey: ["session-timeline"] });
       setSelectedSessionId(session.id);
     },
   });
@@ -1318,6 +1363,85 @@ export function App() {
                 </div>
                 {sessionTimelineQuery.data ? (
                   <div className="mt-4 space-y-4">
+                    <div className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Session chain</div>
+                        <Pill className="border-white/8 text-slate-300">
+                          {sessionTimelineQuery.data.related_sessions.length} linked
+                        </Pill>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          onClick={() =>
+                            createFollowUpSessionMutation.mutate({
+                              sessionId: sessionTimelineQuery.data.session.id,
+                              profile: sessionTimelineQuery.data.session.profile,
+                              followUpType: "retry",
+                            })
+                          }
+                          disabled={createFollowUpSessionMutation.isPending}
+                          className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <GitFork className="h-3.5 w-3.5" />
+                          Retry {sessionTimelineQuery.data.session.profile}
+                        </button>
+                        <button
+                          onClick={() =>
+                            createFollowUpSessionMutation.mutate({
+                              sessionId: sessionTimelineQuery.data.session.id,
+                              profile: "reviewer",
+                              followUpType: "review",
+                            })
+                          }
+                          disabled={createFollowUpSessionMutation.isPending}
+                          className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Bot className="h-3.5 w-3.5" />
+                          Spawn reviewer
+                        </button>
+                        <button
+                          onClick={() =>
+                            createFollowUpSessionMutation.mutate({
+                              sessionId: sessionTimelineQuery.data.session.id,
+                              profile: "verifier",
+                              followUpType: "verify",
+                            })
+                          }
+                          disabled={createFollowUpSessionMutation.isPending}
+                          className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                          Spawn verifier
+                        </button>
+                      </div>
+                      <div className="mt-4 flex flex-col gap-2">
+                        {sessionTimelineQuery.data.related_sessions.map((relatedSession) => (
+                          <button
+                            key={relatedSession.id}
+                            onClick={() => setSelectedSessionId(relatedSession.id)}
+                            className={[
+                              "rounded-2xl border px-3 py-3 text-left",
+                              relatedSession.id === selectedSessionId
+                                ? "border-[color:var(--accent)] bg-[color:var(--accent-soft)]"
+                                : "border-white/8 bg-black/15",
+                            ].join(" ")}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-sm font-medium text-slate-100">
+                                {relatedSession.profile}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Pill className="border-white/8 text-slate-300">
+                                  {getSessionRelationLabel(relatedSession, selectedSessionId)}
+                                </Pill>
+                                <Pill className="border-white/8 text-slate-300">{relatedSession.status}</Pill>
+                              </div>
+                            </div>
+                            <div className="mt-2 text-xs text-slate-500">{relatedSession.session_name}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <div className="grid gap-3 md:grid-cols-2">
                       <div className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3">
                         <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Messages</div>

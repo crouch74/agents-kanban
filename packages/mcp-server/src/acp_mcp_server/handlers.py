@@ -10,6 +10,7 @@ from acp_core.db import SessionLocal, init_db
 from acp_core.models import AgentSession, Event, TaskArtifact, TaskCheck, TaskComment, TaskDependency, Worktree
 from acp_core.schemas import (
     AgentSessionCreate,
+    AgentSessionFollowUpCreate,
     AgentSessionRead,
     DiagnosticsRead,
     EventRecord,
@@ -148,7 +149,7 @@ def _load_idempotent_result(context: ServiceContext, event_type: str, entity_id:
         if dependency is None:
             raise ValueError("Task dependency not found")
         return _serialize_task_dependency(dependency)
-    if event_type == "session.spawned":
+    if event_type in {"session.spawned", "session.follow_up_spawned"}:
         session = context.db.get(AgentSession, entity_id)
         if session is None:
             raise ValueError("Session not found")
@@ -399,6 +400,32 @@ def session_spawn(
                 worktree_id=worktree_id,
                 command=command,
             )
+        )
+        return AgentSessionRead.model_validate(session).model_dump()
+
+
+def session_follow_up(
+    session_id: str,
+    profile: str = "verifier",
+    follow_up_type: str | None = None,
+    reuse_worktree: bool = True,
+    reuse_repository: bool = True,
+    command: str | None = None,
+    client_request_id: str | None = None,
+) -> dict[str, Any]:
+    with service_context(correlation_id=client_request_id) as context:
+        replay = _replay_if_exists(context, "session.follow_up_spawned", client_request_id)
+        if replay is not None:
+            return replay
+        session = SessionService(context).spawn_follow_up_session(
+            session_id,
+            AgentSessionFollowUpCreate(
+                profile=profile,
+                follow_up_type=follow_up_type,
+                reuse_worktree=reuse_worktree,
+                reuse_repository=reuse_repository,
+                command=command,
+            ),
         )
         return AgentSessionRead.model_validate(session).model_dump()
 

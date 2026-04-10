@@ -72,6 +72,8 @@ export interface SessionSummary {
   status: string;
   session_name: string;
   runtime_metadata: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface WaitingQuestionSummary {

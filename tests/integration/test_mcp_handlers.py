@@ -1,10 +1,57 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from app.main import app
 from acp_mcp_server import handlers
+from acp_core.runtime import RuntimeSessionInfo
 
 
-def test_mcp_handlers_expose_core_control_plane_workflows() -> None:
+class FakeRuntime:
+    def __init__(self) -> None:
+        self.sessions: dict[str, dict[str, str]] = {}
+
+    def spawn_session(self, *, session_name: str, working_directory: Path, profile: str, command: str | None = None):
+        self.sessions[session_name] = {
+            "working_directory": str(working_directory),
+            "command": command or profile,
+        }
+        return RuntimeSessionInfo(
+            session_name=session_name,
+            pane_id="%2",
+            window_name="main",
+            working_directory=str(working_directory),
+            command=command or profile,
+        )
+
+    def session_exists(self, session_name: str) -> bool:
+        return session_name in self.sessions
+
+    def capture_tail(self, session_name: str, *, lines: int = 120) -> str:
+        return f"session={session_name}\nlines={lines}"
+
+    def terminate_session(self, session_name: str) -> None:
+        self.sessions.pop(session_name, None)
+
+    def list_sessions(self, *, prefix: str | None = None):
+        names = sorted(self.sessions)
+        if prefix is not None:
+            names = [name for name in names if name.startswith(prefix)]
+        return [
+            type("RuntimeSessionSummary", (), {"session_name": name, "window_name": "main"})()
+            for name in names
+        ]
+
+
+def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch) -> None:
+    fake_runtime = FakeRuntime()
+    original_session_service = handlers.SessionService
+    monkeypatch.setattr(
+        handlers,
+        "SessionService",
+        lambda context: original_session_service(context, runtime=fake_runtime),
+    )
+
     project = handlers.project_create("MCP Ops", "Agent-facing surface", client_request_id="project-1")
     project_id = project["id"]
     project_replayed = handlers.project_create("MCP Ops", "Agent-facing surface", client_request_id="project-1")
@@ -108,6 +155,23 @@ def test_mcp_handlers_expose_core_control_plane_workflows() -> None:
     assert completion["blocking_dependency_count"] == 1
     assert completion["artifact_count"] >= 1
     assert completion["open_waiting_question_count"] == 1
+
+    session = handlers.session_spawn(task_id=task_id, profile="executor", client_request_id="session-1")
+    assert session["task_id"] == task_id
+    follow_up = handlers.session_follow_up(
+        session["id"],
+        profile="verifier",
+        follow_up_type="verify",
+        client_request_id="follow-up-1",
+    )
+    assert follow_up["runtime_metadata"]["follow_up_of_session_id"] == session["id"]
+    follow_up_replayed = handlers.session_follow_up(
+        session["id"],
+        profile="verifier",
+        follow_up_type="verify",
+        client_request_id="follow-up-1",
+    )
+    assert follow_up_replayed["id"] == follow_up["id"]
 
     diagnostics = handlers.diagnostics_get()
     assert "stale_worktree_count" in diagnostics
