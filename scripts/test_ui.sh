@@ -20,8 +20,12 @@ npm --workspace @acp/web run test
 log "🧪" "Building web app"
 npm --workspace @acp/web run build
 
-log "🌐" "Installing Playwright Chromium"
-npx playwright install chromium
+if [ "${ACP_SKIP_PLAYWRIGHT_INSTALL:-0}" != "1" ]; then
+  log "🌐" "Installing Playwright Chromium"
+  npx playwright install chromium
+else
+  log "🌐" "Skipping Playwright install (ACP_SKIP_PLAYWRIGHT_INSTALL=1)"
+fi
 
 log "🌐" "Running Playwright smoke tests"
 npx playwright test
