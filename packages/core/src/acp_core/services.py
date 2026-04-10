@@ -27,6 +27,7 @@ from acp_core.models import (
     TaskCheck,
     Task,
     TaskComment,
+    TaskDependency,
     WaitingQuestion,
     Worktree,
 )
@@ -50,6 +51,7 @@ from acp_core.schemas import (
     TaskCheckRead,
     TaskCommentCreate,
     TaskCommentRead,
+    TaskDependencyRead,
     WaitingQuestionCreate,
     WaitingQuestionDetail,
     WaitingQuestionRead,
@@ -407,6 +409,51 @@ class TaskService:
         self.context.db.refresh(artifact)
         logger.info("✅ task artifact added", task_id=task.id, artifact_id=artifact.id)
         return artifact
+
+    def claim_task(self, task_id: str, *, actor_name: str, session_id: str | None = None) -> Task:
+        task = self.get_task(task_id)
+        metadata = dict(task.metadata_json)
+        metadata["claimed_by"] = actor_name
+        metadata["claimed_session_id"] = session_id
+        task.metadata_json = metadata
+        self.context.record_event(
+            entity_type="task",
+            entity_id=task.id,
+            event_type="task.claimed",
+            payload_json={"actor_name": actor_name, "session_id": session_id},
+        )
+        self.context.db.commit()
+        self.context.db.refresh(task)
+        logger.info("🗂️ task claimed", task_id=task.id, actor_name=actor_name)
+        return task
+
+    def get_dependencies(self, task_id: str) -> list[TaskDependencyRead]:
+        self.get_task(task_id)
+        dependencies = list(
+            self.context.db.scalars(
+                select(TaskDependency)
+                .where(TaskDependency.task_id == task_id)
+                .order_by(TaskDependency.created_at.asc())
+            )
+        )
+        return [TaskDependencyRead.model_validate(item) for item in dependencies]
+
+    def next_task(self, project_id: str | None = None) -> Task | None:
+        stmt = (
+            select(Task)
+            .where(
+                Task.parent_task_id.is_(None),
+                Task.workflow_state.in_(["ready", "in_progress"]),
+                Task.waiting_for_human.is_(False),
+            )
+            .order_by(
+                Task.priority.desc(),
+                Task.created_at.asc(),
+            )
+        )
+        if project_id is not None:
+            stmt = stmt.where(Task.project_id == project_id)
+        return self.context.db.scalar(stmt.limit(1))
 
 
 class RepositoryService:

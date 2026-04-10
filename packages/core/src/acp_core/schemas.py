@@ -229,6 +229,16 @@ class TaskArtifactRead(BaseModel):
     created_at: datetime
 
 
+class TaskDependencyRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    task_id: str
+    depends_on_task_id: str
+    relationship_type: str
+    created_at: datetime
+
+
 class TaskRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
