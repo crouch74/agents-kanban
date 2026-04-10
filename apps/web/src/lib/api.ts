@@ -16,9 +16,15 @@ type Diagnostics = {
   database_path: string;
   runtime_home: string;
   tmux_available: boolean;
+  tmux_server_running: boolean;
   git_available: boolean;
   current_project_count: number;
+  current_repository_count: number;
   current_task_count: number;
+  current_worktree_count: number;
+  current_session_count: number;
+  current_open_question_count: number;
+  current_event_count: number;
 };
 
 type EventRecord = {
@@ -38,6 +44,19 @@ export type Dashboard = {
   waiting_count: number;
   blocked_count: number;
   running_sessions: number;
+};
+
+export type SearchResults = {
+  query: string;
+  hits: Array<{
+    entity_type: string;
+    entity_id: string;
+    project_id?: string | null;
+    title: string;
+    snippet: string;
+    secondary?: string | null;
+    created_at: string;
+  }>;
 };
 
 type ProjectOverview = {
@@ -157,6 +176,14 @@ export function getDiagnostics() {
 
 export function getProjects() {
   return fetchJson<ProjectSummary[]>("/projects");
+}
+
+export function searchContext(query: string, projectId?: string) {
+  const params = new URLSearchParams({ q: query });
+  if (projectId) {
+    params.set("project_id", projectId);
+  }
+  return fetchJson<SearchResults>(`/search?${params.toString()}`);
 }
 
 export function createProject(payload: { name: string; description?: string }) {

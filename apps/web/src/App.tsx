@@ -36,6 +36,7 @@ import {
   getTaskDetail,
   getSessionTail,
   patchWorktree,
+  searchContext,
 } from "@/lib/api";
 import { ColumnShell, Pill, SectionFrame, SectionTitle, StatTile } from "@/components/ui";
 import { useUIStore } from "@/store/ui";
@@ -85,6 +86,11 @@ export function App() {
   const projectsQuery = useQuery({
     queryKey: ["projects"],
     queryFn: getProjects,
+  });
+  const searchQuery = useQuery({
+    queryKey: ["search", deferredSearch, selectedProjectId],
+    queryFn: () => searchContext(deferredSearch, selectedProjectId ?? undefined),
+    enabled: deferredSearch.trim().length >= 2,
   });
 
   useEffect(() => {
@@ -348,6 +354,51 @@ export function App() {
                 <div className="mt-1 text-sm text-slate-500">{project.description ?? project.slug}</div>
               </button>
             ))}
+          </div>
+        </div>
+
+        <div className="mt-8 rounded-3xl border border-white/7 bg-white/2 p-4">
+          <SectionTitle>Search Results</SectionTitle>
+          <div className="mt-4 flex flex-col gap-3">
+            {deferredSearch.trim().length < 2 ? (
+              <div className="text-sm text-slate-500">Type at least two characters to search tasks, questions, sessions, and events.</div>
+            ) : null}
+            {searchQuery.data?.hits.map((hit) => (
+              <button
+                key={`${hit.entity_type}-${hit.entity_id}`}
+                onClick={() => {
+                  if (hit.entity_type === "task") {
+                    setInspectedTaskId(hit.entity_id);
+                    if (hit.project_id) {
+                      setSelectedProjectId(hit.project_id);
+                    }
+                  } else if (hit.entity_type === "waiting_question") {
+                    setSelectedQuestionId(hit.entity_id);
+                    if (hit.project_id) {
+                      setSelectedProjectId(hit.project_id);
+                    }
+                  } else if (hit.entity_type === "session") {
+                    setSelectedSessionId(hit.entity_id);
+                    if (hit.project_id) {
+                      setSelectedProjectId(hit.project_id);
+                    }
+                  } else if (hit.project_id) {
+                    setSelectedProjectId(hit.project_id);
+                  }
+                }}
+                className="rounded-2xl border border-white/7 bg-white/3 px-4 py-3 text-left"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold text-slate-100">{hit.title}</div>
+                  <Pill className="border-white/8 text-slate-300">{hit.entity_type}</Pill>
+                </div>
+                <div className="mt-2 line-clamp-2 text-sm text-slate-500">{hit.snippet}</div>
+                {hit.secondary ? <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-600">{hit.secondary}</div> : null}
+              </button>
+            ))}
+            {deferredSearch.trim().length >= 2 && !searchQuery.data?.hits.length ? (
+              <div className="text-sm text-slate-500">No matching records found.</div>
+            ) : null}
           </div>
         </div>
 
@@ -1061,9 +1112,23 @@ export function App() {
               <SectionTitle>Runtime readiness</SectionTitle>
               <div className="mt-5 grid gap-3">
                 <Signal label="tmux" ready={Boolean(diagnosticsQuery.data?.tmux_available)} icon={Bot} />
+                <Signal label="tmux server" ready={Boolean(diagnosticsQuery.data?.tmux_server_running)} icon={Terminal} />
                 <Signal label="git" ready={Boolean(diagnosticsQuery.data?.git_available)} icon={FolderGit2} />
                 <Signal label="audit log" ready icon={ShieldCheck} />
                 <Signal label="waiting inbox" ready icon={MessageSquareText} />
+              </div>
+            </SectionFrame>
+
+            <SectionFrame className="px-5 py-5">
+              <SectionTitle>Diagnostics</SectionTitle>
+              <div className="mt-4 grid gap-3">
+                <DiagRow label="DB path" value={diagnosticsQuery.data?.database_path ?? "unknown"} />
+                <DiagRow label="Runtime home" value={diagnosticsQuery.data?.runtime_home ?? "unknown"} />
+                <DiagRow label="Repositories" value={String(diagnosticsQuery.data?.current_repository_count ?? 0)} />
+                <DiagRow label="Worktrees" value={String(diagnosticsQuery.data?.current_worktree_count ?? 0)} />
+                <DiagRow label="Sessions" value={String(diagnosticsQuery.data?.current_session_count ?? 0)} />
+                <DiagRow label="Open questions" value={String(diagnosticsQuery.data?.current_open_question_count ?? 0)} />
+                <DiagRow label="Events" value={String(diagnosticsQuery.data?.current_event_count ?? 0)} />
               </div>
             </SectionFrame>
 
@@ -1114,6 +1179,15 @@ function Signal({
       >
         {ready ? "ready" : "pending"}
       </Pill>
+    </div>
+  );
+}
+
+function DiagRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-2xl border border-white/7 bg-white/3 px-4 py-3">
+      <div className="text-sm text-slate-400">{label}</div>
+      <div className="max-w-[60%] break-all text-right text-sm text-slate-200">{value}</div>
     </div>
   );
 }
