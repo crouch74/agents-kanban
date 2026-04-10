@@ -140,6 +140,14 @@ class SessionTailRead(BaseModel):
     recent_messages: list[SessionMessageRead]
 
 
+class SessionTimelineRead(BaseModel):
+    session: AgentSessionRead
+    runs: list[AgentRunRead]
+    messages: list[SessionMessageRead]
+    waiting_questions: list[WaitingQuestionRead]
+    events: list["EventRecord"]
+
+
 class BoardColumnRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

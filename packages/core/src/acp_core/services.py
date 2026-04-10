@@ -59,6 +59,7 @@ from acp_core.schemas import (
     TaskDetail,
     TaskPatch,
     SessionTailRead,
+    SessionTimelineRead,
     SessionMessageRead,
     WorktreeCreate,
     WorktreePatch,
@@ -81,6 +82,7 @@ class ServiceContext:
     db: Session
     actor_type: str = "human"
     actor_name: str = "operator"
+    correlation_id: str | None = None
 
     def record_event(
         self,
@@ -89,6 +91,7 @@ class ServiceContext:
         entity_id: str,
         event_type: str,
         payload_json: dict[str, Any],
+        correlation_id: str | None = None,
     ) -> Event:
         event = Event(
             actor_type=self.actor_type,
@@ -96,6 +99,7 @@ class ServiceContext:
             entity_type=entity_type,
             entity_id=entity_id,
             event_type=event_type,
+            correlation_id=correlation_id or self.correlation_id,
             payload_json=payload_json,
         )
         self.db.add(event)
@@ -802,6 +806,51 @@ class SessionService:
             session=AgentSessionRead.model_validate(session),
             lines=capture_lines[-lines:],
             recent_messages=[SessionMessageRead.model_validate(item) for item in recent_messages],
+        )
+
+    def get_session_timeline(self, session_id: str, *, message_limit: int = 40, event_limit: int = 20) -> SessionTimelineRead:
+        session = self.refresh_session_status(session_id)
+        runs = list(
+            self.context.db.scalars(
+                select(AgentRun)
+                .where(AgentRun.session_id == session.id)
+                .order_by(AgentRun.attempt_number.asc(), AgentRun.created_at.asc())
+            )
+        )
+        messages = list(
+            self.context.db.scalars(
+                select(SessionMessage)
+                .where(SessionMessage.session_id == session.id)
+                .order_by(SessionMessage.created_at.desc())
+                .limit(message_limit)
+            )
+        )
+        waiting_questions = list(
+            self.context.db.scalars(
+                select(WaitingQuestion)
+                .where(WaitingQuestion.session_id == session.id)
+                .order_by(WaitingQuestion.created_at.desc())
+            )
+        )
+        events = list(
+            self.context.db.scalars(
+                select(Event)
+                .where(
+                    or_(
+                        (Event.entity_type == "session") & (Event.entity_id == session.id),
+                        cast(Event.payload_json, String).like(f'%"{session.id}"%'),
+                    )
+                )
+                .order_by(Event.created_at.desc())
+                .limit(event_limit)
+            )
+        )
+        return SessionTimelineRead(
+            session=AgentSessionRead.model_validate(session),
+            runs=[AgentRunRead.model_validate(item) for item in runs],
+            messages=[SessionMessageRead.model_validate(item) for item in messages],
+            waiting_questions=[WaitingQuestionRead.model_validate(item) for item in waiting_questions],
+            events=[EventRecord.model_validate(item) for item in events],
         )
 
 

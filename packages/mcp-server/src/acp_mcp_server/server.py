@@ -32,15 +32,33 @@ def task_get(task_id: str) -> dict:
 
 
 @mcp.tool()
-def task_create(project_id: str, title: str, description: str | None = None, priority: str = "medium") -> dict:
-    """Create a new task."""
-    return handlers.task_create(project_id, title, description, priority)
+def project_create(name: str, description: str | None = None, client_request_id: str | None = None) -> dict:
+    """Create a project and default board."""
+    return handlers.project_create(name, description, client_request_id)
 
 
 @mcp.tool()
-def subtask_create(parent_task_id: str, title: str, description: str | None = None, priority: str = "medium") -> dict:
+def task_create(
+    project_id: str,
+    title: str,
+    description: str | None = None,
+    priority: str = "medium",
+    client_request_id: str | None = None,
+) -> dict:
+    """Create a new task."""
+    return handlers.task_create(project_id, title, description, priority, client_request_id)
+
+
+@mcp.tool()
+def subtask_create(
+    parent_task_id: str,
+    title: str,
+    description: str | None = None,
+    priority: str = "medium",
+    client_request_id: str | None = None,
+) -> dict:
     """Create a subtask under a task."""
-    return handlers.subtask_create(parent_task_id, title, description, priority)
+    return handlers.subtask_create(parent_task_id, title, description, priority, client_request_id)
 
 
 @mcp.tool()
@@ -51,27 +69,53 @@ def task_update(
     workflow_state: str | None = None,
     blocked_reason: str | None = None,
     waiting_for_human: bool | None = None,
+    client_request_id: str | None = None,
 ) -> dict:
     """Patch task state or metadata."""
-    return handlers.task_update(task_id, title, description, workflow_state, blocked_reason, waiting_for_human)
+    return handlers.task_update(
+        task_id,
+        title,
+        description,
+        workflow_state,
+        blocked_reason,
+        waiting_for_human,
+        client_request_id,
+    )
 
 
 @mcp.tool()
-def task_claim(task_id: str, actor_name: str, session_id: str | None = None) -> dict:
+def task_claim(
+    task_id: str,
+    actor_name: str,
+    session_id: str | None = None,
+    client_request_id: str | None = None,
+) -> dict:
     """Claim a task for an agent session."""
-    return handlers.task_claim(task_id, actor_name, session_id)
+    return handlers.task_claim(task_id, actor_name, session_id, client_request_id)
 
 
 @mcp.tool()
-def task_comment_add(task_id: str, author_name: str, body: str, author_type: str = "agent") -> dict:
+def task_comment_add(
+    task_id: str,
+    author_name: str,
+    body: str,
+    author_type: str = "agent",
+    client_request_id: str | None = None,
+) -> dict:
     """Attach a comment to a task."""
-    return handlers.task_comment_add(task_id, author_name, body, author_type)
+    return handlers.task_comment_add(task_id, author_name, body, author_type, client_request_id)
 
 
 @mcp.tool()
-def task_check_add(task_id: str, check_type: str, status: str, summary: str) -> dict:
+def task_check_add(
+    task_id: str,
+    check_type: str,
+    status: str,
+    summary: str,
+    client_request_id: str | None = None,
+) -> dict:
     """Attach a structured check to a task."""
-    return handlers.task_check_add(task_id, check_type, status, summary)
+    return handlers.task_check_add(task_id, check_type, status, summary, client_request_id)
 
 
 @mcp.tool()
@@ -93,9 +137,10 @@ def session_spawn(
     repository_id: str | None = None,
     worktree_id: str | None = None,
     command: str | None = None,
+    client_request_id: str | None = None,
 ) -> dict:
     """Start an agent session for a task."""
-    return handlers.session_spawn(task_id, profile, repository_id, worktree_id, command)
+    return handlers.session_spawn(task_id, profile, repository_id, worktree_id, command, client_request_id)
 
 
 @mcp.tool()
@@ -124,9 +169,18 @@ def question_open(
     blocked_reason: str | None = None,
     urgency: str | None = None,
     options_json: list[dict] | None = None,
+    client_request_id: str | None = None,
 ) -> dict:
     """Open a waiting question for human input."""
-    return handlers.question_open(task_id, prompt, session_id, blocked_reason, urgency, options_json)
+    return handlers.question_open(
+        task_id,
+        prompt,
+        session_id,
+        blocked_reason,
+        urgency,
+        options_json,
+        client_request_id,
+    )
 
 
 @mcp.tool()
@@ -136,9 +190,14 @@ def question_answer_get(question_id: str) -> dict:
 
 
 @mcp.tool()
-def worktree_create(repository_id: str, task_id: str | None = None, label: str | None = None) -> dict:
+def worktree_create(
+    repository_id: str,
+    task_id: str | None = None,
+    label: str | None = None,
+    client_request_id: str | None = None,
+) -> dict:
     """Allocate a worktree for a task."""
-    return handlers.worktree_create(repository_id, task_id, label)
+    return handlers.worktree_create(repository_id, task_id, label, client_request_id)
 
 
 @mcp.tool()

@@ -7,10 +7,11 @@ from typing import Any
 from sqlalchemy import select
 
 from acp_core.db import SessionLocal, init_db
-from acp_core.models import Event, HumanReply, WaitingQuestion, Worktree
+from acp_core.models import AgentSession, Event, TaskCheck, TaskComment, Worktree
 from acp_core.schemas import (
     AgentSessionCreate,
     AgentSessionRead,
+    EventRecord,
     ProjectCreate,
     ProjectSummary,
     RepositoryRead,
@@ -53,13 +54,86 @@ def ensure_runtime_ready() -> None:
 
 
 @contextmanager
-def service_context(actor_type: str = "agent", actor_name: str = "mcp") -> ServiceContext:
+def service_context(
+    actor_type: str = "agent",
+    actor_name: str = "mcp",
+    correlation_id: str | None = None,
+) -> ServiceContext:
     ensure_runtime_ready()
     db = SessionLocal()
     try:
-        yield ServiceContext(db=db, actor_type=actor_type, actor_name=actor_name)
+        yield ServiceContext(
+            db=db,
+            actor_type=actor_type,
+            actor_name=actor_name,
+            correlation_id=correlation_id,
+        )
     finally:
         db.close()
+
+
+def _serialize_task_comment(comment: TaskComment) -> dict[str, Any]:
+    return {
+        "id": comment.id,
+        "task_id": comment.task_id,
+        "author_type": comment.author_type,
+        "author_name": comment.author_name,
+        "body": comment.body,
+        "metadata_json": comment.metadata_json,
+        "created_at": comment.created_at,
+    }
+
+
+def _serialize_task_check(check: TaskCheck) -> dict[str, Any]:
+    return {
+        "id": check.id,
+        "task_id": check.task_id,
+        "check_type": check.check_type,
+        "status": check.status,
+        "summary": check.summary,
+        "payload_json": check.payload_json,
+        "created_at": check.created_at,
+    }
+
+
+def _load_idempotent_result(context: ServiceContext, event_type: str, entity_id: str) -> dict[str, Any]:
+    if event_type == "project.created":
+        return ProjectSummary.model_validate(ProjectService(context).get_project(entity_id)).model_dump()
+    if event_type in {"task.created", "task.updated", "task.claimed"}:
+        return TaskRead.model_validate(TaskService(context).get_task(entity_id)).model_dump()
+    if event_type == "task.comment_added":
+        comment = context.db.get(TaskComment, entity_id)
+        if comment is None:
+            raise ValueError("Task comment not found")
+        return _serialize_task_comment(comment)
+    if event_type == "task.check_added":
+        check = context.db.get(TaskCheck, entity_id)
+        if check is None:
+            raise ValueError("Task check not found")
+        return _serialize_task_check(check)
+    if event_type == "session.spawned":
+        session = context.db.get(AgentSession, entity_id)
+        if session is None:
+            raise ValueError("Session not found")
+        return AgentSessionRead.model_validate(session).model_dump()
+    if event_type == "waiting_question.opened":
+        return WaitingQuestionRead.model_validate(WaitingService(context).get_question(entity_id)).model_dump()
+    if event_type == "worktree.created":
+        return WorktreeRead.model_validate(WorktreeService(context).get_worktree(entity_id)).model_dump()
+    raise ValueError(f"Unsupported idempotent event type: {event_type}")
+
+
+def _replay_if_exists(context: ServiceContext, event_type: str, client_request_id: str | None) -> dict[str, Any] | None:
+    if not client_request_id:
+        return None
+    event = context.db.scalar(
+        select(Event)
+        .where(Event.correlation_id == client_request_id, Event.event_type == event_type)
+        .order_by(Event.created_at.desc())
+    )
+    if event is None:
+        return None
+    return _load_idempotent_result(context, event_type, event.entity_id)
 
 
 def project_list() -> list[ProjectSummary]:
@@ -67,8 +141,15 @@ def project_list() -> list[ProjectSummary]:
         return [ProjectSummary.model_validate(item) for item in ProjectService(context).list_projects()]
 
 
-def project_create(name: str, description: str | None = None) -> dict[str, Any]:
-    with service_context() as context:
+def project_create(
+    name: str,
+    description: str | None = None,
+    client_request_id: str | None = None,
+) -> dict[str, Any]:
+    with service_context(correlation_id=client_request_id) as context:
+        replay = _replay_if_exists(context, "project.created", client_request_id)
+        if replay is not None:
+            return replay
         project = ProjectService(context).create_project(ProjectCreate(name=name, description=description))
         return ProjectSummary.model_validate(project).model_dump()
 
@@ -91,16 +172,34 @@ def task_get(task_id: str) -> dict[str, Any]:
         return detail.model_dump()
 
 
-def task_create(project_id: str, title: str, description: str | None = None, priority: str = "medium") -> dict[str, Any]:
-    with service_context() as context:
+def task_create(
+    project_id: str,
+    title: str,
+    description: str | None = None,
+    priority: str = "medium",
+    client_request_id: str | None = None,
+) -> dict[str, Any]:
+    with service_context(correlation_id=client_request_id) as context:
+        replay = _replay_if_exists(context, "task.created", client_request_id)
+        if replay is not None:
+            return replay
         task = TaskService(context).create_task(
             TaskCreate(project_id=project_id, title=title, description=description, priority=priority)
         )
         return TaskRead.model_validate(task).model_dump()
 
 
-def subtask_create(parent_task_id: str, title: str, description: str | None = None, priority: str = "medium") -> dict[str, Any]:
-    with service_context() as context:
+def subtask_create(
+    parent_task_id: str,
+    title: str,
+    description: str | None = None,
+    priority: str = "medium",
+    client_request_id: str | None = None,
+) -> dict[str, Any]:
+    with service_context(correlation_id=client_request_id) as context:
+        replay = _replay_if_exists(context, "task.created", client_request_id)
+        if replay is not None:
+            return replay
         parent = TaskService(context).get_task(parent_task_id)
         task = TaskService(context).create_task(
             TaskCreate(
@@ -121,8 +220,12 @@ def task_update(
     workflow_state: str | None = None,
     blocked_reason: str | None = None,
     waiting_for_human: bool | None = None,
+    client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context() as context:
+    with service_context(correlation_id=client_request_id) as context:
+        replay = _replay_if_exists(context, "task.updated", client_request_id)
+        if replay is not None:
+            return replay
         task = TaskService(context).patch_task(
             task_id,
             TaskPatch(
@@ -136,44 +239,54 @@ def task_update(
         return TaskRead.model_validate(task).model_dump()
 
 
-def task_claim(task_id: str, actor_name: str, session_id: str | None = None) -> dict[str, Any]:
-    with service_context(actor_name=actor_name) as context:
+def task_claim(
+    task_id: str,
+    actor_name: str,
+    session_id: str | None = None,
+    client_request_id: str | None = None,
+) -> dict[str, Any]:
+    with service_context(actor_name=actor_name, correlation_id=client_request_id) as context:
+        replay = _replay_if_exists(context, "task.claimed", client_request_id)
+        if replay is not None:
+            return replay
         task = TaskService(context).claim_task(task_id, actor_name=actor_name, session_id=session_id)
         return TaskRead.model_validate(task).model_dump()
 
 
-def task_comment_add(task_id: str, author_name: str, body: str, author_type: str = "agent") -> dict[str, Any]:
-    with service_context(actor_name=author_name) as context:
+def task_comment_add(
+    task_id: str,
+    author_name: str,
+    body: str,
+    author_type: str = "agent",
+    client_request_id: str | None = None,
+) -> dict[str, Any]:
+    with service_context(actor_name=author_name, correlation_id=client_request_id) as context:
+        replay = _replay_if_exists(context, "task.comment_added", client_request_id)
+        if replay is not None:
+            return replay
         comment = TaskService(context).add_comment(
             task_id,
             TaskCommentCreate(author_type=author_type, author_name=author_name, body=body),
         )
-        return {
-            "id": comment.id,
-            "task_id": comment.task_id,
-            "author_type": comment.author_type,
-            "author_name": comment.author_name,
-            "body": comment.body,
-            "metadata_json": comment.metadata_json,
-            "created_at": comment.created_at,
-        }
+        return _serialize_task_comment(comment)
 
 
-def task_check_add(task_id: str, check_type: str, status: str, summary: str) -> dict[str, Any]:
-    with service_context() as context:
+def task_check_add(
+    task_id: str,
+    check_type: str,
+    status: str,
+    summary: str,
+    client_request_id: str | None = None,
+) -> dict[str, Any]:
+    with service_context(correlation_id=client_request_id) as context:
+        replay = _replay_if_exists(context, "task.check_added", client_request_id)
+        if replay is not None:
+            return replay
         check = TaskService(context).add_check(
             task_id,
             TaskCheckCreate(check_type=check_type, status=status, summary=summary),
         )
-        return {
-            "id": check.id,
-            "task_id": check.task_id,
-            "check_type": check.check_type,
-            "status": check.status,
-            "summary": check.summary,
-            "payload_json": check.payload_json,
-            "created_at": check.created_at,
-        }
+        return _serialize_task_check(check)
 
 
 def task_next(project_id: str | None = None) -> dict[str, Any] | None:
@@ -194,8 +307,12 @@ def session_spawn(
     repository_id: str | None = None,
     worktree_id: str | None = None,
     command: str | None = None,
+    client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context() as context:
+    with service_context(correlation_id=client_request_id) as context:
+        replay = _replay_if_exists(context, "session.spawned", client_request_id)
+        if replay is not None:
+            return replay
         session = SessionService(context).spawn_session(
             AgentSessionCreate(
                 task_id=task_id,
@@ -233,8 +350,12 @@ def question_open(
     blocked_reason: str | None = None,
     urgency: str | None = None,
     options_json: list[dict[str, Any]] | None = None,
+    client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context() as context:
+    with service_context(correlation_id=client_request_id) as context:
+        replay = _replay_if_exists(context, "waiting_question.opened", client_request_id)
+        if replay is not None:
+            return replay
         question = WaitingService(context).open_question(
             WaitingQuestionCreate(
                 task_id=task_id,
@@ -254,8 +375,16 @@ def question_answer_get(question_id: str) -> dict[str, Any]:
         return question.model_dump()
 
 
-def worktree_create(repository_id: str, task_id: str | None = None, label: str | None = None) -> dict[str, Any]:
-    with service_context() as context:
+def worktree_create(
+    repository_id: str,
+    task_id: str | None = None,
+    label: str | None = None,
+    client_request_id: str | None = None,
+) -> dict[str, Any]:
+    with service_context(correlation_id=client_request_id) as context:
+        replay = _replay_if_exists(context, "worktree.created", client_request_id)
+        if replay is not None:
+            return replay
         worktree = WorktreeService(context).create_worktree(
             WorktreeCreate(repository_id=repository_id, task_id=task_id, label=label)
         )
@@ -289,7 +418,9 @@ def task_detail_resource(task_id: str) -> dict[str, Any]:
 
 
 def session_timeline_resource(session_id: str) -> dict[str, Any]:
-    return session_tail(session_id)
+    with service_context() as context:
+        timeline = SessionService(context).get_session_timeline(session_id)
+        return timeline.model_dump()
 
 
 def question_resource(question_id: str) -> dict[str, Any]:
@@ -313,14 +444,4 @@ def recent_events_resource(project_id: str | None = None, task_id: str | None = 
             stmt = stmt.where((Event.entity_type == "project") & (Event.entity_id == project_id))
         if task_id is not None:
             stmt = stmt.where((Event.entity_type == "task") & (Event.entity_id == task_id))
-        return [
-            {
-                "id": item.id,
-                "entity_type": item.entity_type,
-                "entity_id": item.entity_id,
-                "event_type": item.event_type,
-                "payload_json": item.payload_json,
-                "created_at": item.created_at,
-            }
-            for item in context.db.scalars(stmt)
-        ]
+        return [EventRecord.model_validate(item).model_dump() for item in context.db.scalars(stmt)]
