@@ -15,6 +15,8 @@ type WorktreeInventoryScreenProps = {
   events: EventRecord[];
   loading?: boolean;
   error?: string | null;
+  selectedWorktreeId?: string | null;
+  onSelectWorktree?: (worktreeId: string) => void;
   onLock: (worktreeId: string) => void;
   onArchive: (worktreeId: string) => void;
   onPrune: (worktreeId: string) => void;
@@ -41,6 +43,8 @@ export function WorktreeInventoryScreen({
   events,
   loading,
   error,
+  selectedWorktreeId,
+  onSelectWorktree,
   onLock,
   onArchive,
   onPrune,
@@ -110,7 +114,7 @@ export function WorktreeInventoryScreen({
       key: "actions",
       header: "Actions",
       render: (row) => (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
           {row.raw.status === "active" ? (
             <>
               <Button onClick={() => onLock(row.id)} className="px-2.5 py-1 text-xs"><Lock className="h-3.5 w-3.5" />Lock</Button>
@@ -160,6 +164,8 @@ export function WorktreeInventoryScreen({
           rows={filteredRows}
           rowKey={(row) => row.id}
           rowClassName="align-top"
+          onRowClick={onSelectWorktree ? (row) => onSelectWorktree(row.id) : undefined}
+          selectedRowKey={selectedWorktreeId ?? null}
           state={{ loading, error, emptyMessage: "No worktrees match these filters yet." }}
         />
       </div>

@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import type { TaskSummary } from "@acp/sdk";
 import { ProjectBootstrapWizard } from "@/components/project-bootstrap-wizard";
+import { DetailDrawer, type DetailDrawerSection } from "@/components/DetailDrawer";
 import {
   ColumnShell,
   Pill,
@@ -117,6 +118,29 @@ type NavSection =
   | "activity"
   | "diagnostics";
 
+
+type DetailEntityType = "task" | "session" | "worktree" | "question";
+
+type DetailSelection = {
+  type: DetailEntityType;
+  id: string;
+};
+
+const validSections = new Set<NavSection>([
+  "home",
+  "projects",
+  "waiting",
+  "sessions",
+  "worktrees",
+  "search",
+  "activity",
+  "diagnostics",
+]);
+
+function isDetailEntityType(value: string | null): value is DetailEntityType {
+  return value === "task" || value === "session" || value === "worktree" || value === "question";
+}
+
 export function App() {
   const queryClient = useQueryClient();
   const { selectedProjectId, setSelectedProjectId } = useUIStore();
@@ -155,10 +179,41 @@ export function App() {
   const [selectedDependencyTaskId, setSelectedDependencyTaskId] = useState("");
   const [draftSubtaskTitle, setDraftSubtaskTitle] = useState("");
   const [activeSection, setActiveSection] = useState<NavSection>("home");
+  const [drawerSelection, setDrawerSelection] = useState<DetailSelection | null>(null);
   const deferredSearch = useDeferredValue(search);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const section = params.get("section");
+    const projectId = params.get("project");
+    const taskId = params.get("task");
+    const sessionId = params.get("session");
+    const questionId = params.get("question");
+    const drawerType = params.get("drawer");
+    const drawerId = params.get("drawer_id");
+
+    if (section && validSections.has(section as NavSection)) {
+      setActiveSection(section as NavSection);
+    }
+    if (projectId) {
+      setSelectedProjectId(projectId);
+    }
+    if (taskId) {
+      setInspectedTaskId(taskId);
+    }
+    if (sessionId) {
+      setSelectedSessionId(sessionId);
+    }
+    if (questionId) {
+      setSelectedQuestionId(questionId);
+    }
+    if (drawerId && isDetailEntityType(drawerType)) {
+      setDrawerSelection({ type: drawerType, id: drawerId });
+    }
+  }, [setSelectedProjectId]);
 
   const dashboardQuery = useDashboardQuery();
   const diagnosticsQuery = useDiagnosticsQuery();
@@ -194,6 +249,7 @@ export function App() {
     setSelectedSessionId(null);
     setSelectedQuestionId(null);
     setInspectedTaskId(null);
+    setDrawerSelection(null);
   }, [selectedProjectId]);
 
   useEffect(() => {
@@ -320,7 +376,7 @@ export function App() {
         });
         queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       }
-      setSelectedSessionId(session.id);
+      selectSession(session.id);
     },
   });
 
@@ -334,7 +390,7 @@ export function App() {
       }
       queryClient.invalidateQueries({ queryKey: ["session-tail"] });
       queryClient.invalidateQueries({ queryKey: ["session-timeline"] });
-      setSelectedSessionId(session.id);
+      selectSession(session.id);
     },
   });
 
@@ -346,7 +402,7 @@ export function App() {
         });
         queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       }
-      setSelectedQuestionId(question.id);
+      selectQuestion(question.id);
       setDraftQuestionPrompt("");
       setDraftQuestionReason("");
     },
@@ -536,6 +592,28 @@ export function App() {
     selectedSession?.task_id ?? null,
   );
 
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set("section", activeSection);
+    if (selectedProjectId) params.set("project", selectedProjectId);
+    if (inspectedTaskId) params.set("task", inspectedTaskId);
+    if (selectedSessionId) params.set("session", selectedSessionId);
+    if (selectedQuestionId) params.set("question", selectedQuestionId);
+    if (drawerSelection) {
+      params.set("drawer", drawerSelection.type);
+      params.set("drawer_id", drawerSelection.id);
+    }
+    const next = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState(null, "", next);
+  }, [
+    activeSection,
+    selectedProjectId,
+    inspectedTaskId,
+    selectedSessionId,
+    selectedQuestionId,
+    drawerSelection,
+  ]);
+
   const navItems: Array<{ key: NavSection; label: string; icon: typeof Home }> =
     [
       { key: "home", label: "Home", icon: Home },
@@ -566,6 +644,25 @@ export function App() {
     sessionTimelineQuery.data?.session.session_name,
   ].filter(Boolean) as string[];
 
+  const selectTask = (taskId: string) => {
+    setInspectedTaskId(taskId);
+    setDrawerSelection({ type: "task", id: taskId });
+  };
+
+  const selectSession = (sessionId: string) => {
+    setSelectedSessionId(sessionId);
+    setDrawerSelection({ type: "session", id: sessionId });
+  };
+
+  const selectQuestion = (questionId: string) => {
+    setSelectedQuestionId(questionId);
+    setDrawerSelection({ type: "question", id: questionId });
+  };
+
+  const selectWorktree = (worktreeId: string) => {
+    setDrawerSelection({ type: "worktree", id: worktreeId });
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || !projectDetailQuery.data) {
@@ -591,6 +688,199 @@ export function App() {
 
     patchTaskMutation.mutate({ taskId, boardColumnId: column.id });
   };
+
+  const selectedWorktree = useMemo(
+    () =>
+      projectDetailQuery.data?.worktrees.find(
+        (worktree) => worktree.id === drawerSelection?.id,
+      ) ?? null,
+    [projectDetailQuery.data?.worktrees, drawerSelection?.id],
+  );
+
+  const openFullDetail = () => {
+    if (!drawerSelection) {
+      return;
+    }
+    if (drawerSelection.type === "task") {
+      setActiveSection("projects");
+      setInspectedTaskId(drawerSelection.id);
+      return;
+    }
+    if (drawerSelection.type === "session") {
+      setActiveSection("sessions");
+      setSelectedSessionId(drawerSelection.id);
+      return;
+    }
+    if (drawerSelection.type === "worktree") {
+      setActiveSection("worktrees");
+      return;
+    }
+    setActiveSection("waiting");
+    setSelectedQuestionId(drawerSelection.id);
+  };
+
+  const drawerContent = useMemo(() => {
+    if (!drawerSelection) {
+      return (
+        <SectionFrame className="px-4 py-4">
+          <SectionTitle>Detail Drawer</SectionTitle>
+          <p className="mt-2 text-sm text-slate-500">
+            Single-click a task, session, worktree, or waiting question to
+            inspect it here.
+          </p>
+        </SectionFrame>
+      );
+    }
+
+    if (drawerSelection.type === "task" && taskDetailQuery.data) {
+      const sections: DetailDrawerSection[] = [
+        {
+          id: "context",
+          label: "Context",
+          content: (
+            <div className="space-y-1">
+              <div>State: {taskDetailQuery.data.workflow_state}</div>
+              <div>Priority: {taskDetailQuery.data.priority ?? "unset"}</div>
+              <div>Dependencies: {taskDetailQuery.data.dependencies.length}</div>
+            </div>
+          ),
+        },
+        {
+          id: "activity",
+          label: "Recent activity",
+          content: (
+            <div className="space-y-1">
+              <div>Comments: {taskDetailQuery.data.comments.length}</div>
+              <div>Checks: {taskDetailQuery.data.checks.length}</div>
+              <div>Artifacts: {taskDetailQuery.data.artifacts.length}</div>
+            </div>
+          ),
+        },
+      ];
+      return (
+        <DetailDrawer
+          title={taskDetailQuery.data.title}
+          subtitle={taskDetailQuery.data.description ?? "No description yet."}
+          sections={sections}
+          onOpenFullDetail={openFullDetail}
+          onClose={() => setDrawerSelection(null)}
+        />
+      );
+    }
+
+    if (drawerSelection.type === "session" && selectedSession) {
+      const sections: DetailDrawerSection[] = [
+        {
+          id: "runtime",
+          label: "Runtime",
+          content: (
+            <div className="space-y-1">
+              <div>Status: {selectedSession.status}</div>
+              <div>Profile: {selectedSession.profile}</div>
+              <div>Task: {selectedSession.task_id.slice(0, 8)}</div>
+            </div>
+          ),
+        },
+        {
+          id: "output",
+          label: "Recent output",
+          content: sessionTailQuery.data?.lines.length ? (
+            <pre className="max-h-40 overflow-auto rounded-xl bg-black/25 p-2 text-xs text-slate-300">
+              {sessionTailQuery.data.lines.slice(-8).join("\n")}
+            </pre>
+          ) : (
+            "No tail output available."
+          ),
+        },
+      ];
+      return (
+        <DetailDrawer
+          title={selectedSession.session_name}
+          subtitle={`${selectedSession.profile} · ${selectedSession.status}`}
+          sections={sections}
+          onOpenFullDetail={openFullDetail}
+          onClose={() => setDrawerSelection(null)}
+        />
+      );
+    }
+
+    if (drawerSelection.type === "worktree" && selectedWorktree) {
+      const sections: DetailDrawerSection[] = [
+        {
+          id: "ownership",
+          label: "Ownership",
+          content: (
+            <div className="space-y-1">
+              <div>Branch: {selectedWorktree.branch_name}</div>
+              <div>Status: {selectedWorktree.status}</div>
+              <div>Task: {selectedWorktree.task_id ?? "unlinked"}</div>
+            </div>
+          ),
+        },
+        {
+          id: "location",
+          label: "Filesystem",
+          content: <div className="break-all">{selectedWorktree.path}</div>,
+        },
+      ];
+      return (
+        <DetailDrawer
+          title={selectedWorktree.branch_name}
+          subtitle={selectedWorktree.status}
+          sections={sections}
+          onOpenFullDetail={openFullDetail}
+          onClose={() => setDrawerSelection(null)}
+        />
+      );
+    }
+
+    if (drawerSelection.type === "question" && questionDetailQuery.data) {
+      const sections: DetailDrawerSection[] = [
+        {
+          id: "prompt",
+          label: "Prompt",
+          content: questionDetailQuery.data.prompt,
+        },
+        {
+          id: "status",
+          label: "Status",
+          content: (
+            <div className="space-y-1">
+              <div>Status: {questionDetailQuery.data.status}</div>
+              <div>Urgency: {questionDetailQuery.data.urgency ?? "low"}</div>
+              <div>Replies: {questionDetailQuery.data.replies.length}</div>
+            </div>
+          ),
+        },
+      ];
+      return (
+        <DetailDrawer
+          title="Waiting question"
+          subtitle={questionDetailQuery.data.blocked_reason ?? "No blocked reason"}
+          sections={sections}
+          onOpenFullDetail={openFullDetail}
+          onClose={() => setDrawerSelection(null)}
+        />
+      );
+    }
+
+    return (
+      <SectionFrame className="px-4 py-4">
+        <SectionTitle>Detail Drawer</SectionTitle>
+        <p className="mt-2 text-sm text-slate-500">
+          The selected entity is unavailable in this project context.
+        </p>
+      </SectionFrame>
+    );
+  }, [
+    drawerSelection,
+    openFullDetail,
+    questionDetailQuery.data,
+    selectedSession,
+    selectedWorktree,
+    sessionTailQuery.data?.lines,
+    taskDetailQuery.data,
+  ]);
 
   return (
     <AppShell
@@ -768,7 +1058,7 @@ export function App() {
                             key={question.id}
                             onClick={() => {
                               setSelectedProjectId(question.project_id);
-                              setSelectedQuestionId(question.id);
+                              selectQuestion(question.id);
                             }}
                             className="rounded-2xl border border-white/7 bg-white/3 px-4 py-3 text-left"
                           >
@@ -798,7 +1088,7 @@ export function App() {
                           key={task.id}
                           onClick={() => {
                             setSelectedProjectId(task.project_id);
-                            setInspectedTaskId(task.id);
+                            selectTask(task.id);
                           }}
                           className="rounded-2xl border border-white/7 bg-white/3 px-4 py-3 text-left"
                         >
@@ -826,7 +1116,7 @@ export function App() {
                           key={session.id}
                           onClick={() => {
                             setSelectedProjectId(session.project_id);
-                            setSelectedSessionId(session.id);
+                            selectSession(session.id);
                           }}
                           className="rounded-2xl border border-white/7 bg-white/3 px-4 py-3 text-left"
                         >
@@ -914,11 +1204,11 @@ export function App() {
                     key={`${hit.entity_type}-${hit.entity_id}`}
                     onClick={() => {
                       if (hit.entity_type === "task") {
-                        setInspectedTaskId(hit.entity_id);
+                        selectTask(hit.entity_id);
                       } else if (hit.entity_type === "waiting_question") {
-                        setSelectedQuestionId(hit.entity_id);
+                        selectQuestion(hit.entity_id);
                       } else if (hit.entity_type === "session") {
-                        setSelectedSessionId(hit.entity_id);
+                        selectSession(hit.entity_id);
                       }
                       if (hit.project_id) {
                         setSelectedProjectId(hit.project_id);
@@ -1042,7 +1332,7 @@ export function App() {
                                                 : 0,
                                           }}
                                           onInspect={() =>
-                                            setInspectedTaskId(task.id)
+                                            selectTask(task.id)
                                           }
                                         />
                                       ),
@@ -1133,7 +1423,7 @@ export function App() {
                                     <button
                                       key={subtask.id}
                                       onClick={() =>
-                                        setInspectedTaskId(subtask.id)
+                                        selectTask(subtask.id)
                                       }
                                       className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3 text-left"
                                     >
@@ -1599,6 +1889,8 @@ export function App() {
                     tasks={topLevelTasks}
                     sessions={projectDetailQuery.data?.sessions ?? []}
                     events={eventsQuery.data ?? []}
+                    selectedWorktreeId={drawerSelection?.type === "worktree" ? drawerSelection.id : null}
+                    onSelectWorktree={selectWorktree}
                     loading={projectDetailQuery.isLoading || eventsQuery.isLoading}
                     error={
                       projectDetailQuery.error instanceof Error
@@ -1715,7 +2007,7 @@ export function App() {
                         {projectDetailQuery.data?.sessions.map((session) => (
                           <button
                             key={session.id}
-                            onClick={() => setSelectedSessionId(session.id)}
+                            onClick={() => selectSession(session.id)}
                             className={[
                               "rounded-2xl border px-4 py-4 text-left",
                               selectedSessionId === session.id
@@ -2146,18 +2438,18 @@ export function App() {
                     }
                     draftReplyBody={draftReplyBody}
                     onDraftReplyBodyChange={setDraftReplyBody}
-                    onSelectQuestion={setSelectedQuestionId}
+                    onSelectQuestion={selectQuestion}
                     onSendReply={(questionId, body) =>
                       answerQuestionMutation.mutate({ questionId, body })
                     }
                     isSendingReply={answerQuestionMutation.isPending}
                     onOpenProject={() => setActiveSection("projects")}
                     onOpenSession={(sessionId) => {
-                      setSelectedSessionId(sessionId);
+                      selectSession(sessionId);
                       setActiveSection("sessions");
                     }}
                     onOpenTask={(taskId) => {
-                      setInspectedTaskId(taskId);
+                      selectTask(taskId);
                       setActiveSection("projects");
                     }}
                   />
@@ -2355,7 +2647,7 @@ export function App() {
           ) : null}
         </>
       }
-      drawer={<></>}
+      drawer={drawerContent}
     />
   );
 }

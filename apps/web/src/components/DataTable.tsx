@@ -19,6 +19,8 @@ type DataTableProps<TRow> = {
   rows: TRow[];
   rowKey: (row: TRow) => string;
   rowClassName?: string;
+  onRowClick?: (row: TRow) => void;
+  selectedRowKey?: string | null;
   state?: DataTableState;
 };
 
@@ -27,6 +29,8 @@ export function DataTable<TRow>({
   rows,
   rowKey,
   rowClassName,
+  onRowClick,
+  selectedRowKey,
   state,
 }: DataTableProps<TRow>) {
   return (
@@ -76,11 +80,17 @@ export function DataTable<TRow>({
               </td>
             </tr>
           ) : (
-            rows.map((row) => (
+            rows.map((row) => {
+              const key = rowKey(row);
+              const selected = selectedRowKey === key;
+              return (
               <tr
-                key={rowKey(row)}
+                key={key}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={cn(
                   "border-b border-white/7 last:border-b-0",
+                  onRowClick ? "cursor-pointer hover:bg-white/5" : "",
+                  selected ? "bg-[color:var(--color-accent-soft)]/30" : "",
                   rowClassName ?? "align-top",
                 )}
               >
@@ -90,7 +100,8 @@ export function DataTable<TRow>({
                   </td>
                 ))}
               </tr>
-            ))
+            );
+            })
           )}
         </tbody>
       </table>
