@@ -64,6 +64,52 @@ class AgentSessionRead(BaseModel):
     updated_at: datetime
 
 
+class WaitingQuestionCreate(BaseModel):
+    task_id: str
+    session_id: str | None = None
+    prompt: str = Field(min_length=3)
+    blocked_reason: str | None = None
+    urgency: Literal["low", "medium", "high", "urgent"] | None = None
+    options_json: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class HumanReplyCreate(BaseModel):
+    responder_name: str = Field(min_length=2, max_length=255)
+    body: str = Field(min_length=1)
+    payload_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class HumanReplyRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    question_id: str
+    responder_name: str
+    body: str
+    payload_json: dict[str, Any]
+    created_at: datetime
+
+
+class WaitingQuestionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    task_id: str
+    session_id: str | None
+    status: str
+    prompt: str
+    blocked_reason: str | None
+    urgency: str | None
+    options_json: list[dict[str, Any]]
+    created_at: datetime
+    updated_at: datetime
+
+
+class WaitingQuestionDetail(WaitingQuestionRead):
+    replies: list[HumanReplyRead]
+
+
 class AgentRunRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -185,6 +231,7 @@ class ProjectOverview(BaseModel):
     repositories: list[RepositoryRead]
     worktrees: list[WorktreeRead]
     sessions: list[AgentSessionRead]
+    waiting_questions: list[WaitingQuestionRead]
 
 
 class EventRecord(BaseModel):

@@ -72,3 +72,15 @@ export interface SessionSummary {
   session_name: string;
   runtime_metadata: Record<string, unknown>;
 }
+
+export interface WaitingQuestionSummary {
+  id: string;
+  project_id: string;
+  task_id: string;
+  session_id?: string | null;
+  status: string;
+  prompt: string;
+  blocked_reason?: string | null;
+  urgency?: string | null;
+  options_json: Array<Record<string, unknown>>;
+}

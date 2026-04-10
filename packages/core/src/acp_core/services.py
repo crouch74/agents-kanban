@@ -12,7 +12,20 @@ from sqlalchemy.orm import Session
 
 from acp_core.constants import DEFAULT_BOARD_COLUMNS, TASK_TRANSITIONS, WORKFLOW_BY_COLUMN_KEY
 from acp_core.logging import logger
-from acp_core.models import AgentRun, AgentSession, Board, BoardColumn, Event, Project, Repository, SessionMessage, Task, Worktree
+from acp_core.models import (
+    AgentRun,
+    AgentSession,
+    Board,
+    BoardColumn,
+    Event,
+    HumanReply,
+    Project,
+    Repository,
+    SessionMessage,
+    Task,
+    WaitingQuestion,
+    Worktree,
+)
 from acp_core.runtime import TmuxRuntimeAdapter, safe_tmux_name
 from acp_core.schemas import (
     AgentSessionCreate,
@@ -20,9 +33,14 @@ from acp_core.schemas import (
     BoardView,
     DashboardRead,
     DiagnosticsRead,
+    HumanReplyCreate,
+    HumanReplyRead,
     ProjectCreate,
     RepositoryCreate,
     RepositoryRead,
+    WaitingQuestionCreate,
+    WaitingQuestionDetail,
+    WaitingQuestionRead,
     TaskCreate,
     TaskPatch,
     SessionTailRead,
@@ -152,12 +170,20 @@ class ProjectService:
                 select(AgentSession).where(AgentSession.project_id == project_id).order_by(AgentSession.created_at.desc())
             )
         )
+        waiting_questions = list(
+            self.context.db.scalars(
+                select(WaitingQuestion)
+                .where(WaitingQuestion.project_id == project_id, WaitingQuestion.status == "open")
+                .order_by(WaitingQuestion.created_at.desc())
+            )
+        )
         return ProjectOverview(
             project=ProjectSummary.model_validate(project),
             board=board,
             repositories=[RepositoryRead.model_validate(item) for item in repositories],
             worktrees=[WorktreeRead.model_validate(item) for item in worktrees],
             sessions=[AgentSessionRead.model_validate(item) for item in sessions],
+            waiting_questions=[WaitingQuestionRead.model_validate(item) for item in waiting_questions],
         )
 
 
@@ -584,7 +610,10 @@ class SessionService:
     def refresh_session_status(self, session_id: str) -> AgentSession:
         session = self.get_session(session_id)
         exists = self.runtime.session_exists(session.session_name)
-        next_status = "running" if exists else "done"
+        if session.status == "waiting_human" and exists:
+            next_status = "waiting_human"
+        else:
+            next_status = "running" if exists else "done"
         if session.status != next_status:
             session.status = next_status
             self.context.record_event(
@@ -620,6 +649,137 @@ class SessionService:
         )
 
 
+class WaitingService:
+    def __init__(self, context: ServiceContext, runtime: TmuxRuntimeAdapter | None = None) -> None:
+        self.context = context
+        self.runtime = runtime or TmuxRuntimeAdapter()
+
+    def list_questions(self, project_id: str | None = None, status: str | None = None) -> list[WaitingQuestion]:
+        stmt = select(WaitingQuestion).order_by(WaitingQuestion.created_at.desc())
+        if project_id is not None:
+            stmt = stmt.where(WaitingQuestion.project_id == project_id)
+        if status is not None:
+            stmt = stmt.where(WaitingQuestion.status == status)
+        return list(self.context.db.scalars(stmt))
+
+    def get_question(self, question_id: str) -> WaitingQuestion:
+        question = self.context.db.get(WaitingQuestion, question_id)
+        if question is None:
+            raise ValueError("Waiting question not found")
+        return question
+
+    def open_question(self, payload: WaitingQuestionCreate) -> WaitingQuestion:
+        task = self.context.db.get(Task, payload.task_id)
+        if task is None:
+            raise ValueError("Task not found")
+
+        session = None
+        if payload.session_id is not None:
+            session = self.context.db.get(AgentSession, payload.session_id)
+            if session is None:
+                raise ValueError("Session not found")
+            if session.task_id != task.id:
+                raise ValueError("Session must belong to the same task")
+
+        question = WaitingQuestion(
+            project_id=task.project_id,
+            task_id=task.id,
+            session_id=session.id if session else None,
+            status="open",
+            prompt=payload.prompt,
+            blocked_reason=payload.blocked_reason,
+            urgency=payload.urgency,
+            options_json=payload.options_json,
+        )
+        task.waiting_for_human = True
+        if session is not None:
+            session.status = "waiting_human"
+            self.context.db.add(
+                SessionMessage(
+                    session_id=session.id,
+                    message_type="waiting_question",
+                    source="control-plane",
+                    body=f"💬 Waiting for human input: {payload.prompt}",
+                    payload_json={"urgency": payload.urgency},
+                )
+            )
+
+        self.context.db.add(question)
+        self.context.db.flush()
+        self.context.record_event(
+            entity_type="waiting_question",
+            entity_id=question.id,
+            event_type="waiting_question.opened",
+            payload_json={
+                "task_id": task.id,
+                "session_id": session.id if session else None,
+                "urgency": payload.urgency,
+            },
+        )
+        self.context.db.commit()
+        self.context.db.refresh(question)
+
+        logger.info("💬 waiting question opened", question_id=question.id, task_id=task.id)
+        return question
+
+    def answer_question(self, question_id: str, payload: HumanReplyCreate) -> WaitingQuestion:
+        question = self.get_question(question_id)
+        if question.status != "open":
+            raise ValueError("Question is not open")
+
+        reply = HumanReply(
+            question_id=question.id,
+            responder_name=payload.responder_name,
+            body=payload.body,
+            payload_json=payload.payload_json,
+        )
+        self.context.db.add(reply)
+
+        task = self.context.db.get(Task, question.task_id)
+        if task is not None:
+            task.waiting_for_human = False
+
+        if question.session_id is not None:
+            session = self.context.db.get(AgentSession, question.session_id)
+            if session is not None:
+                session_exists = self.runtime.session_exists(session.session_name)
+                session.status = "running" if session_exists else "done"
+                self.context.db.add(
+                    SessionMessage(
+                        session_id=session.id,
+                        message_type="human_reply",
+                        source=payload.responder_name,
+                        body=f"💬 Human replied: {payload.body}",
+                        payload_json=payload.payload_json,
+                    )
+                )
+
+        question.status = "answered"
+        self.context.db.flush()
+        self.context.record_event(
+            entity_type="waiting_question",
+            entity_id=question.id,
+            event_type="waiting_question.answered",
+            payload_json={"responder_name": payload.responder_name},
+        )
+        self.context.db.commit()
+        self.context.db.refresh(question)
+
+        logger.info("💬 waiting question answered", question_id=question.id, responder=payload.responder_name)
+        return question
+
+    def get_question_detail(self, question_id: str) -> WaitingQuestionDetail:
+        question = self.get_question(question_id)
+        replies = list(
+            self.context.db.scalars(
+                select(HumanReply).where(HumanReply.question_id == question.id).order_by(HumanReply.created_at.asc())
+            )
+        )
+        detail = WaitingQuestionDetail.model_validate(question)
+        detail.replies = [HumanReplyRead.model_validate(item) for item in replies]
+        return detail
+
+
 class DiagnosticsService:
     def __init__(self, context: ServiceContext) -> None:
         self.context = context
@@ -646,7 +806,7 @@ class DashboardService:
     def get_dashboard(self) -> DashboardRead:
         projects = list(self.context.db.scalars(select(Project).order_by(Project.created_at.desc()).limit(8)))
         events = list(self.context.db.scalars(select(Event).order_by(Event.created_at.desc()).limit(12)))
-        waiting_count = self.context.db.scalar(select(func.count(Task.id)).where(Task.waiting_for_human.is_(True))) or 0
+        waiting_count = self.context.db.scalar(select(func.count(WaitingQuestion.id)).where(WaitingQuestion.status == "open")) or 0
         blocked_count = self.context.db.scalar(select(func.count(Task.id)).where(Task.blocked_reason.is_not(None))) or 0
         running_sessions = self.context.db.scalar(select(func.count(AgentSession.id)).where(AgentSession.status == "running")) or 0
         return DashboardRead(

@@ -13,6 +13,7 @@ from acp_core.services import (
     SessionService,
     ServiceContext,
     TaskService,
+    WaitingService,
     WorktreeService,
 )
 
@@ -54,3 +55,10 @@ def get_session_service(
     runtime: TmuxRuntimeAdapter = Depends(get_runtime_adapter),
 ) -> SessionService:
     return SessionService(context, runtime=runtime)
+
+
+def get_waiting_service(
+    context: ServiceContext = Depends(get_service_context),
+    runtime: TmuxRuntimeAdapter = Depends(get_runtime_adapter),
+) -> WaitingService:
+    return WaitingService(context, runtime=runtime)

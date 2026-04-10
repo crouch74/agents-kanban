@@ -111,6 +111,7 @@ class Task(TimestampMixin, Base):
     parent_task: Mapped["Task | None"] = relationship(remote_side="Task.id")
     worktrees: Mapped[list["Worktree"]] = relationship(back_populates="task")
     sessions: Mapped[list["AgentSession"]] = relationship(back_populates="task")
+    waiting_questions: Mapped[list["WaitingQuestion"]] = relationship(back_populates="task")
 
 
 class TaskDependency(TimestampMixin, Base):
@@ -166,6 +167,7 @@ class AgentSession(TimestampMixin, Base):
     task: Mapped[Task] = relationship(back_populates="sessions")
     runs: Mapped[list["AgentRun"]] = relationship(back_populates="session")
     messages: Mapped[list["SessionMessage"]] = relationship(back_populates="session")
+    waiting_questions: Mapped[list["WaitingQuestion"]] = relationship(back_populates="session")
 
 
 class AgentRun(TimestampMixin, Base):
@@ -204,6 +206,10 @@ class WaitingQuestion(TimestampMixin, Base):
     urgency: Mapped[str | None] = mapped_column(String(32))
     options_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
 
+    task: Mapped[Task] = relationship(back_populates="waiting_questions")
+    session: Mapped[AgentSession | None] = relationship(back_populates="waiting_questions")
+    replies: Mapped[list["HumanReply"]] = relationship(back_populates="question")
+
 
 class HumanReply(TimestampMixin, Base):
     __tablename__ = "human_replies"
@@ -212,6 +218,8 @@ class HumanReply(TimestampMixin, Base):
     responder_name: Mapped[str] = mapped_column(String(255), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+
+    question: Mapped[WaitingQuestion] = relationship(back_populates="replies")
 
 
 class Worktree(TimestampMixin, Base):
