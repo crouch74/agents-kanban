@@ -29,6 +29,10 @@ the source of truth.
 The shared service layer in `packages/core/src/acp_core/services.py` is the
 behavioral center of the app.
 
+The canonical local development entrypoint is `scripts/dev-stack.sh`. New local
+services or long-running developer processes should be integrated into that
+launcher instead of introducing another parallel startup path.
+
 ## Non-Negotiable Guardrails
 
 ### Source of truth

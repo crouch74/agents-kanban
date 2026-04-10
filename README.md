@@ -11,10 +11,12 @@ agent surface.
 This repository is beyond scaffold stage. The current implementation includes:
 
 - projects with one default board per project
+- guided project bootstrap from repo path, stack preset, and kickoff prompt
 - canonical kanban columns: `Backlog`, `Ready`, `In Progress`, `Review`, `Done`
 - tasks and one level of subtasks
 - task dependencies, comments, checks, and artifacts
 - repository registration for local git repositories
+- optional repo initialization and starter scaffold for empty folders
 - deterministic task-linked git worktree allocation and lifecycle management
 - tmux-backed agent sessions with status, tail, timeline, cancel, and follow-up
   workflows
@@ -64,17 +66,31 @@ areas:
 
 ## Local Development
 
-Bootstrap once:
+Recommended single entrypoint:
 
-1. Run `scripts/bootstrap.sh`
+1. Run `scripts/dev-stack.sh`
 
-Run the backend:
+This script:
 
-1. Run `scripts/dev-api.sh`
+- bootstraps local dependencies when needed
+- starts API, web, and MCP by default
+- writes per-service logs under `.acp/logs/dev/`
+- streams prefixed live logs in one terminal
+- stops all managed processes on `Ctrl-C`
 
-Run the web app:
+Useful variants:
 
-1. Run `scripts/dev-web.sh`
+- `scripts/dev-stack.sh --no-mcp`
+- `scripts/dev-stack.sh --api-only`
+- `scripts/dev-stack.sh --web-only`
+- `scripts/dev-stack.sh --mcp-only`
+- `scripts/dev-stack.sh --no-bootstrap`
+
+Focused scripts still exist for narrower workflows:
+
+- `scripts/bootstrap.sh`
+- `scripts/dev-api.sh`
+- `scripts/dev-web.sh`
 
 Useful test commands:
 

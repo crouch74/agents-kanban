@@ -23,6 +23,8 @@ agent interaction.
   and recent events
 - project overview composed from board, repositories, worktrees, sessions, and
   waiting questions
+- project bootstrap wizard for repo path, stack preset, kickoff prompt, and
+  optional worktree kickoff
 - task inspector with subtasks, comments, checks, artifacts, and dependencies
 - session runtime view with tail, timeline, waiting state, and session chain
 - diagnostics panel with runtime orphan detection and worktree hygiene signals
@@ -36,6 +38,8 @@ agent interaction.
 - task transitions enforced in the service layer
 - task completion readiness gate
 - repository registration and metadata capture
+- bootstrap flow for existing repos or empty folders with optional `git init`
+- minimal starter scaffolds for a focused set of stack presets
 - deterministic worktree allocation and lifecycle updates
 - tmux-backed sessions with cancel and follow-up flows
 - waiting question open/answer/resume flow
@@ -54,6 +58,13 @@ agent interaction.
   recovery, and MCP handlers
 - one Playwright smoke test for the web shell
 - one Vitest app-shell test
+
+### Local developer runtime
+
+- `scripts/dev-stack.sh` bootstraps when needed and starts API, web, and MCP in
+  one terminal session
+- live logs are multiplexed with stable service prefixes
+- raw per-service logs are written under `.acp/logs/dev`
 
 ## Known Implementation Limits
 
