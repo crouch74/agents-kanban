@@ -245,6 +245,20 @@ export function createTask(payload: {
   return postJson<TaskSummary>("/tasks", payload);
 }
 
+export function patchTask(
+  taskId: string,
+  payload: {
+    title?: string;
+    description?: string;
+    workflow_state?: string;
+    board_column_id?: string;
+    blocked_reason?: string | null;
+    waiting_for_human?: boolean;
+  },
+) {
+  return patchJson<TaskSummary>(`/tasks/${taskId}`, payload);
+}
+
 export function createRepository(payload: { project_id: string; local_path: string; name?: string }) {
   return postJson<RepositorySummary>("/repositories", payload);
 }

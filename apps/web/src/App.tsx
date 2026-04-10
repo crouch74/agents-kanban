@@ -1,5 +1,7 @@
-import { useDeferredValue, useEffect, useMemo, useState, startTransition } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, startTransition, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import {
   Activity,
   ArrowRight,
@@ -38,6 +40,7 @@ import {
   getSessionTimeline,
   getTaskDetail,
   getSessionTail,
+  patchTask,
   patchWorktree,
   searchContext,
 } from "@/lib/api";
@@ -78,6 +81,7 @@ export function App() {
   const [draftArtifactUri, setDraftArtifactUri] = useState("");
   const [selectedDependencyTaskId, setSelectedDependencyTaskId] = useState("");
   const deferredSearch = useDeferredValue(search);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const dashboardQuery = useQuery({
     queryKey: ["dashboard"],
@@ -157,6 +161,19 @@ export function App() {
       }
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       setDraftTaskTitle("");
+    },
+  });
+
+  const patchTaskMutation = useMutation({
+    mutationFn: ({ taskId, boardColumnId }: { taskId: string; boardColumnId: string }) =>
+      patchTask(taskId, { board_column_id: boardColumnId }),
+    onSuccess: () => {
+      if (selectedProjectId) {
+        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
+      }
+      if (inspectedTaskId) {
+        queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
+      }
     },
   });
 
@@ -337,6 +354,23 @@ export function App() {
     queryFn: () => getTaskDetail(inspectedTaskId!),
     enabled: Boolean(inspectedTaskId),
   });
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || !projectDetailQuery.data) {
+      return;
+    }
+
+    const taskId = String(active.id);
+    const boardColumnId = String(over.id);
+    const task = projectDetailQuery.data.board.tasks.find((candidate) => candidate.id === taskId);
+    const column = projectDetailQuery.data.board.columns.find((candidate) => candidate.id === boardColumnId);
+    if (!task || !column || task.board_column_id === column.id || task.parent_task_id) {
+      return;
+    }
+
+    patchTaskMutation.mutate({ taskId, boardColumnId: column.id });
+  };
 
   return (
     <div className="grid-shell">
@@ -535,65 +569,44 @@ export function App() {
               ) : null}
             </div>
 
-            <div className="mt-6 flex gap-4 overflow-x-auto pb-2 scrollbar-thin">
-              {projectDetailQuery.data?.board.columns.map((column) => (
-                <ColumnShell key={column.id} className="flex flex-col gap-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <div className="text-sm font-semibold">{column.name}</div>
-                      <div className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">
-                        {column.key}
+            <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+              <div className="mt-6 flex gap-4 overflow-x-auto pb-2 scrollbar-thin">
+                {projectDetailQuery.data?.board.columns.map((column) => (
+                  <DroppableBoardColumn key={column.id} columnId={column.id}>
+                    <ColumnShell className="flex flex-col gap-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <div className="text-sm font-semibold">{column.name}</div>
+                          <div className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">
+                            {column.key}
+                          </div>
+                        </div>
+                        <Pill className="border-white/8 text-slate-300">
+                          {groupedTasks.get(column.id)?.length ?? 0}
+                          {column.wip_limit ? ` / ${column.wip_limit}` : ""}
+                        </Pill>
                       </div>
-                    </div>
-                    <Pill className="border-white/8 text-slate-300">
-                      {groupedTasks.get(column.id)?.length ?? 0}
-                      {column.wip_limit ? ` / ${column.wip_limit}` : ""}
-                    </Pill>
-                  </div>
 
-                  <div className="space-y-3">
-                    {(groupedTasks.get(column.id) ?? []).map((task) => (
-                      <button
-                        key={task.id}
-                        onClick={() => setInspectedTaskId(task.id)}
-                        className={[
-                          "w-full rounded-2xl border bg-white/4 p-4 text-left",
-                          inspectedTaskId === task.id
-                            ? "border-[color:var(--accent)]"
-                            : "border-white/8",
-                        ].join(" ")}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="text-sm font-semibold text-slate-100">{task.title}</div>
-                          <Pill
-                            className={
-                              task.waiting_for_human
-                                ? "border-amber-300/25 bg-amber-300/10 text-amber-100"
-                                : task.blocked_reason
-                                  ? "border-rose-300/25 bg-rose-300/10 text-rose-100"
-                                  : "border-white/8 text-slate-300"
-                            }
-                          >
-                            {task.waiting_for_human ? "Waiting" : task.blocked_reason ? "Blocked" : task.priority}
-                          </Pill>
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-                          {task.tags.map((tag) => (
-                            <span key={tag}>#{tag}</span>
-                          ))}
-                          {!task.tags.length ? <span>No tags yet</span> : null}
-                        </div>
-                      </button>
-                    ))}
-                    {!groupedTasks.get(column.id)?.length ? (
-                      <div className="rounded-2xl border border-dashed border-white/8 px-4 py-6 text-sm text-slate-500">
-                        No tasks in this column yet.
+                      <div className="space-y-3">
+                        {(groupedTasks.get(column.id) ?? []).map((task) => (
+                          <DraggableTaskCard
+                            key={task.id}
+                            task={task}
+                            selected={inspectedTaskId === task.id}
+                            onInspect={() => setInspectedTaskId(task.id)}
+                          />
+                        ))}
+                        {!groupedTasks.get(column.id)?.length ? (
+                          <div className="rounded-2xl border border-dashed border-white/8 px-4 py-6 text-sm text-slate-500">
+                            No tasks in this column yet.
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                </ColumnShell>
-              ))}
-            </div>
+                    </ColumnShell>
+                  </DroppableBoardColumn>
+                ))}
+              </div>
+            </DndContext>
           </SectionFrame>
 
           <div className="flex flex-col gap-6">
@@ -1325,6 +1338,80 @@ export function App() {
         </div>
       </main>
     </div>
+  );
+}
+
+function DroppableBoardColumn({
+  columnId,
+  children,
+}: {
+  columnId: string;
+  children: ReactNode;
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id: columnId });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={isOver ? "rounded-[28px] ring-2 ring-[color:var(--accent)]/70 ring-offset-2 ring-offset-transparent" : ""}
+    >
+      {children}
+    </div>
+  );
+}
+
+function DraggableTaskCard({
+  task,
+  selected,
+  onInspect,
+}: {
+  task: TaskSummary;
+  selected: boolean;
+  onInspect: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: task.id,
+    disabled: Boolean(task.parent_task_id),
+  });
+
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      onClick={onInspect}
+      style={{
+        transform: transform ? CSS.Translate.toString(transform) : undefined,
+        opacity: isDragging ? 0.6 : 1,
+      }}
+      className={[
+        "w-full rounded-2xl border bg-white/4 p-4 text-left transition",
+        selected ? "border-[color:var(--accent)]" : "border-white/8",
+        task.parent_task_id ? "cursor-default" : "cursor-grab active:cursor-grabbing",
+      ].join(" ")}
+      {...listeners}
+      {...attributes}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-sm font-semibold text-slate-100">{task.title}</div>
+        <Pill
+          className={
+            task.waiting_for_human
+              ? "border-amber-300/25 bg-amber-300/10 text-amber-100"
+              : task.blocked_reason
+                ? "border-rose-300/25 bg-rose-300/10 text-rose-100"
+                : "border-white/8 text-slate-300"
+          }
+        >
+          {task.waiting_for_human ? "Waiting" : task.blocked_reason ? "Blocked" : task.priority}
+        </Pill>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+        {task.tags.map((tag) => (
+          <span key={tag}>#{tag}</span>
+        ))}
+        {!task.tags.length ? <span>No tags yet</span> : null}
+      </div>
+    </button>
   );
 }
 
