@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_PYTHON="$ROOT/.venv/bin/python"
+PYTHON_BIN="python3"
 INSTALL_BROWSER=0
 INSTALL_BROWSER_DEPS=0
 
@@ -50,16 +51,31 @@ cd "$ROOT"
 log "🔎" "Checking required tooling"
 command -v python3 >/dev/null || { log "❌" "python3 is required"; exit 1; }
 command -v npm >/dev/null || { log "❌" "npm is required"; exit 1; }
-python3 - <<'PYVERSION'
+if ! python3 - <<'PYVERSION'
 import sys
 if sys.version_info < (3, 12):
     raise SystemExit("❌ Python 3.12+ is required")
 print("✅ Python version is compatible")
 PYVERSION
+then
+  if command -v python3.12 >/dev/null; then
+    PYTHON_BIN="python3.12"
+    log "🐍" "python3 is below 3.12; using python3.12 instead"
+    "$PYTHON_BIN" - <<'PYVERSION'
+import sys
+if sys.version_info < (3, 12):
+    raise SystemExit("❌ Python 3.12+ is required")
+print("✅ Python 3.12 fallback is compatible")
+PYVERSION
+  else
+    log "❌" "Python 3.12+ is required (python3.12 was not found)"
+    exit 1
+  fi
+fi
 
 if [ ! -x "$VENV_PYTHON" ]; then
   log "🐍" "Creating Python virtual environment at .venv"
-  python3 -m venv .venv
+  "$PYTHON_BIN" -m venv .venv
 else
   log "🐍" "Using existing Python virtual environment"
 fi
