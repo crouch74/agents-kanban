@@ -172,12 +172,12 @@ High-care areas:
 
 ## PR Evidence
 
-- For every new PR, post a PR comment with at least 3 screenshots from 3
-  different application views (for example: project, task, dashboard).
-- Keep screenshots at desktop viewport for now; no viewport size switching is
-  required.
-- Label each screenshot's view in the PR comment text so CI can validate
-  cross-view coverage.
+- Screenshot evidence is pipeline-owned: GitHub Actions captures screenshots and
+  posts them as a PR comment.
+- Each PR run should publish three desktop screenshots from different views
+  (currently: dashboard/home, project board/tasks, and activity).
+- Do not rely on manual user/agent screenshot comments for baseline PR
+  evidence.
 
 ## If You Are Unsure
 

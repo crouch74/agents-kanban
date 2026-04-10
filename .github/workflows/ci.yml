@@ -8,73 +8,100 @@ on:
 
 jobs:
   pr-screenshot-evidence:
-    name: PR Screenshot Evidence (3 views)
+    name: PR Screenshot Evidence Capture
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
-      - name: Validate screenshot comments on PR
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Capture screenshots from web app
+        run: |
+          npm --workspace @acp/web run dev -- --host 127.0.0.1 --port 5173 >/tmp/acp-web.log 2>&1 &
+          WEB_PID=$!
+          trap 'kill $WEB_PID || true' EXIT
+
+          for i in {1..45}; do
+            if curl -sf http://127.0.0.1:5173 >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          node scripts/capture_pr_screenshots.mjs
+
+      - name: Upload screenshot artifact
+        id: upload_screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-screenshots
+          path: .artifacts/pr-screenshots/
+          if-no-files-found: error
+
+      - name: Publish screenshot comment
         uses: actions/github-script@v7
         with:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const issue_number = context.payload.pull_request.number;
+            const runId = process.env.GITHUB_RUN_ID;
+            const artifactId = "${{ steps.upload_screenshots.outputs.artifact-id }}";
+
+            const marker = "<!-- pr-screenshot-evidence -->";
+            const body = `${marker}
+            ### 📸 Automated UI screenshots (desktop)
+
+            The pipeline captured screenshots from three application views:
+
+            - Dashboard view (`home`)
+            - Project board/tasks view (`projects`)
+            - Activity view (`activity`)
+
+            Download the screenshot bundle: https://github.com/${owner}/${repo}/actions/runs/${runId}/artifacts/${artifactId}
+            `;
 
             const comments = await github.paginate(
               github.rest.issues.listComments,
               { owner, repo, issue_number, per_page: 100 }
             );
+            const existing = comments.find(
+              (comment) =>
+                comment.user?.type === "Bot" &&
+                typeof comment.body === "string" &&
+                comment.body.includes(marker)
+            );
 
-            const imageMarkdownRe = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
-            const ghAttachmentRe = /https:\/\/github\.com\/user-attachments\/assets\/[^\s)]+/g;
-            const legacyAttachmentRe = /https:\/\/user-images\.githubusercontent\.com\/[^\s)]+/g;
-            const viewRe =
-              /\b(project|projects|task|tasks|board|boards|dashboard|dashboards|session|sessions|diagnostics|activity|waiting|worktree|worktrees|repository|repositories|search)\b/gi;
-
-            const screenshotRefs = new Set();
-            const viewSet = new Set();
-            for (const comment of comments) {
-              const body = comment.body || "";
-              let commentImageCount = 0;
-
-              for (const match of body.matchAll(imageMarkdownRe)) {
-                screenshotRefs.add(match[1]);
-                commentImageCount += 1;
-              }
-              for (const match of body.match(ghAttachmentRe) || []) {
-                screenshotRefs.add(match);
-                commentImageCount += 1;
-              }
-              for (const match of body.match(legacyAttachmentRe) || []) {
-                screenshotRefs.add(match);
-                commentImageCount += 1;
-              }
-
-              if (commentImageCount > 0) {
-                for (const viewMatch of body.matchAll(viewRe)) {
-                  const rawView = viewMatch[1].toLowerCase();
-                  const normalizedView = rawView.endsWith("s")
-                    ? rawView.slice(0, -1)
-                    : rawView;
-                  viewSet.add(normalizedView);
-                }
-              }
-            }
-
-            if (screenshotRefs.size < 3 || viewSet.size < 3) {
-              core.setFailed(
-                `Expected at least 3 screenshots from 3 different app views in PR comments. ` +
-                `Found ${screenshotRefs.size} screenshot reference(s) and ${viewSet.size} distinct view label(s): ` +
-                `[${Array.from(viewSet).sort().join(", ")}]. ` +
-                `Please add/update a PR comment with at least 3 screenshots and identify each view ` +
-                `(e.g., project, task, dashboard).`
-              );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
             } else {
-              core.info(
-                `✅ Found ${screenshotRefs.size} screenshot references across ` +
-                `${viewSet.size} distinct views: [${Array.from(viewSet).sort().join(", ")}].`
-              );
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
             }
 
   verify:
