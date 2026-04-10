@@ -310,9 +310,23 @@ class TaskService:
         logger.info("🗂️ task created", task_id=task.id, project_id=task.project_id)
         return task
 
+    def _ensure_completion_evidence(self, task: Task) -> None:
+        passing_check_count = self.context.db.scalar(
+            select(func.count(TaskCheck.id)).where(
+                TaskCheck.task_id == task.id,
+                TaskCheck.status.in_(["passed", "warning"]),
+            )
+        ) or 0
+        artifact_count = self.context.db.scalar(
+            select(func.count(TaskArtifact.id)).where(TaskArtifact.task_id == task.id)
+        ) or 0
+        if passing_check_count == 0 and artifact_count == 0:
+            raise ValueError("Task needs at least one passing check or artifact before moving to done")
+
     def patch_task(self, task_id: str, payload: TaskPatch) -> Task:
         task = self.get_task(task_id)
         provided = payload.model_fields_set
+        next_workflow_state = task.workflow_state
 
         if "title" in provided and payload.title is not None:
             task.title = payload.title
@@ -332,14 +346,19 @@ class TaskService:
                 raise ValueError(
                     f"Invalid workflow transition from {task.workflow_state} to {payload.workflow_state}"
                 )
-            task.workflow_state = payload.workflow_state
+            next_workflow_state = payload.workflow_state
 
         if "board_column_id" in provided and payload.board_column_id is not None:
             column = self.context.db.get(BoardColumn, payload.board_column_id)
             if column is None:
                 raise ValueError("Board column not found")
             task.board_column_id = column.id
-            task.workflow_state = WORKFLOW_BY_COLUMN_KEY.get(column.key, task.workflow_state)
+            next_workflow_state = WORKFLOW_BY_COLUMN_KEY.get(column.key, next_workflow_state)
+
+        if task.workflow_state != "done" and next_workflow_state == "done":
+            self._ensure_completion_evidence(task)
+
+        task.workflow_state = next_workflow_state
 
         self.context.record_event(
             entity_type="task",

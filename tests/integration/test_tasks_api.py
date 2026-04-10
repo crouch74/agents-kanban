@@ -36,6 +36,33 @@ def test_create_and_move_task_through_valid_workflow() -> None:
         assert invalid_response.status_code == 400
         assert "Invalid workflow transition" in invalid_response.json()["detail"]
 
+        review_response = client.patch(
+            f"/api/v1/tasks/{task['id']}",
+            json={"workflow_state": "review"},
+        )
+        assert review_response.status_code == 200
+        assert review_response.json()["workflow_state"] == "review"
+
+        evidence_missing_response = client.patch(
+            f"/api/v1/tasks/{task['id']}",
+            json={"workflow_state": "done"},
+        )
+        assert evidence_missing_response.status_code == 400
+        assert "passing check or artifact" in evidence_missing_response.json()["detail"]
+
+        check_response = client.post(
+            f"/api/v1/tasks/{task['id']}/checks",
+            json={"check_type": "verification", "status": "passed", "summary": "Ready to complete."},
+        )
+        assert check_response.status_code == 201
+
+        done_response = client.patch(
+            f"/api/v1/tasks/{task['id']}",
+            json={"workflow_state": "done"},
+        )
+        assert done_response.status_code == 200
+        assert done_response.json()["workflow_state"] == "done"
+
 
 def test_create_subtask_under_parent_task() -> None:
     with TestClient(app) as client:
