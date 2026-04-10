@@ -1,4 +1,11 @@
-import type { BoardView, ProjectSummary, RepositorySummary, TaskSummary, WorktreeSummary } from "@acp/sdk";
+import type {
+  BoardView,
+  ProjectSummary,
+  RepositorySummary,
+  SessionSummary,
+  TaskSummary,
+  WorktreeSummary,
+} from "@acp/sdk";
 
 const API_BASE = "http://127.0.0.1:8000/api/v1";
 
@@ -37,6 +44,21 @@ type ProjectOverview = {
   board: BoardView;
   repositories: RepositorySummary[];
   worktrees: WorktreeSummary[];
+  sessions: SessionSummary[];
+};
+
+export type SessionTail = {
+  session: SessionSummary;
+  lines: string[];
+  recent_messages: Array<{
+    id: string;
+    session_id: string;
+    message_type: string;
+    source: string;
+    body: string;
+    payload_json: Record<string, unknown>;
+    created_at: string;
+  }>;
 };
 
 export async function fetchJson<T>(path: string): Promise<T> {
@@ -120,4 +142,18 @@ export function createWorktree(payload: { repository_id: string; task_id?: strin
 
 export function patchWorktree(worktreeId: string, payload: { status: string; lock_reason?: string }) {
   return patchJson<WorktreeSummary>(`/worktrees/${worktreeId}`, payload);
+}
+
+export function createSession(payload: {
+  task_id: string;
+  profile: string;
+  repository_id?: string;
+  worktree_id?: string;
+  command?: string;
+}) {
+  return postJson<SessionSummary>("/sessions", payload);
+}
+
+export function getSessionTail(sessionId: string) {
+  return fetchJson<SessionTail>(`/sessions/${sessionId}/tail`);
 }

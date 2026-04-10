@@ -4,17 +4,21 @@ import {
   Activity,
   ArrowRight,
   Bot,
+  CircleDashed,
   FolderGit2,
   GitBranch,
   GitFork,
   Lock,
   MessageSquareText,
+  Play,
   Search,
   ShieldCheck,
+  Terminal,
   Trash2,
 } from "lucide-react";
 import type { TaskSummary } from "@acp/sdk";
 import {
+  createSession,
   createProject,
   createRepository,
   createTask,
@@ -23,6 +27,7 @@ import {
   getDiagnostics,
   getProject,
   getProjects,
+  getSessionTail,
   patchWorktree,
 } from "@/lib/api";
 import { ColumnShell, Pill, SectionFrame, SectionTitle, StatTile } from "@/components/ui";
@@ -43,6 +48,10 @@ export function App() {
   const [draftWorktreeLabel, setDraftWorktreeLabel] = useState("");
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
+  const [selectedSessionTaskId, setSelectedSessionTaskId] = useState<string>("");
+  const [selectedSessionWorktreeId, setSelectedSessionWorktreeId] = useState<string>("");
+  const [sessionProfile, setSessionProfile] = useState("executor");
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
 
   const dashboardQuery = useQuery({
@@ -73,6 +82,9 @@ export function App() {
   useEffect(() => {
     setSelectedRepositoryId(null);
     setSelectedTaskId("");
+    setSelectedSessionTaskId("");
+    setSelectedSessionWorktreeId("");
+    setSelectedSessionId(null);
   }, [selectedProjectId]);
 
   useEffect(() => {
@@ -139,6 +151,17 @@ export function App() {
     },
   });
 
+  const createSessionMutation = useMutation({
+    mutationFn: createSession,
+    onSuccess: (session) => {
+      if (selectedProjectId) {
+        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      }
+      setSelectedSessionId(session.id);
+    },
+  });
+
   const filteredProjects = useMemo(() => {
     const projects = projectsQuery.data ?? [];
     const needle = deferredSearch.trim().toLowerCase();
@@ -175,6 +198,13 @@ export function App() {
   const topLevelTasks = useMemo(() => {
     return (projectDetailQuery.data?.board.tasks ?? []).filter((task) => !task.parent_task_id);
   }, [projectDetailQuery.data]);
+
+  const sessionTailQuery = useQuery({
+    queryKey: ["session-tail", selectedSessionId],
+    queryFn: () => getSessionTail(selectedSessionId!),
+    enabled: Boolean(selectedSessionId),
+    refetchInterval: selectedSessionId ? 2500 : false,
+  });
 
   return (
     <div className="grid-shell">
@@ -506,6 +536,107 @@ export function App() {
                   </button>
                 </div>
               ) : null}
+            </SectionFrame>
+
+            <SectionFrame className="px-5 py-5">
+              <SectionTitle>Session Runtime</SectionTitle>
+              <div className="mt-4 flex flex-col gap-3">
+                {projectDetailQuery.data?.sessions.map((session) => (
+                  <button
+                    key={session.id}
+                    onClick={() => setSelectedSessionId(session.id)}
+                    className={[
+                      "rounded-2xl border px-4 py-4 text-left",
+                      selectedSessionId === session.id
+                        ? "border-[color:var(--accent)] bg-[color:var(--accent-soft)]"
+                        : "border-white/7 bg-white/3",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
+                        <Terminal className="h-4 w-4 text-slate-400" />
+                        {session.profile}
+                      </div>
+                      <Pill className="border-white/8 text-slate-300">{session.status}</Pill>
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">{session.session_name}</div>
+                  </button>
+                ))}
+                {!projectDetailQuery.data?.sessions.length ? (
+                  <div className="text-sm text-slate-500">No agent sessions yet.</div>
+                ) : null}
+              </div>
+
+              {selectedProjectId ? (
+                <div className="mt-5 rounded-2xl border border-white/7 bg-black/10 p-4">
+                  <div className="text-sm font-medium text-slate-200">Spawn session</div>
+                  <select
+                    value={selectedSessionTaskId}
+                    onChange={(event) => setSelectedSessionTaskId(event.target.value)}
+                    className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                  >
+                    <option value="">Choose task</option>
+                    {topLevelTasks.map((task) => (
+                      <option key={task.id} value={task.id}>
+                        {task.title}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={selectedSessionWorktreeId}
+                    onChange={(event) => setSelectedSessionWorktreeId(event.target.value)}
+                    className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                  >
+                    <option value="">No worktree</option>
+                    {(projectDetailQuery.data?.worktrees ?? [])
+                      .filter((worktree) => worktree.status !== "pruned")
+                      .map((worktree) => (
+                        <option key={worktree.id} value={worktree.id}>
+                          {worktree.branch_name}
+                        </option>
+                      ))}
+                  </select>
+                  <select
+                    value={sessionProfile}
+                    onChange={(event) => setSessionProfile(event.target.value)}
+                    className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                  >
+                    {["executor", "reviewer", "verifier", "research", "docs"].map((profile) => (
+                      <option key={profile} value={profile}>
+                        {profile}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() =>
+                      createSessionMutation.mutate({
+                        task_id: selectedSessionTaskId,
+                        profile: sessionProfile,
+                        worktree_id: selectedSessionWorktreeId || undefined,
+                      })
+                    }
+                    disabled={!selectedSessionTaskId || createSessionMutation.isPending}
+                    className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Play className="h-4 w-4" />
+                    Spawn
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="mt-5 rounded-2xl border border-white/7 bg-black/15 p-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
+                  <CircleDashed className="h-4 w-4 text-slate-400" />
+                  Recent tail
+                </div>
+                {sessionTailQuery.data ? (
+                  <pre className="mt-3 max-h-56 overflow-auto rounded-2xl bg-black/25 p-3 text-xs leading-5 text-slate-300">
+                    {sessionTailQuery.data.lines.join("\n")}
+                  </pre>
+                ) : (
+                  <div className="mt-3 text-sm text-slate-500">Select a session to inspect recent runtime output.</div>
+                )}
+              </div>
             </SectionFrame>
 
             <SectionFrame className="px-5 py-5">
