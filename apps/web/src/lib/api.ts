@@ -74,6 +74,38 @@ export type WaitingQuestionDetail = WaitingQuestionSummary & {
   }>;
 };
 
+export type TaskDetail = TaskSummary & {
+  description?: string | null;
+  comments: Array<{
+    id: string;
+    task_id: string;
+    author_type: string;
+    author_name: string;
+    body: string;
+    metadata_json: Record<string, unknown>;
+    created_at: string;
+  }>;
+  checks: Array<{
+    id: string;
+    task_id: string;
+    check_type: string;
+    status: string;
+    summary: string;
+    payload_json: Record<string, unknown>;
+    created_at: string;
+  }>;
+  artifacts: Array<{
+    id: string;
+    task_id: string;
+    artifact_type: string;
+    name: string;
+    uri: string;
+    payload_json: Record<string, unknown>;
+    created_at: string;
+  }>;
+  waiting_questions: WaitingQuestionSummary[];
+};
+
 export async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`);
   if (!response.ok) {
@@ -191,4 +223,29 @@ export function answerQuestion(
   payload: { responder_name: string; body: string; payload_json?: Record<string, unknown> },
 ) {
   return postJson<WaitingQuestionDetail>(`/questions/${questionId}/replies`, payload);
+}
+
+export function getTaskDetail(taskId: string) {
+  return fetchJson<TaskDetail>(`/tasks/${taskId}/detail`);
+}
+
+export function addTaskComment(
+  taskId: string,
+  payload: { author_type?: string; author_name: string; body: string; metadata_json?: Record<string, unknown> },
+) {
+  return postJson<TaskDetail["comments"][number]>(`/tasks/${taskId}/comments`, payload);
+}
+
+export function addTaskCheck(
+  taskId: string,
+  payload: { check_type: string; status: string; summary: string; payload_json?: Record<string, unknown> },
+) {
+  return postJson<TaskDetail["checks"][number]>(`/tasks/${taskId}/checks`, payload);
+}
+
+export function addTaskArtifact(
+  taskId: string,
+  payload: { artifact_type: string; name: string; uri: string; payload_json?: Record<string, unknown> },
+) {
+  return postJson<TaskDetail["artifacts"][number]>(`/tasks/${taskId}/artifacts`, payload);
 }

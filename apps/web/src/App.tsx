@@ -18,6 +18,9 @@ import {
 } from "lucide-react";
 import type { TaskSummary } from "@acp/sdk";
 import {
+  addTaskArtifact,
+  addTaskCheck,
+  addTaskComment,
   answerQuestion,
   createQuestion,
   createSession,
@@ -30,6 +33,7 @@ import {
   getProject,
   getProjects,
   getQuestion,
+  getTaskDetail,
   getSessionTail,
   patchWorktree,
 } from "@/lib/api";
@@ -56,10 +60,18 @@ export function App() {
   const [sessionProfile, setSessionProfile] = useState("executor");
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
+  const [inspectedTaskId, setInspectedTaskId] = useState<string | null>(null);
   const [draftQuestionPrompt, setDraftQuestionPrompt] = useState("");
   const [draftQuestionReason, setDraftQuestionReason] = useState("");
   const [draftQuestionUrgency, setDraftQuestionUrgency] = useState("medium");
   const [draftReplyBody, setDraftReplyBody] = useState("");
+  const [draftCommentBody, setDraftCommentBody] = useState("");
+  const [draftCheckSummary, setDraftCheckSummary] = useState("");
+  const [draftCheckType, setDraftCheckType] = useState("verification");
+  const [draftCheckStatus, setDraftCheckStatus] = useState("passed");
+  const [draftArtifactName, setDraftArtifactName] = useState("");
+  const [draftArtifactType, setDraftArtifactType] = useState("log");
+  const [draftArtifactUri, setDraftArtifactUri] = useState("");
   const deferredSearch = useDeferredValue(search);
 
   const dashboardQuery = useQuery({
@@ -94,6 +106,7 @@ export function App() {
     setSelectedSessionWorktreeId("");
     setSelectedSessionId(null);
     setSelectedQuestionId(null);
+    setInspectedTaskId(null);
   }, [selectedProjectId]);
 
   useEffect(() => {
@@ -204,6 +217,40 @@ export function App() {
     },
   });
 
+  const addTaskCommentMutation = useMutation({
+    mutationFn: ({ taskId, body }: { taskId: string; body: string }) =>
+      addTaskComment(taskId, { author_name: "operator", body }),
+    onSuccess: () => {
+      if (inspectedTaskId) {
+        queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
+      }
+      setDraftCommentBody("");
+    },
+  });
+
+  const addTaskCheckMutation = useMutation({
+    mutationFn: ({ taskId, checkType, status, summary }: { taskId: string; checkType: string; status: string; summary: string }) =>
+      addTaskCheck(taskId, { check_type: checkType, status, summary }),
+    onSuccess: () => {
+      if (inspectedTaskId) {
+        queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
+      }
+      setDraftCheckSummary("");
+    },
+  });
+
+  const addTaskArtifactMutation = useMutation({
+    mutationFn: ({ taskId, artifactType, name, uri }: { taskId: string; artifactType: string; name: string; uri: string }) =>
+      addTaskArtifact(taskId, { artifact_type: artifactType, name, uri }),
+    onSuccess: () => {
+      if (inspectedTaskId) {
+        queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
+      }
+      setDraftArtifactName("");
+      setDraftArtifactUri("");
+    },
+  });
+
   const filteredProjects = useMemo(() => {
     const projects = projectsQuery.data ?? [];
     const needle = deferredSearch.trim().toLowerCase();
@@ -252,6 +299,12 @@ export function App() {
     queryKey: ["question", selectedQuestionId],
     queryFn: () => getQuestion(selectedQuestionId!),
     enabled: Boolean(selectedQuestionId),
+  });
+
+  const taskDetailQuery = useQuery({
+    queryKey: ["task-detail", inspectedTaskId],
+    queryFn: () => getTaskDetail(inspectedTaskId!),
+    enabled: Boolean(inspectedTaskId),
   });
 
   return (
@@ -393,7 +446,16 @@ export function App() {
 
                   <div className="space-y-3">
                     {(groupedTasks.get(column.id) ?? []).map((task) => (
-                      <div key={task.id} className="rounded-2xl border border-white/8 bg-white/4 p-4">
+                      <button
+                        key={task.id}
+                        onClick={() => setInspectedTaskId(task.id)}
+                        className={[
+                          "w-full rounded-2xl border bg-white/4 p-4 text-left",
+                          inspectedTaskId === task.id
+                            ? "border-[color:var(--accent)]"
+                            : "border-white/8",
+                        ].join(" ")}
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div className="text-sm font-semibold text-slate-100">{task.title}</div>
                           <Pill
@@ -414,7 +476,7 @@ export function App() {
                           ))}
                           {!task.tags.length ? <span>No tags yet</span> : null}
                         </div>
-                      </div>
+                      </button>
                     ))}
                     {!groupedTasks.get(column.id)?.length ? (
                       <div className="rounded-2xl border border-dashed border-white/8 px-4 py-6 text-sm text-slate-500">
@@ -428,6 +490,167 @@ export function App() {
           </SectionFrame>
 
           <div className="flex flex-col gap-6">
+            <SectionFrame className="px-5 py-5">
+              <SectionTitle>Task Inspector</SectionTitle>
+              {taskDetailQuery.data ? (
+                <div className="mt-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-xl font-semibold text-slate-100">{taskDetailQuery.data.title}</div>
+                      <div className="mt-2 text-sm text-slate-400">
+                        {taskDetailQuery.data.description ?? "No task description yet."}
+                      </div>
+                    </div>
+                    <Pill className="border-white/8 text-slate-300">{taskDetailQuery.data.workflow_state}</Pill>
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-white/7 bg-black/10 p-4">
+                    <div className="text-sm font-medium text-slate-200">Comments</div>
+                    <div className="mt-3 flex flex-col gap-2">
+                      {taskDetailQuery.data.comments.map((comment) => (
+                        <div key={comment.id} className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3">
+                          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">{comment.author_name}</div>
+                          <div className="mt-2 text-sm text-slate-200">{comment.body}</div>
+                        </div>
+                      ))}
+                      {!taskDetailQuery.data.comments.length ? (
+                        <div className="text-sm text-slate-500">No comments yet.</div>
+                      ) : null}
+                    </div>
+                    <textarea
+                      value={draftCommentBody}
+                      onChange={(event) => setDraftCommentBody(event.target.value)}
+                      placeholder="Add operator note"
+                      className="mt-3 min-h-24 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                    />
+                    <button
+                      onClick={() =>
+                        addTaskCommentMutation.mutate({
+                          taskId: taskDetailQuery.data!.id,
+                          body: draftCommentBody,
+                        })
+                      }
+                      disabled={!draftCommentBody.trim() || addTaskCommentMutation.isPending}
+                      className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Add comment
+                    </button>
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-white/7 bg-black/10 p-4">
+                    <div className="text-sm font-medium text-slate-200">Checks</div>
+                    <div className="mt-3 flex flex-col gap-2">
+                      {taskDetailQuery.data.checks.map((check) => (
+                        <div key={check.id} className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-medium text-slate-100">{check.check_type}</div>
+                            <Pill className="border-white/8 text-slate-300">{check.status}</Pill>
+                          </div>
+                          <div className="mt-2 text-sm text-slate-200">{check.summary}</div>
+                        </div>
+                      ))}
+                      {!taskDetailQuery.data.checks.length ? (
+                        <div className="text-sm text-slate-500">No checks yet.</div>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <input
+                        value={draftCheckType}
+                        onChange={(event) => setDraftCheckType(event.target.value)}
+                        placeholder="Check type"
+                        className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                      />
+                      <select
+                        value={draftCheckStatus}
+                        onChange={(event) => setDraftCheckStatus(event.target.value)}
+                        className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                      >
+                        {["pending", "passed", "failed", "warning"].map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <textarea
+                      value={draftCheckSummary}
+                      onChange={(event) => setDraftCheckSummary(event.target.value)}
+                      placeholder="What was checked?"
+                      className="mt-3 min-h-24 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                    />
+                    <button
+                      onClick={() =>
+                        addTaskCheckMutation.mutate({
+                          taskId: taskDetailQuery.data!.id,
+                          checkType: draftCheckType,
+                          status: draftCheckStatus,
+                          summary: draftCheckSummary,
+                        })
+                      }
+                      disabled={!draftCheckSummary.trim() || addTaskCheckMutation.isPending}
+                      className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Add check
+                    </button>
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-white/7 bg-black/10 p-4">
+                    <div className="text-sm font-medium text-slate-200">Artifacts</div>
+                    <div className="mt-3 flex flex-col gap-2">
+                      {taskDetailQuery.data.artifacts.map((artifact) => (
+                        <div key={artifact.id} className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-medium text-slate-100">{artifact.name}</div>
+                            <Pill className="border-white/8 text-slate-300">{artifact.artifact_type}</Pill>
+                          </div>
+                          <div className="mt-2 break-all text-sm text-slate-400">{artifact.uri}</div>
+                        </div>
+                      ))}
+                      {!taskDetailQuery.data.artifacts.length ? (
+                        <div className="text-sm text-slate-500">No artifacts yet.</div>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <input
+                        value={draftArtifactType}
+                        onChange={(event) => setDraftArtifactType(event.target.value)}
+                        placeholder="Artifact type"
+                        className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                      />
+                      <input
+                        value={draftArtifactName}
+                        onChange={(event) => setDraftArtifactName(event.target.value)}
+                        placeholder="Artifact name"
+                        className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                      />
+                    </div>
+                    <input
+                      value={draftArtifactUri}
+                      onChange={(event) => setDraftArtifactUri(event.target.value)}
+                      placeholder="file path, branch, diff, or URL"
+                      className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                    />
+                    <button
+                      onClick={() =>
+                        addTaskArtifactMutation.mutate({
+                          taskId: taskDetailQuery.data!.id,
+                          artifactType: draftArtifactType,
+                          name: draftArtifactName,
+                          uri: draftArtifactUri,
+                        })
+                      }
+                      disabled={!draftArtifactName.trim() || !draftArtifactUri.trim() || addTaskArtifactMutation.isPending}
+                      className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Add artifact
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 text-sm text-slate-500">Select a task card to inspect comments, checks, and artifacts.</div>
+              )}
+            </SectionFrame>
+
             <SectionFrame className="px-5 py-5">
               <SectionTitle>Repository Inventory</SectionTitle>
               <div className="mt-4 flex flex-col gap-3">
