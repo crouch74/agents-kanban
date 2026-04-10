@@ -4,10 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "styles:generate": "node ./scripts/generate-tailwind-css.mjs",
+    "dev": "npm run styles:generate && vite",
+    "build": "npm run styles:generate && tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "npm run styles:generate && vitest run"
   },
   "dependencies": {
     "@acp/sdk": "file:../../packages/sdk",
