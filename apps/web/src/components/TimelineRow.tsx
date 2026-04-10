@@ -32,6 +32,32 @@ function friendlyEvent(eventType: string) {
   return eventType.replaceAll(".", " ").replaceAll("_", " ");
 }
 
+function eventSummary(event: EventRecord) {
+  const payload = event.payload_json;
+  const summaryFields = [
+    payload.title,
+    payload.name,
+    payload.prompt,
+    payload.summary,
+    payload.local_path,
+    payload.branch_name,
+    payload.status,
+  ];
+  const summary = summaryFields.find(
+    (value): value is string => typeof value === "string" && value.trim().length > 0,
+  );
+  if (summary) {
+    return summary;
+  }
+
+  const addedColumnKeys = payload.added_column_keys;
+  if (Array.isArray(addedColumnKeys) && addedColumnKeys.length > 0) {
+    return `Added columns: ${addedColumnKeys.join(", ")}`;
+  }
+
+  return `${event.actor_name || "system"} updated ${event.entity_type}.`;
+}
+
 type TimelineRowProps = {
   event: EventRecord;
 };
@@ -59,6 +85,7 @@ export function TimelineRow({ event }: TimelineRowProps) {
           <div className="mt-1 text-xs text-slate-500">
             {event.actor_name || "system"} · {new Date(event.created_at).toLocaleString()}
           </div>
+          <div className="mt-2 text-sm text-slate-300">{eventSummary(event)}</div>
         </div>
       </div>
     </div>

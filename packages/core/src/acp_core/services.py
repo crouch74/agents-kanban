@@ -135,6 +135,33 @@ class ProjectService:
         stmt = select(Project).where(Project.archived.is_(False)).order_by(Project.created_at.desc())
         return list(self.context.db.scalars(stmt))
 
+    def _repair_board_columns(self, board: Board) -> None:
+        existing_keys = {column.key for column in board.columns}
+        missing_columns = [column for column in DEFAULT_BOARD_COLUMNS if column["key"] not in existing_keys]
+        if not missing_columns:
+            return
+
+        for column_data in missing_columns:
+            board.columns.append(BoardColumn(**column_data))
+
+        self.context.record_event(
+            entity_type="board",
+            entity_id=board.id,
+            event_type="board.columns_repaired",
+            payload_json={
+                "project_id": board.project_id,
+                "added_column_keys": [str(column["key"]) for column in missing_columns],
+            },
+        )
+        self.context.db.flush()
+        self.context.db.commit()
+        logger.info(
+            "🗂️ board columns repaired",
+            board_id=board.id,
+            project_id=board.project_id,
+            added_column_keys=[str(column["key"]) for column in missing_columns],
+        )
+
     def get_project(self, project_id: str) -> Project:
         project = self.context.db.get(Project, project_id)
         if project is None:
@@ -174,6 +201,7 @@ class ProjectService:
         project = self.get_project(project_id)
         if project.board is None:
             raise ValueError("Board not found")
+        self._repair_board_columns(project.board)
 
         tasks_stmt = (
             select(Task)

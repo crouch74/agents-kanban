@@ -21,3 +21,7 @@ apps/web/vite.config.d.ts
 
 .acp/
 tmp/
+
+.coverage
+coverage.xml
+.playwright-cli/

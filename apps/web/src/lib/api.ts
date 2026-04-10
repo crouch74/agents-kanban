@@ -80,6 +80,8 @@ export type SearchResults = {
   }>;
 };
 
+export type SearchHit = SearchResults["hits"][number];
+
 type ProjectOverview = {
   project: ProjectSummary;
   board: BoardView;

@@ -2,5 +2,5 @@
 set -euo pipefail
 
 export PYTHONPATH="${PYTHONPATH:-}:$(pwd)/apps/api:$(pwd)/packages/core/src"
-python3 -m uvicorn app.main:app --reload --app-dir apps/api --port 8000
+python3 -m uvicorn app.main:app --reload --app-dir apps/api --port 8000 --reload-dir apps/api --reload-dir packages/core/src
 

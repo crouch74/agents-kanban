@@ -71,6 +71,8 @@ This repository is beyond scaffold stage. The current implementation includes:
 - waiting questions and human replies with resume semantics
 - append-only audit events and dashboard/activity views
 - global search across key operator surfaces
+- workspace-wide search from the shell header with project context shown in results
+- quick-create actions for task entry and project bootstrap from the top bar
 - a real MCP server with typed tools/resources and idempotent write support
 - startup runtime reconciliation and worktree hygiene diagnostics
 - live WebSocket-driven UI refresh on committed mutations
@@ -99,6 +101,19 @@ Useful variants:
 - `scripts/dev-stack.sh --web-only`
 - `scripts/dev-stack.sh --mcp-only`
 - `scripts/dev-stack.sh --no-bootstrap`
+
+### Docker
+
+Alternatively, you can run the entire stack using Docker Compose:
+
+```bash
+docker-compose up --build
+```
+
+This will:
+- Build and start API, Web, and MCP services.
+- Enable hot reload for both backend and frontend via volume mounts.
+- Run health checks to ensure service availability.
 
 ## Runtime Conventions
 

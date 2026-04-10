@@ -25,10 +25,12 @@ agent interaction.
   waiting questions
 - project bootstrap wizard for repo path, stack preset, kickoff prompt, and
   optional worktree kickoff
+- quick-create actions in the shell header for task entry and project bootstrap
 - task inspector with subtasks, comments, checks, artifacts, and dependencies
 - session runtime view with tail, timeline, waiting state, and session chain
 - diagnostics panel with runtime orphan detection and worktree hygiene signals
-- search and live refresh via WebSocket mutation broadcasts
+- standalone activity timeline plus workspace-wide search and live refresh via
+  WebSocket mutation broadcasts
 
 ### Domain behavior
 

@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - api_data:/app/.acp
+    environment:
+      - ACP_RUNTIME_HOME=/app/.acp
+      - ACP_WEB_ORIGIN=http://localhost:5173
+    stdin_open: true
+    tty: true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000/api/v1
+    depends_on:
+      api:
+        condition: service_healthy
+
+  mcp:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      - PYTHONPATH=/app/packages/core/src:/app/packages/mcp-server/src
+      - ACP_RUNTIME_HOME=/app/.acp
+      - ACP_MCP_TRANSPORT=streamable-http
+      - FASTMCP_HOST=0.0.0.0
+      - FASTMCP_PORT=8001
+      - FASTMCP_STREAMABLE_HTTP_PATH=/mcp
+    ports:
+      - "8001:8001"
+    volumes:
+      - .:/app
+      - api_data:/app/.acp
+    command: >
+      python3 -c 'import os; from acp_mcp_server.server import mcp; 
+      mcp.settings.host = os.environ["FASTMCP_HOST"]; 
+      mcp.settings.port = int(os.environ["FASTMCP_PORT"]); 
+      mcp.settings.streamable_http_path = os.environ["FASTMCP_STREAMABLE_HTTP_PATH"]; 
+      mcp.run(transport=os.environ["ACP_MCP_TRANSPORT"])'
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  api_data:

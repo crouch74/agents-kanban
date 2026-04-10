@@ -79,7 +79,7 @@ export const useProjectDetailQuery = (projectId: string | null) =>
   useQuery({ queryKey: ["project", projectId], queryFn: () => getProject(projectId!), enabled: Boolean(projectId) });
 export const useEventsQuery = (projectId: string | null) =>
   useQuery({ queryKey: ["events", projectId], queryFn: () => getEvents({ projectId: projectId ?? undefined, limit: 18 }) });
-export const useSearchQuery = (deferredSearch: string, projectId: string | null) =>
+export const useSearchQuery = (deferredSearch: string, projectId?: string | null) =>
   useQuery({
     queryKey: ["search", deferredSearch, projectId],
     queryFn: () => searchContext(deferredSearch, projectId ?? undefined),

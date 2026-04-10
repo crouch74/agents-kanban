@@ -2,6 +2,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
   startTransition,
 } from "react";
@@ -28,6 +29,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Terminal,
+  WandSparkles,
 } from "lucide-react";
 import type { TaskSummary } from "@acp/sdk";
 import { ProjectBootstrapWizard } from "@/components/project-bootstrap-wizard";
@@ -39,6 +41,7 @@ import {
   SectionTitle,
   StatTile,
 } from "@/components/ui";
+import { Button } from "@/components/primitives";
 import { useUIStore } from "@/store/ui";
 import { AppShell } from "@/layout/AppShell";
 import { DashboardScreen } from "@/screens/DashboardScreen";
@@ -82,9 +85,43 @@ import {
   useSessionTimelineQuery,
   useTaskDetailQuery,
 } from "@/features/control-plane/hooks";
+import type { EventRecord, SearchHit } from "@/lib/api";
 
 function formatEvent(eventType: string) {
   return eventType.replaceAll(".", " ").replaceAll("_", " ");
+}
+
+function summarizeEvent(event: EventRecord) {
+  const payload = event.payload_json;
+  const summaryFields = [
+    payload.title,
+    payload.name,
+    payload.prompt,
+    payload.summary,
+    payload.local_path,
+    payload.branch_name,
+    payload.status,
+  ];
+  const summary = summaryFields.find(
+    (value): value is string => typeof value === "string" && value.trim().length > 0,
+  );
+  if (summary) {
+    return summary;
+  }
+
+  const addedColumnKeys = payload.added_column_keys;
+  if (Array.isArray(addedColumnKeys) && addedColumnKeys.length > 0) {
+    return `Added columns: ${addedColumnKeys.join(", ")}`;
+  }
+
+  return `${event.actor_name || "system"} updated ${event.entity_type}.`;
+}
+
+function formatSearchSnippet(hit: SearchHit) {
+  if (hit.entity_type === "event") {
+    return `Audit event matched the query. ${formatEvent(hit.title)} · ${hit.secondary ?? "system"}`;
+  }
+  return hit.snippet;
 }
 
 
@@ -144,6 +181,8 @@ function isDetailEntityType(value: string | null): value is DetailEntityType {
 export function App() {
   const queryClient = useQueryClient();
   const { selectedProjectId, setSelectedProjectId } = useUIStore();
+  const taskTitleInputRef = useRef<HTMLInputElement | null>(null);
+  const bootstrapWizardRef = useRef<HTMLDivElement | null>(null);
   const [search, setSearch] = useState("");
   const [draftTaskTitle, setDraftTaskTitle] = useState("");
   const [draftRepoPath, setDraftRepoPath] = useState("");
@@ -180,6 +219,8 @@ export function App() {
   const [draftSubtaskTitle, setDraftSubtaskTitle] = useState("");
   const [activeSection, setActiveSection] = useState<NavSection>("home");
   const [drawerSelection, setDrawerSelection] = useState<DetailSelection | null>(null);
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+  const [pendingQuickCreateAction, setPendingQuickCreateAction] = useState<"task" | "bootstrap" | null>(null);
   const deferredSearch = useDeferredValue(search);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -218,8 +259,9 @@ export function App() {
   const dashboardQuery = useDashboardQuery();
   const diagnosticsQuery = useDiagnosticsQuery();
   const eventsQuery = useEventsQuery(selectedProjectId);
+  const activityEventsQuery = useEventsQuery(null);
   const projectsQuery = useProjectsQuery();
-  const searchQuery = useSearchQuery(deferredSearch, selectedProjectId);
+  const searchQuery = useSearchQuery(deferredSearch);
 
   useEffect(() => {
     if (!selectedProjectId && projectsQuery.data?.[0]) {
@@ -258,6 +300,23 @@ export function App() {
       setSelectedRepositoryId(repositories[0].id);
     }
   }, [projectDetailQuery.data?.repositories, selectedRepositoryId]);
+
+  useEffect(() => {
+    if (!pendingQuickCreateAction || activeSection !== "projects") {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      if (pendingQuickCreateAction === "task") {
+        taskTitleInputRef.current?.focus();
+      } else {
+        bootstrapWizardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+      setPendingQuickCreateAction(null);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeSection, pendingQuickCreateAction]);
 
   useEffect(() => {
     const questions = projectDetailQuery.data?.waiting_questions ?? [];
@@ -549,31 +608,69 @@ export function App() {
     return { sessionsByTask, worktreeByTask };
   }, [projectDetailQuery.data?.sessions, projectDetailQuery.data?.worktrees]);
 
+  const projectNameById = useMemo(
+    () => new Map((projectsQuery.data ?? []).map((project) => [project.id, project.name])),
+    [projectsQuery.data],
+  );
+
   const activityProjectOptions = useMemo(
     () =>
-      projectDetailQuery.data?.project
-        ? [{ value: projectDetailQuery.data.project.id, label: projectDetailQuery.data.project.name }]
-        : [],
-    [projectDetailQuery.data?.project],
+      (projectsQuery.data ?? []).map((project) => ({
+        value: project.id,
+        label: project.name,
+      })),
+    [projectsQuery.data],
   );
 
-  const activityTaskOptions = useMemo(
-    () =>
-      topLevelTasks.map((task) => ({
-        value: task.id,
-        label: task.title,
-      })),
-    [topLevelTasks],
-  );
+  const activityTaskOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    for (const task of projectDetailQuery.data?.board.tasks ?? []) {
+      options.set(task.id, task.title);
+    }
+    for (const event of activityEventsQuery.data ?? []) {
+      const taskId =
+        typeof event.payload_json.task_id === "string"
+          ? event.payload_json.task_id
+          : event.entity_type === "task"
+            ? event.entity_id
+            : null;
+      if (taskId && !options.has(taskId)) {
+        const payloadTitle = event.payload_json.title;
+        options.set(
+          taskId,
+          typeof payloadTitle === "string" && payloadTitle.trim().length > 0
+            ? payloadTitle
+            : `Task ${taskId.slice(0, 8)}`,
+        );
+      }
+    }
+    return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
+  }, [activityEventsQuery.data, projectDetailQuery.data?.board.tasks]);
 
-  const activitySessionOptions = useMemo(
-    () =>
-      (projectDetailQuery.data?.sessions ?? []).map((session) => ({
-        value: session.id,
-        label: session.session_name,
-      })),
-    [projectDetailQuery.data?.sessions],
-  );
+  const activitySessionOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    for (const session of projectDetailQuery.data?.sessions ?? []) {
+      options.set(session.id, session.session_name);
+    }
+    for (const event of activityEventsQuery.data ?? []) {
+      const sessionId =
+        typeof event.payload_json.session_id === "string"
+          ? event.payload_json.session_id
+          : event.entity_type === "session"
+            ? event.entity_id
+            : null;
+      if (sessionId && !options.has(sessionId)) {
+        const payloadSessionName = event.payload_json.session_name;
+        options.set(
+          sessionId,
+          typeof payloadSessionName === "string" && payloadSessionName.trim().length > 0
+            ? payloadSessionName
+            : `Session ${sessionId.slice(0, 8)}`,
+        );
+      }
+    }
+    return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
+  }, [activityEventsQuery.data, projectDetailQuery.data?.sessions]);
 
   const sessionTailQuery = useSessionTailQuery(selectedSessionId);
   const sessionTimelineQuery = useSessionTimelineQuery(selectedSessionId);
@@ -637,12 +734,25 @@ export function App() {
     diagnostics: "Diagnostics & Settings",
   }[activeSection];
 
-  const breadcrumbs = [
-    sectionTitle,
+  const breadcrumbs = useMemo(() => {
+    const crumbs = [sectionTitle];
+    if (!["home", "search", "activity"].includes(activeSection) && projectDetailQuery.data?.project.name) {
+      crumbs.push(projectDetailQuery.data.project.name);
+    }
+    if (activeSection === "projects" && taskDetailQuery.data?.title) {
+      crumbs.push(taskDetailQuery.data.title);
+    }
+    if (activeSection === "sessions" && sessionTimelineQuery.data?.session.session_name) {
+      crumbs.push(sessionTimelineQuery.data.session.session_name);
+    }
+    return crumbs;
+  }, [
+    activeSection,
     projectDetailQuery.data?.project.name,
-    taskDetailQuery.data?.title,
+    sectionTitle,
     sessionTimelineQuery.data?.session.session_name,
-  ].filter(Boolean) as string[];
+    taskDetailQuery.data?.title,
+  ]);
 
   const selectTask = (taskId: string) => {
     setInspectedTaskId(taskId);
@@ -949,16 +1059,18 @@ export function App() {
             </div>
           </div>
 
-          <ProjectBootstrapWizard
-            isPending={bootstrapProjectMutation.isPending}
-            errorMessage={
-              bootstrapProjectMutation.error instanceof Error
-                ? bootstrapProjectMutation.error.message
-                : undefined
-            }
-            result={bootstrapProjectMutation.data}
-            onSubmit={(payload) => bootstrapProjectMutation.mutate(payload)}
-          />
+          <div ref={bootstrapWizardRef}>
+            <ProjectBootstrapWizard
+              isPending={bootstrapProjectMutation.isPending}
+              errorMessage={
+                bootstrapProjectMutation.error instanceof Error
+                  ? bootstrapProjectMutation.error.message
+                  : undefined
+              }
+              result={bootstrapProjectMutation.data}
+              onSubmit={(payload) => bootstrapProjectMutation.mutate(payload)}
+            />
+          </div>
         </>
       }
       header={
@@ -986,18 +1098,66 @@ export function App() {
                   <Search className="h-4 w-4" />
                   <input
                     value={search}
-                    onChange={(event) => setSearch(event.target.value)}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                      if (event.target.value.trim().length > 0) {
+                        setActiveSection("search");
+                      }
+                    }}
                     className="w-52 border-0 bg-transparent p-0 text-sm outline-none placeholder:text-slate-600"
-                    placeholder="Global search"
+                    placeholder="Search workspace"
                   />
                 </label>
-                <button
-                  onClick={() => setActiveSection("projects")}
-                  className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900"
-                >
-                  <Plus className="h-4 w-4" />
-                  Quick create
-                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setQuickCreateOpen((open) => !open)}
+                    aria-expanded={quickCreateOpen}
+                    className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Quick create
+                  </button>
+                  {quickCreateOpen ? (
+                    <div className="absolute right-0 z-20 mt-2 w-64 rounded-3xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur">
+                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                        Quick create
+                      </div>
+                      <div className="mt-3 flex flex-col gap-2">
+                        <Button
+                          variant="secondary"
+                          disabled={!selectedProjectId}
+                          onClick={() => {
+                            setQuickCreateOpen(false);
+                            setActiveSection("projects");
+                            setPendingQuickCreateAction("task");
+                          }}
+                          className="justify-start rounded-2xl px-4 py-3"
+                        >
+                          <Plus className="h-4 w-4" />
+                          New task
+                        </Button>
+                        {!selectedProjectId ? (
+                          <div className="px-1 text-xs text-slate-500">
+                            Select a project first to create a task.
+                          </div>
+                        ) : null}
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setQuickCreateOpen(false);
+                            setActiveSection("projects");
+                            setPendingQuickCreateAction("bootstrap");
+                          }}
+                          className="justify-start rounded-2xl px-4 py-3"
+                        >
+                          <WandSparkles className="h-4 w-4" />
+                          New project bootstrap
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
                 <button className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-slate-300">
                   <SlidersHorizontal className="h-4 w-4" />
                   View controls
@@ -1142,10 +1302,7 @@ export function App() {
                     <div>
                       <SectionTitle>Activity Feed</SectionTitle>
                       <div className="mt-2 text-sm text-slate-500">
-                        Recent audit events for{" "}
-                        {projectDetailQuery.data?.project.name ??
-                          "the control plane"}
-                        .
+                        Recent audit events for {projectDetailQuery.data?.project.name ?? "the control plane"}.
                       </div>
                     </div>
                     <Pill className="border-white/8 text-slate-300">
@@ -1167,8 +1324,7 @@ export function App() {
                           </Pill>
                         </div>
                         <div className="mt-2 text-sm text-slate-400">
-                          {event.actor_name} updated {event.entity_type}{" "}
-                          {event.entity_id.slice(0, 8)}
+                          {summarizeEvent(event)}
                         </div>
                         <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-600">
                           {new Date(event.created_at).toLocaleString()}
@@ -1192,25 +1348,35 @@ export function App() {
           {activeSection === "search" ? (
             <SectionFrame className="px-5 py-5">
               <SectionTitle>Search Results</SectionTitle>
+              <div className="mt-2 text-sm text-slate-500">
+                Workspace-wide results across projects, tasks, questions, sessions, and events.
+              </div>
               <div className="mt-4 flex flex-col gap-3">
                 {deferredSearch.trim().length < 2 ? (
                   <div className="text-sm text-slate-500">
-                    Type at least two characters to search tasks, questions,
-                    sessions, and events.
+                    Type at least two characters to search the entire workspace.
                   </div>
                 ) : null}
                 {searchQuery.data?.hits.map((hit) => (
                   <button
                     key={`${hit.entity_type}-${hit.entity_id}`}
                     onClick={() => {
-                      if (hit.entity_type === "task") {
+                      if (hit.entity_type === "project") {
+                        setSelectedProjectId(hit.entity_id);
+                        setActiveSection("projects");
+                      } else if (hit.entity_type === "task") {
                         selectTask(hit.entity_id);
+                        setActiveSection("projects");
                       } else if (hit.entity_type === "waiting_question") {
                         selectQuestion(hit.entity_id);
+                        setActiveSection("waiting");
                       } else if (hit.entity_type === "session") {
                         selectSession(hit.entity_id);
+                        setActiveSection("sessions");
+                      } else if (hit.entity_type === "event") {
+                        setActiveSection("activity");
                       }
-                      if (hit.project_id) {
+                      if (hit.project_id && hit.entity_type !== "project") {
                         setSelectedProjectId(hit.project_id);
                       }
                     }}
@@ -1225,14 +1391,34 @@ export function App() {
                       </Pill>
                     </div>
                     <div className="mt-2 line-clamp-2 text-sm text-slate-500">
-                      {hit.snippet}
+                      {formatSearchSnippet(hit)}
                     </div>
+                    {hit.project_id ? (
+                      <div className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-600">
+                        Project · {projectNameById.get(hit.project_id) ?? hit.project_id.slice(0, 8)}
+                      </div>
+                    ) : null}
                   </button>
                 ))}
               </div>
             </SectionFrame>
           ) : null}
-          {activeSection !== "home" && activeSection !== "search" ? (
+          {activeSection === "activity" ? (
+            <ActivityScreen
+              active
+              events={activityEventsQuery.data ?? []}
+              loading={activityEventsQuery.isLoading}
+              error={
+                activityEventsQuery.error instanceof Error
+                  ? activityEventsQuery.error.message
+                  : null
+              }
+              projectOptions={activityProjectOptions}
+              taskOptions={activityTaskOptions}
+              sessionOptions={activitySessionOptions}
+            />
+          ) : null}
+          {activeSection !== "home" && activeSection !== "search" && activeSection !== "activity" ? (
             <ProjectOverviewScreen>
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
                 <ProjectBoardScreen>
@@ -1249,6 +1435,7 @@ export function App() {
                         {selectedProjectId ? (
                           <div className="flex items-center gap-3">
                             <input
+                              ref={taskTitleInputRef}
                               value={draftTaskTitle}
                               onChange={(event) =>
                                 setDraftTaskTitle(event.target.value)
@@ -2628,19 +2815,6 @@ export function App() {
                     ) : null}
                   </DiagnosticsScreen>
 
-                  <ActivityScreen
-                    active={activeSection === "activity"}
-                    events={eventsQuery.data ?? []}
-                    loading={eventsQuery.isLoading}
-                    error={
-                      eventsQuery.error instanceof Error
-                        ? eventsQuery.error.message
-                        : null
-                    }
-                    projectOptions={activityProjectOptions}
-                    taskOptions={activityTaskOptions}
-                    sessionOptions={activitySessionOptions}
-                  />
                 </div>
               </div>
             </ProjectOverviewScreen>

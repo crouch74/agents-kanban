@@ -29,9 +29,10 @@ the source of truth.
 The shared service layer in `packages/core/src/acp_core/services.py` is the
 behavioral center of the app.
 
-The canonical local development entrypoint is `scripts/dev-stack.sh`. New local
-services or long-running developer processes should be integrated into that
-launcher instead of introducing another parallel startup path.
+The canonical local development entrypoint is `scripts/dev-stack.sh`. 
+Alternatively, the full stack can be run via Docker using `docker-compose up`.
+
+Hot reload is enabled for both backend and frontend. The backend watches both `apps/api` and `packages/core/src` to ensure changes in shared services are reflected immediately.
 
 ## Non-Negotiable Guardrails
 
