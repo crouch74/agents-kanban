@@ -6,14 +6,29 @@ Accepted
 
 ## Decision
 
-Use canonical backend workflow states for tasks and sessions. Project boards map
-columns onto those states for presentation and limited customization.
+Use canonical backend workflow states for tasks, with board columns mapping onto
+those states for presentation and light customization.
 
-Blocked and waiting remain overlays instead of bespoke columns.
+The canonical states are:
+
+- `backlog`
+- `ready`
+- `in_progress`
+- `review`
+- `done`
+- `cancelled`
+
+Blocked and waiting remain overlays instead of bespoke workflow columns.
 
 ## Why
 
-- agent tools need deterministic state semantics
-- crash recovery and search become simpler
+- agent tools need deterministic semantics
+- crash recovery and search are simpler when workflow state is normalized
 - standard kanban reporting remains possible
+- the operator can still see blocked/waiting work inside the actual flow stage
 
+## Consequences
+
+- service-layer transition rules are authoritative
+- UI drag/drop must defer to backend validation
+- API and MCP writes must not bypass transition logic

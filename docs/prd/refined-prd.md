@@ -2,87 +2,152 @@
 
 ## Product Summary
 
-Agent Control Plane is a local-first operational workspace for managing AI
-agents across projects, repositories, tasks, worktrees, and sessions. The
-product serves one technical operator and treats both humans and agents as
-first-class actors.
+Agent Control Plane is a local-first operational workspace for one technical
+operator coordinating multiple AI agents across multiple repositories and
+projects. The product combines:
 
-The system of record is the backend plus SQLite database plus append-only event
-history. The UI visualizes and steers that state; agents interact through MCP
-contracts rather than UI scraping.
+- structured kanban workflow
+- task-linked worktree isolation
+- tmux-backed local runtime execution
+- append-only operational history
+- an MCP-native interface for agents
+- a human UI optimized for attention, intervention, and recovery
 
-## Goals
+The current system of record is the backend domain model plus SQLite plus the
+append-only `events` table. The React UI and MCP server are clients of the same
+shared services.
 
-- Make multi-agent work observable at a glance.
-- Make work steerable and resumable without digging through raw terminals.
-- Keep agent workflows structured, deterministic, and auditable.
-- Preserve local-first and offline operation after installation.
-- Keep the codebase maintainable for future coding agents.
+## Product Positioning
 
-## Key Product Principles
+This app is intentionally:
 
-- Control plane first, kanban board second, terminal viewer third.
-- Canonical backend workflow state with customizable column mapping.
-- Blocked and waiting are overlays, not alternate workflow stages.
-- Every material write operation emits a durable audit event.
-- Worktrees are explicit first-class records, not hidden git side effects.
-- Session runtime state is persisted separately from raw terminal output.
+- a control plane first
+- a kanban board second
+- a terminal viewer third
 
-## Standard Kanban Guidance Adopted in v1
+The board helps the operator steer work, but the board is not the source of
+truth. Raw terminal output is visible, but it is not trusted as the canonical
+representation of system state.
 
-- Default columns: `Backlog`, `Ready`, `In Progress`, `Review`, `Done`
-- WIP limits belong to columns, not ad-hoc operator memory.
-- Column policies are explicit and visible.
-- Work is pulled into active states rather than pushed automatically.
-- Blocked and waiting items remain visible in their workflow stage.
-- Done requires evidence through checks and/or acceptance criteria.
+## Primary Actors
 
-## Human Workflows
+### Human operator
 
-- Create projects, attach repositories, and operate from one board per project.
-- Create tasks and subtasks manually or via planning agents.
-- Spawn agent sessions with linked worktree and runtime metadata.
-- Review comments, checks, questions, artifacts, and event history.
-- Respond quickly to waiting questions from an inbox.
-- Inspect all running and blocked work from a global dashboard.
-- Recover context after a restart without reconstructing history from scratch.
+One technical operator who needs:
 
-## Agent Workflows
+- global visibility across projects, tasks, sessions, and worktrees
+- fast intervention when an agent is blocked
+- clean local execution and offline behavior
+- crash continuity without reconstructing context manually
 
-- Discover next task through predictable read tools.
-- Claim and update work through structured MCP calls.
-- Create subtasks without relying on natural-language parsing.
-- Request a worktree, emit progress, and attach checks and artifacts.
-- Open a waiting question when blocked and resume after a reply.
+### Agent actors
 
-## Scope
+Agents are treated as first-class actors and currently operate through:
 
-### In scope
+- typed MCP tools
+- structured MCP resources
+- deterministic task, session, worktree, and search contracts
 
-- projects, repositories, boards, columns
-- tasks, subtasks, dependencies
-- comments, checks, artifacts
-- agent sessions and session runs
+The design goal is that agents should not need to scrape the UI or infer state
+from free-form text when a structured contract is available.
+
+## Product Principles
+
+- Local-first and offline after installation
+- Shared domain services for REST and MCP behavior
+- Canonical workflow state in the backend
+- Blocked and waiting modeled as overlays rather than board columns
+- Durable audit events for every material write
+- Explicit worktree and session records instead of hidden shell state
+- Recovery and diagnostics treated as product features, not dev-only concerns
+
+## Standard Kanban Model Adopted
+
+The current implementation follows a standard five-column pull flow:
+
+- `Backlog`
+- `Ready`
+- `In Progress`
+- `Review`
+- `Done`
+
+Key rules:
+
+- WIP limits live on columns
+- work is pulled into active columns rather than automatically pushed
+- blocked and waiting items remain in their current workflow column
+- done requires explicit evidence and no unresolved blockers
+
+## Current In-Scope Behavior
+
+Implemented today:
+
+- project creation with one default board per project
+- repository registration for local git repositories
+- tasks and one level of subtasks
+- task dependencies, comments, checks, artifacts
+- worktree allocation, archive, lock, and prune lifecycle
+- tmux-backed sessions with spawn, follow-up, cancel, tail, and timeline
 - waiting questions and human replies
-- git worktree lifecycle
-- MCP server with structured tools/resources
-- diagnostics, search, dashboard, and crash continuity basics
+- dashboard, diagnostics, global search, and event feed
+- startup reconciliation of runtime state
+- stale worktree hygiene recommendations
+- MCP tool and resource surface over the same domain services
 
-### Out of scope
+Partially implemented or intentionally limited today:
 
-- multi-user collaboration
-- cloud sync
-- internet-required features
-- enterprise auth
-- deployment pipelines and automatic merging
-- distributed execution across multiple machines
+- board customization is still minimal
+- the web shell is functional but concentrated in a large `App.tsx`
+- export/import exists only as future intent
+- deeper multi-step orchestration is still operator-driven
+- SQLite schema evolution is still conservative and compatibility-aware
 
-## Success Criteria
+## Core Operator Workflows
 
-- Operator can create a project and attached repo, then work entirely inside the
-  app for task/session visibility.
-- Agents can claim, update, and complete work through MCP tools without scraping
-  the UI.
-- Waiting questions and replies are durable, queryable, and resumable.
-- Restarting the app preserves operator understanding of current and recent work.
+- Create a project and get a default board immediately.
+- Register one or more local repositories under a project.
+- Create tasks and subtasks manually.
+- Allocate a worktree for a task.
+- Spawn an executor session in tmux.
+- Inspect session tail, timeline, linked events, and waiting state.
+- Spawn follow-up reviewer/verifier/retry sessions from an existing session.
+- Answer waiting questions from the inbox or task/session context.
+- Move tasks through canonical workflow states with evidence gating.
+- Use diagnostics to discover runtime drift and stale worktrees.
 
+## Core Agent Workflows
+
+- Discover projects, boards, tasks, and context through MCP.
+- Create tasks or subtasks.
+- Add comments, checks, artifacts, and dependencies.
+- Spawn or inspect sessions and worktrees.
+- Open waiting questions and read answers.
+- Read task completion readiness before marking work done.
+- Search context and inspect diagnostics/hygiene state.
+
+## Constraints and Tradeoffs
+
+- Single-user local environment only in the current design.
+- Only one subtask nesting level is supported in v1.
+- SQLite remains the local default and is not being replaced with a server DB.
+- tmux is the runtime backbone; we persist metadata around it rather than
+  abstracting it away.
+- Session lineage is currently modeled via structured metadata to preserve local
+  DB compatibility while the repository still relies on `create_all`.
+
+## Success Criteria for the Current Build
+
+The app already clears these bars:
+
+- the operator can manage work across projects inside one local UI
+- agents can interact through MCP instead of UI scraping
+- worktree ownership and session runtime are visible in structured state
+- waiting questions and replies are durable and queryable
+- restart and diagnostics flows preserve operational understanding
+
+The next bar is hardening:
+
+- stronger backup/export/import story
+- better component decomposition
+- more comprehensive end-to-end coverage
+- safer long-term schema migration discipline
