@@ -46,9 +46,9 @@
   --space-5: 1.25rem;
   --space-6: 1.5rem;
 
-  --space-page-gutter: clamp(1rem, 2vw, 1.5rem);
+  --space-page-gutter: clamp(1.125rem, 2.4vw, 1.875rem);
   --space-section-gap: clamp(1rem, 1.6vw, 1.25rem);
-  --space-card-padding: clamp(0.875rem, 1.4vw, 1.25rem);
+  --space-card-padding: clamp(1rem, 1.7vw, 1.5rem);
   --space-row-height: 2rem;
   --space-form-gap: 0.75rem;
 
