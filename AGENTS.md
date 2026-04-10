@@ -170,6 +170,15 @@ High-care areas:
 - Follow Conventional Commit style.
 - Keep commit scope aligned to a single slice when possible.
 
+## PR Evidence
+
+- For every new PR, capture a few representative screenshots of the changed
+  experience.
+- Post those screenshots as a PR comment so reviewers can quickly validate UI
+  impact without pulling the branch locally.
+- If a change is non-visual, leave a short PR comment explicitly stating that
+  no UI screenshots apply.
+
 ## If You Are Unsure
 
 Prefer the simpler local-first option.
