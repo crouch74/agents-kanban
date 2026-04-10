@@ -8,7 +8,7 @@ on:
 
 jobs:
   pr-screenshot-evidence:
-    name: PR Screenshot Evidence
+    name: PR Screenshot Evidence (3 views)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
@@ -26,25 +26,55 @@ jobs:
               { owner, repo, issue_number, per_page: 100 }
             );
 
-            const imageMarkdownRe = /!\[[^\]]*\]\([^)]+\)/g;
+            const imageMarkdownRe = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
             const ghAttachmentRe = /https:\/\/github\.com\/user-attachments\/assets\/[^\s)]+/g;
             const legacyAttachmentRe = /https:\/\/user-images\.githubusercontent\.com\/[^\s)]+/g;
+            const viewRe =
+              /\b(project|projects|task|tasks|board|boards|dashboard|dashboards|session|sessions|diagnostics|activity|waiting|worktree|worktrees|repository|repositories|search)\b/gi;
 
-            let imageCount = 0;
+            const screenshotRefs = new Set();
+            const viewSet = new Set();
             for (const comment of comments) {
               const body = comment.body || "";
-              imageCount += (body.match(imageMarkdownRe) || []).length;
-              imageCount += (body.match(ghAttachmentRe) || []).length;
-              imageCount += (body.match(legacyAttachmentRe) || []).length;
+              let commentImageCount = 0;
+
+              for (const match of body.matchAll(imageMarkdownRe)) {
+                screenshotRefs.add(match[1]);
+                commentImageCount += 1;
+              }
+              for (const match of body.match(ghAttachmentRe) || []) {
+                screenshotRefs.add(match);
+                commentImageCount += 1;
+              }
+              for (const match of body.match(legacyAttachmentRe) || []) {
+                screenshotRefs.add(match);
+                commentImageCount += 1;
+              }
+
+              if (commentImageCount > 0) {
+                for (const viewMatch of body.matchAll(viewRe)) {
+                  const rawView = viewMatch[1].toLowerCase();
+                  const normalizedView = rawView.endsWith("s")
+                    ? rawView.slice(0, -1)
+                    : rawView;
+                  viewSet.add(normalizedView);
+                }
+              }
             }
 
-            if (imageCount < 2) {
+            if (screenshotRefs.size < 3 || viewSet.size < 3) {
               core.setFailed(
-                `Expected at least 2 screenshots in PR comments, found ${imageCount}. ` +
-                `Please add a PR comment with multiple screenshots before merging.`
+                `Expected at least 3 screenshots from 3 different app views in PR comments. ` +
+                `Found ${screenshotRefs.size} screenshot reference(s) and ${viewSet.size} distinct view label(s): ` +
+                `[${Array.from(viewSet).sort().join(", ")}]. ` +
+                `Please add/update a PR comment with at least 3 screenshots and identify each view ` +
+                `(e.g., project, task, dashboard).`
               );
             } else {
-              core.info(`✅ Found ${imageCount} screenshot references in PR comments.`);
+              core.info(
+                `✅ Found ${screenshotRefs.size} screenshot references across ` +
+                `${viewSet.size} distinct views: [${Array.from(viewSet).sort().join(", ")}].`
+              );
             }
 
   verify:

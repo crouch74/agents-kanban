@@ -172,12 +172,12 @@ High-care areas:
 
 ## PR Evidence
 
-- For every new PR, capture a few representative screenshots of the changed
-  experience.
-- Post those screenshots as a PR comment so reviewers can quickly validate UI
-  impact without pulling the branch locally.
-- If a change is non-visual, leave a short PR comment explicitly stating that
-  no UI screenshots apply.
+- For every new PR, post a PR comment with at least 3 screenshots from 3
+  different application views (for example: project, task, dashboard).
+- Keep screenshots at desktop viewport for now; no viewport size switching is
+  required.
+- Label each screenshot's view in the PR comment text so CI can validate
+  cross-view coverage.
 
 ## If You Are Unsure
 
