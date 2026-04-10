@@ -5,15 +5,19 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   Activity,
   Bot,
+  ChevronRight,
   CircleDashed,
   FolderGit2,
   GitBranch,
   GitFork,
+  Home,
   Lock,
   MessageSquareText,
+  Plus,
   Play,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
   Terminal,
   Trash2,
 } from "lucide-react";
@@ -82,6 +86,16 @@ function getSessionRelationLabel(session: {
   return "origin";
 }
 
+type NavSection =
+  | "home"
+  | "projects"
+  | "waiting"
+  | "sessions"
+  | "worktrees"
+  | "search"
+  | "activity"
+  | "diagnostics";
+
 export function App() {
   const queryClient = useQueryClient();
   const { selectedProjectId, setSelectedProjectId } = useUIStore();
@@ -111,6 +125,7 @@ export function App() {
   const [draftArtifactUri, setDraftArtifactUri] = useState("");
   const [selectedDependencyTaskId, setSelectedDependencyTaskId] = useState("");
   const [draftSubtaskTitle, setDraftSubtaskTitle] = useState("");
+  const [activeSection, setActiveSection] = useState<NavSection>("home");
   const deferredSearch = useDeferredValue(search);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -407,6 +422,35 @@ export function App() {
 
   const taskDetailQuery = useTaskDetailQuery(inspectedTaskId);
 
+  const navItems: Array<{ key: NavSection; label: string; icon: typeof Home }> = [
+    { key: "home", label: "Home", icon: Home },
+    { key: "projects", label: "Projects", icon: FolderGit2 },
+    { key: "waiting", label: "Waiting Inbox", icon: MessageSquareText },
+    { key: "sessions", label: "Sessions", icon: Terminal },
+    { key: "worktrees", label: "Worktrees", icon: GitBranch },
+    { key: "search", label: "Search", icon: Search },
+    { key: "activity", label: "Activity", icon: Activity },
+    { key: "diagnostics", label: "Diagnostics/Settings", icon: ShieldCheck },
+  ];
+
+  const sectionTitle = {
+    home: "Home",
+    projects: "Projects",
+    waiting: "Waiting Inbox",
+    sessions: "Sessions",
+    worktrees: "Worktrees",
+    search: "Search",
+    activity: "Activity",
+    diagnostics: "Diagnostics & Settings",
+  }[activeSection];
+
+  const breadcrumbs = [
+    sectionTitle,
+    projectDetailQuery.data?.project.name,
+    taskDetailQuery.data?.title,
+    sessionTimelineQuery.data?.session.session_name,
+  ].filter(Boolean) as string[];
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || !projectDetailQuery.data) {
@@ -435,81 +479,48 @@ export function App() {
           <Pill className="border-emerald-400/20 bg-emerald-400/10 text-emerald-200">v0.1</Pill>
         </div>
 
-        <div className="mt-8 rounded-3xl border border-white/7 bg-white/3 px-4 py-3">
-          <label className="flex items-center gap-3 text-sm text-slate-300">
-            <Search className="h-4 w-4 text-slate-500" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-slate-600"
-              placeholder="Search projects"
-            />
-          </label>
+        <div className="mt-8">
+          <SectionTitle>Navigation</SectionTitle>
+          <div className="mt-3 flex flex-col gap-2">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => setActiveSection(item.key)}
+                  className={[
+                    "flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition",
+                    activeSection === item.key
+                      ? "border-[color:var(--color-accent-primary)] bg-[color:var(--color-accent-soft)] text-slate-100"
+                      : "border-white/7 bg-white/2 text-slate-400 hover:bg-white/5",
+                  ].join(" ")}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="mt-8">
           <SectionTitle>Projects</SectionTitle>
-          <div className="mt-4 flex flex-col gap-3">
-            {filteredProjects.map((project) => (
+          <div className="mt-3 flex flex-col gap-2">
+            {filteredProjects.slice(0, 6).map((project) => (
               <button
                 key={project.id}
-                onClick={() => setSelectedProjectId(project.id)}
+                onClick={() => {
+                  setSelectedProjectId(project.id);
+                  setActiveSection("projects");
+                }}
                 className={[
-                  "rounded-3xl border px-4 py-4 text-left transition",
-                  selectedProjectId === project.id
-                    ? "border-[color:var(--color-accent-primary)] bg-[color:var(--color-accent-soft)]"
-                    : "border-white/7 bg-white/2 hover:bg-white/5",
+                  "rounded-2xl border px-3 py-3 text-left text-sm",
+                  selectedProjectId === project.id ? "border-[color:var(--color-accent-primary)] bg-[color:var(--color-accent-soft)]" : "border-white/7 bg-white/2",
                 ].join(" ")}
               >
-                <div className="text-sm font-semibold text-slate-100">{project.name}</div>
-                <div className="mt-1 text-sm text-slate-500">{project.description ?? project.slug}</div>
+                <div className="font-semibold text-slate-100">{project.name}</div>
               </button>
             ))}
-          </div>
-        </div>
-
-        <div className="mt-8 rounded-3xl border border-white/7 bg-white/2 p-4">
-          <SectionTitle>Search Results</SectionTitle>
-          <div className="mt-4 flex flex-col gap-3">
-            {deferredSearch.trim().length < 2 ? (
-              <div className="text-sm text-slate-500">Type at least two characters to search tasks, questions, sessions, and events.</div>
-            ) : null}
-            {searchQuery.data?.hits.map((hit) => (
-              <button
-                key={`${hit.entity_type}-${hit.entity_id}`}
-                onClick={() => {
-                  if (hit.entity_type === "task") {
-                    setInspectedTaskId(hit.entity_id);
-                    if (hit.project_id) {
-                      setSelectedProjectId(hit.project_id);
-                    }
-                  } else if (hit.entity_type === "waiting_question") {
-                    setSelectedQuestionId(hit.entity_id);
-                    if (hit.project_id) {
-                      setSelectedProjectId(hit.project_id);
-                    }
-                  } else if (hit.entity_type === "session") {
-                    setSelectedSessionId(hit.entity_id);
-                    if (hit.project_id) {
-                      setSelectedProjectId(hit.project_id);
-                    }
-                  } else if (hit.project_id) {
-                    setSelectedProjectId(hit.project_id);
-                  }
-                }}
-                className="rounded-2xl border border-white/7 bg-white/3 px-4 py-3 text-left"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-semibold text-slate-100">{hit.title}</div>
-                  <Pill className="border-white/8 text-slate-300">{hit.entity_type}</Pill>
-                </div>
-                <div className="mt-2 line-clamp-2 text-sm text-slate-500">{hit.snippet}</div>
-                {hit.secondary ? <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-600">{hit.secondary}</div> : null}
-              </button>
-            ))}
-            {deferredSearch.trim().length >= 2 && !searchQuery.data?.hits.length ? (
-              <div className="text-sm text-slate-500">No matching records found.</div>
-            ) : null}
           </div>
         </div>
 
@@ -520,7 +531,45 @@ export function App() {
           onSubmit={(payload) => bootstrapProjectMutation.mutate(payload)}
         />
       </>}
-      header={<DashboardScreen>
+      header={<>
+        <section className="surface rounded-[28px] px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+                {breadcrumbs.map((crumb, index) => (
+                  <span key={crumb} className="inline-flex items-center gap-2">
+                    {index ? <ChevronRight className="h-3 w-3" /> : null}
+                    {crumb}
+                  </span>
+                ))}
+              </div>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-100">{sectionTitle}</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/15 px-3 py-2 text-sm text-slate-400">
+                <Search className="h-4 w-4" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  className="w-52 border-0 bg-transparent p-0 text-sm outline-none placeholder:text-slate-600"
+                  placeholder="Global search"
+                />
+              </label>
+              <button
+                onClick={() => setActiveSection("projects")}
+                className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900"
+              >
+                <Plus className="h-4 w-4" />
+                Quick create
+              </button>
+              <button className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-slate-300">
+                <SlidersHorizontal className="h-4 w-4" />
+                View controls
+              </button>
+            </div>
+          </div>
+        </section>
+        {activeSection === "home" ? <DashboardScreen>
         <section className="surface rounded-[32px] px-6 py-6">
           <div className="flex flex-wrap items-end justify-between gap-6">
             <div>
@@ -643,10 +692,46 @@ export function App() {
             </div>
           </div>
         </section>
-      </DashboardScreen>
+      </DashboardScreen> : null}
+      </>
       }
-      main={<ProjectOverviewScreen><div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <ProjectBoardScreen><SectionFrame className="px-5 py-5">
+      main={<>
+        {activeSection === "search" ? (
+          <SectionFrame className="px-5 py-5">
+            <SectionTitle>Search Results</SectionTitle>
+            <div className="mt-4 flex flex-col gap-3">
+              {deferredSearch.trim().length < 2 ? (
+                <div className="text-sm text-slate-500">Type at least two characters to search tasks, questions, sessions, and events.</div>
+              ) : null}
+              {searchQuery.data?.hits.map((hit) => (
+                <button
+                  key={`${hit.entity_type}-${hit.entity_id}`}
+                  onClick={() => {
+                    if (hit.entity_type === "task") {
+                      setInspectedTaskId(hit.entity_id);
+                    } else if (hit.entity_type === "waiting_question") {
+                      setSelectedQuestionId(hit.entity_id);
+                    } else if (hit.entity_type === "session") {
+                      setSelectedSessionId(hit.entity_id);
+                    }
+                    if (hit.project_id) {
+                      setSelectedProjectId(hit.project_id);
+                    }
+                  }}
+                  className="rounded-2xl border border-white/7 bg-white/3 px-4 py-3 text-left"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold text-slate-100">{hit.title}</div>
+                    <Pill className="border-white/8 text-slate-300">{hit.entity_type}</Pill>
+                  </div>
+                  <div className="mt-2 line-clamp-2 text-sm text-slate-500">{hit.snippet}</div>
+                </button>
+              ))}
+            </div>
+          </SectionFrame>
+        ) : null}
+        {activeSection !== "home" && activeSection !== "search" ? <ProjectOverviewScreen><div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <ProjectBoardScreen>{activeSection === "projects" ? <SectionFrame className="px-5 py-5">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <SectionTitle>Project Board</SectionTitle>
@@ -717,10 +802,10 @@ export function App() {
                 ))}
               </div>
             </DndContext>
-          </SectionFrame></ProjectBoardScreen>
+          </SectionFrame> : null}</ProjectBoardScreen>
 
           <div className="flex flex-col gap-6">
-            <TaskDetailScreen><SectionFrame className="px-5 py-5">
+            <TaskDetailScreen>{activeSection === "projects" ? <SectionFrame className="px-5 py-5">
               <SectionTitle>Task Inspector</SectionTitle>
               {taskDetailQuery.data ? (
                 <div className="mt-4">
@@ -973,9 +1058,9 @@ export function App() {
               ) : (
                 <div className="mt-4 text-sm text-slate-500">Select a task card to inspect comments, checks, and artifacts.</div>
               )}
-            </SectionFrame></TaskDetailScreen>
+            </SectionFrame> : null}</TaskDetailScreen>
 
-            <WorktreeInventoryScreen><SectionFrame className="px-5 py-5">
+            <WorktreeInventoryScreen>{activeSection === "worktrees" ? <SectionFrame className="px-5 py-5">
               <SectionTitle>Repository Inventory</SectionTitle>
               <div className="mt-4 flex flex-col gap-3">
                 {projectDetailQuery.data?.repositories.map((repository) => (
@@ -1030,9 +1115,9 @@ export function App() {
                   </button>
                 </div>
               ) : null}
-            </SectionFrame></WorktreeInventoryScreen>
+            </SectionFrame> : null}</WorktreeInventoryScreen>
 
-            <WorktreeInventoryScreen><SectionFrame className="px-5 py-5">
+            <WorktreeInventoryScreen>{activeSection === "worktrees" ? <SectionFrame className="px-5 py-5">
               <SectionTitle>Worktree Fleet</SectionTitle>
               <div className="mt-4 flex flex-col gap-3">
                 {projectDetailQuery.data?.worktrees.map((worktree) => (
@@ -1138,9 +1223,9 @@ export function App() {
                   </button>
                 </div>
               ) : null}
-            </SectionFrame></WorktreeInventoryScreen>
+            </SectionFrame> : null}</WorktreeInventoryScreen>
 
-            <SessionDetailScreen><SectionFrame className="px-5 py-5">
+            <SessionDetailScreen>{activeSection === "sessions" ? <SectionFrame className="px-5 py-5">
               <SectionTitle>Session Runtime</SectionTitle>
               <div className="mt-4 flex flex-col gap-3">
                 {projectDetailQuery.data?.sessions.map((session) => (
@@ -1457,9 +1542,9 @@ export function App() {
                   Open question
                 </button>
               </div>
-            </SectionFrame></SessionDetailScreen>
+            </SectionFrame> : null}</SessionDetailScreen>
 
-            <WaitingInboxScreen><SectionFrame className="px-5 py-5">
+            <WaitingInboxScreen>{activeSection === "waiting" ? <SectionFrame className="px-5 py-5">
               <SectionTitle>Waiting Inbox</SectionTitle>
               <div className="mt-4 flex flex-col gap-3">
                 {(projectDetailQuery.data?.waiting_questions ?? []).map((question) => (
@@ -1538,9 +1623,9 @@ export function App() {
                   <div className="mt-3 text-sm text-slate-500">Select a waiting question to inspect and answer it.</div>
                 )}
               </div>
-            </SectionFrame></WaitingInboxScreen>
+            </SectionFrame> : null}</WaitingInboxScreen>
 
-            <DiagnosticsScreen><SectionFrame className="px-5 py-5">
+            <DiagnosticsScreen>{activeSection === "diagnostics" ? <SectionFrame className="px-5 py-5">
               <SectionTitle>Runtime readiness</SectionTitle>
               <div className="mt-5 grid gap-3">
                 <Signal label="tmux" ready={Boolean(diagnosticsQuery.data?.tmux_available)} icon={Bot} />
@@ -1550,9 +1635,9 @@ export function App() {
                 <Signal label="audit log" ready icon={ShieldCheck} />
                 <Signal label="waiting inbox" ready icon={MessageSquareText} />
               </div>
-            </SectionFrame></DiagnosticsScreen>
+            </SectionFrame> : null}</DiagnosticsScreen>
 
-            <DiagnosticsScreen><SectionFrame className="px-5 py-5">
+            <DiagnosticsScreen>{activeSection === "diagnostics" ? <SectionFrame className="px-5 py-5">
               <SectionTitle>Diagnostics</SectionTitle>
               <div className="mt-4 grid gap-3">
                 <DiagRow label="DB path" value={diagnosticsQuery.data?.database_path ?? "unknown"} />
@@ -1594,9 +1679,9 @@ export function App() {
                   </div>
                 </div>
               ) : null}
-            </SectionFrame></DiagnosticsScreen>
+            </SectionFrame> : null}</DiagnosticsScreen>
 
-            <ActivityScreen><SectionFrame className="px-5 py-5">
+            <ActivityScreen>{activeSection === "activity" ? <SectionFrame className="px-5 py-5">
               <SectionTitle>Recent events</SectionTitle>
               <div className="mt-4 flex flex-col gap-3">
                 {dashboardQuery.data?.recent_events.map((event) => (
@@ -1611,9 +1696,10 @@ export function App() {
                   <div className="text-sm text-slate-500">Events will appear here as work is created and updated.</div>
                 ) : null}
               </div>
-            </SectionFrame></ActivityScreen>
+            </SectionFrame> : null}</ActivityScreen>
           </div>
-        </div></ProjectOverviewScreen>}
+        </div></ProjectOverviewScreen> : null}
+      </>}
       drawer={<></>}
     />
   );
