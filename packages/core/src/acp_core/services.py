@@ -64,6 +64,7 @@ from acp_core.schemas import (
     SessionTimelineRead,
     SessionMessageRead,
     WorktreeCreate,
+    WorktreeHygieneIssueRead,
     WorktreePatch,
     WorktreeRead,
 )
@@ -1157,6 +1158,60 @@ class RecoveryService:
         }
 
 
+class WorktreeHygieneService:
+    def __init__(self, context: ServiceContext) -> None:
+        self.context = context
+
+    def list_issues(self, *, project_id: str | None = None) -> list[WorktreeHygieneIssueRead]:
+        stmt = select(Worktree).order_by(Worktree.updated_at.desc())
+        if project_id is not None:
+            stmt = stmt.join(Repository, Repository.id == Worktree.repository_id).where(Repository.project_id == project_id)
+
+        issues: list[WorktreeHygieneIssueRead] = []
+        for worktree in self.context.db.scalars(stmt):
+            if worktree.status == "pruned":
+                continue
+
+            repository = self.context.db.get(Repository, worktree.repository_id)
+            task = self.context.db.get(Task, worktree.task_id) if worktree.task_id else None
+            session = self.context.db.get(AgentSession, worktree.session_id) if worktree.session_id else None
+            reasons: list[str] = []
+            recommendation: str | None = None
+
+            if not Path(worktree.path).exists():
+                reasons.append("worktree_path_missing")
+                recommendation = "inspect"
+
+            if session is not None and session.status in {"done", "failed", "cancelled"}:
+                reasons.append(f"session_{session.status}")
+                recommendation = "archive" if worktree.status == "active" else "prune"
+
+            if task is not None and task.workflow_state in {"done", "cancelled"}:
+                reasons.append(f"task_{task.workflow_state}")
+                if recommendation is None:
+                    recommendation = "archive" if worktree.status == "active" else "prune"
+
+            if worktree.status == "archived" and not reasons:
+                continue
+
+            if reasons and recommendation is not None:
+                issues.append(
+                    WorktreeHygieneIssueRead(
+                        worktree_id=worktree.id,
+                        project_id=repository.project_id if repository else None,
+                        task_id=worktree.task_id,
+                        session_id=worktree.session_id,
+                        branch_name=worktree.branch_name,
+                        path=worktree.path,
+                        status=worktree.status,
+                        recommendation=recommendation,
+                        reasons=reasons,
+                    )
+                )
+
+        return issues
+
+
 class DiagnosticsService:
     def __init__(self, context: ServiceContext, runtime: TmuxRuntimeAdapter | None = None) -> None:
         self.context = context
@@ -1182,6 +1237,7 @@ class DiagnosticsService:
             )
             tmux_server_running = result.returncode == 0
         recovery = RecoveryService(self.context, runtime=self.runtime).reconcile_runtime_sessions()
+        stale_worktrees = WorktreeHygieneService(self.context).list_issues()
         return DiagnosticsRead(
             app_name=settings.app_name,
             environment=settings.app_env,
@@ -1193,6 +1249,8 @@ class DiagnosticsService:
             orphan_runtime_session_count=recovery["orphan_runtime_session_count"],
             orphan_runtime_sessions=recovery["orphan_runtime_sessions"],
             reconciled_session_count=recovery["reconciled_session_count"],
+            stale_worktree_count=len(stale_worktrees),
+            stale_worktrees=stale_worktrees,
             git_available=which("git") is not None,
             current_project_count=project_count,
             current_repository_count=repository_count,

@@ -21,6 +21,18 @@ type Diagnostics = {
   orphan_runtime_session_count: number;
   orphan_runtime_sessions: string[];
   reconciled_session_count: number;
+  stale_worktree_count: number;
+  stale_worktrees: Array<{
+    worktree_id: string;
+    project_id?: string | null;
+    task_id?: string | null;
+    session_id?: string | null;
+    branch_name: string;
+    path: string;
+    status: string;
+    recommendation: "archive" | "prune" | "inspect";
+    reasons: string[];
+  }>;
   git_available: boolean;
   current_project_count: number;
   current_repository_count: number;

@@ -421,6 +421,14 @@ export function App() {
     return map;
   }, [projectDetailQuery.data]);
 
+  const staleWorktreesById = useMemo(() => {
+    const map = new Map<string, { recommendation: string; reasons: string[] }>();
+    for (const issue of diagnosticsQuery.data?.stale_worktrees ?? []) {
+      map.set(issue.worktree_id, { recommendation: issue.recommendation, reasons: issue.reasons });
+    }
+    return map;
+  }, [diagnosticsQuery.data]);
+
   const sessionTailQuery = useQuery({
     queryKey: ["session-tail", selectedSessionId],
     queryFn: () => getSessionTail(selectedSessionId!),
@@ -1087,6 +1095,13 @@ export function App() {
               <div className="mt-4 flex flex-col gap-3">
                 {projectDetailQuery.data?.worktrees.map((worktree) => (
                   <div key={worktree.id} className="rounded-2xl border border-white/7 bg-white/3 px-4 py-4">
+                    {staleWorktreesById.get(worktree.id) ? (
+                      <div className="mb-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
+                        Recommended: {staleWorktreesById.get(worktree.id)?.recommendation}
+                        {" · "}
+                        {(staleWorktreesById.get(worktree.id)?.reasons ?? []).join(", ")}
+                      </div>
+                    ) : null}
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
@@ -1527,6 +1542,7 @@ export function App() {
                 <DiagRow label="Runtime sessions" value={String(diagnosticsQuery.data?.runtime_managed_session_count ?? 0)} />
                 <DiagRow label="Reconciled on check" value={String(diagnosticsQuery.data?.reconciled_session_count ?? 0)} />
                 <DiagRow label="Orphan tmux sessions" value={String(diagnosticsQuery.data?.orphan_runtime_session_count ?? 0)} />
+                <DiagRow label="Stale worktrees" value={String(diagnosticsQuery.data?.stale_worktree_count ?? 0)} />
                 <DiagRow label="Open questions" value={String(diagnosticsQuery.data?.current_open_question_count ?? 0)} />
                 <DiagRow label="Events" value={String(diagnosticsQuery.data?.current_event_count ?? 0)} />
               </div>
@@ -1537,6 +1553,21 @@ export function App() {
                     {diagnosticsQuery.data.orphan_runtime_sessions.map((sessionName) => (
                       <div key={sessionName} className="text-sm text-amber-50">
                         {sessionName}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {diagnosticsQuery.data?.stale_worktrees.length ? (
+                <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-4">
+                  <div className="text-sm font-medium text-amber-100">Worktree recommendations</div>
+                  <div className="mt-2 flex flex-col gap-3">
+                    {diagnosticsQuery.data.stale_worktrees.map((issue) => (
+                      <div key={issue.worktree_id} className="rounded-2xl border border-amber-300/15 bg-black/10 px-3 py-3">
+                        <div className="text-sm font-medium text-amber-50">{issue.branch_name}</div>
+                        <div className="mt-1 text-xs text-amber-100">
+                          {issue.recommendation} · {issue.reasons.join(", ")}
+                        </div>
                       </div>
                     ))}
                   </div>

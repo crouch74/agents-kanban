@@ -34,6 +34,8 @@ vi.stubGlobal(
           orphan_runtime_session_count: 0,
           orphan_runtime_sessions: [],
           reconciled_session_count: 0,
+          stale_worktree_count: 0,
+          stale_worktrees: [],
           git_available: true,
           current_project_count: 0,
           current_repository_count: 0,

@@ -120,5 +120,14 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
             refreshed_response = client.get(f"/api/v1/sessions/{session['id']}")
             assert refreshed_response.status_code == 200
             assert refreshed_response.json()["status"] == "cancelled"
+
+            diagnostics_response = client.get("/api/v1/diagnostics")
+            assert diagnostics_response.status_code == 200
+            diagnostics = diagnostics_response.json()
+            assert diagnostics["stale_worktree_count"] >= 1
+            assert any(
+                issue["worktree_id"] == worktree_id and issue["recommendation"] == "archive"
+                for issue in diagnostics["stale_worktrees"]
+            )
     finally:
         app.dependency_overrides.clear()

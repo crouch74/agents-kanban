@@ -305,6 +305,18 @@ class WorktreeRead(BaseModel):
     updated_at: datetime
 
 
+class WorktreeHygieneIssueRead(BaseModel):
+    worktree_id: str
+    project_id: str | None
+    task_id: str | None
+    session_id: str | None
+    branch_name: str
+    path: str
+    status: str
+    recommendation: Literal["archive", "prune", "inspect"]
+    reasons: list[str]
+
+
 class BoardView(BaseModel):
     id: str
     project_id: str
@@ -361,6 +373,8 @@ class DiagnosticsRead(BaseModel):
     orphan_runtime_session_count: int
     orphan_runtime_sessions: list[str]
     reconciled_session_count: int
+    stale_worktree_count: int
+    stale_worktrees: list[WorktreeHygieneIssueRead]
     git_available: bool
     current_project_count: int
     current_repository_count: int
