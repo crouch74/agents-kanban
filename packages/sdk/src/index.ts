@@ -16,6 +16,7 @@ export interface BoardColumn {
 
 export interface TaskSummary {
   id: string;
+  project_id: string;
   title: string;
   workflow_state: WorkflowState;
   board_column_id: string;

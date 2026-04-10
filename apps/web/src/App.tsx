@@ -504,6 +504,74 @@ export function App() {
             <StatTile label="Running Sessions" value={dashboardQuery.data?.running_sessions ?? 0} />
           </div>
 
+          <div className="mt-8 grid gap-4 xl:grid-cols-3">
+            <div className="rounded-[28px] border border-white/8 bg-black/10 p-5">
+              <SectionTitle>Waiting Across Projects</SectionTitle>
+              <div className="mt-4 flex flex-col gap-3">
+                {dashboardQuery.data?.waiting_questions.map((question) => (
+                  <button
+                    key={question.id}
+                    onClick={() => {
+                      setSelectedProjectId(question.project_id);
+                      setSelectedQuestionId(question.id);
+                    }}
+                    className="rounded-2xl border border-white/7 bg-white/3 px-4 py-3 text-left"
+                  >
+                    <div className="text-sm font-semibold text-slate-100">{question.prompt}</div>
+                    <div className="mt-1 text-xs text-slate-500">{question.urgency ?? "open"} · {question.project_id.slice(0, 8)}</div>
+                  </button>
+                ))}
+                {!dashboardQuery.data?.waiting_questions.length ? (
+                  <div className="text-sm text-slate-500">No open waiting questions across projects.</div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-white/8 bg-black/10 p-5">
+              <SectionTitle>Blocked Tasks</SectionTitle>
+              <div className="mt-4 flex flex-col gap-3">
+                {dashboardQuery.data?.blocked_tasks.map((task) => (
+                  <button
+                    key={task.id}
+                    onClick={() => {
+                      setSelectedProjectId(task.project_id);
+                      setInspectedTaskId(task.id);
+                    }}
+                    className="rounded-2xl border border-white/7 bg-white/3 px-4 py-3 text-left"
+                  >
+                    <div className="text-sm font-semibold text-slate-100">{task.title}</div>
+                    <div className="mt-1 text-xs text-slate-500">{task.blocked_reason ?? "Blocked"}</div>
+                  </button>
+                ))}
+                {!dashboardQuery.data?.blocked_tasks.length ? (
+                  <div className="text-sm text-slate-500">No blocked tasks right now.</div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-white/8 bg-black/10 p-5">
+              <SectionTitle>Running Sessions</SectionTitle>
+              <div className="mt-4 flex flex-col gap-3">
+                {dashboardQuery.data?.active_sessions.map((session) => (
+                  <button
+                    key={session.id}
+                    onClick={() => {
+                      setSelectedProjectId(session.project_id);
+                      setSelectedSessionId(session.id);
+                    }}
+                    className="rounded-2xl border border-white/7 bg-white/3 px-4 py-3 text-left"
+                  >
+                    <div className="text-sm font-semibold text-slate-100">{session.profile}</div>
+                    <div className="mt-1 text-xs text-slate-500">{session.session_name}</div>
+                  </button>
+                ))}
+                {!dashboardQuery.data?.active_sessions.length ? (
+                  <div className="text-sm text-slate-500">No running sessions right now.</div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
           <div className="mt-8 rounded-[28px] border border-white/8 bg-black/10 p-5">
             <div className="flex items-center justify-between gap-4">
               <div>

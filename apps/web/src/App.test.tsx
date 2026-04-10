@@ -11,6 +11,9 @@ vi.stubGlobal(
         JSON.stringify({
           projects: [],
           recent_events: [],
+          waiting_questions: [],
+          blocked_tasks: [],
+          active_sessions: [],
           waiting_count: 0,
           blocked_count: 0,
           running_sessions: 0,

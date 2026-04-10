@@ -370,6 +370,9 @@ class DiagnosticsRead(BaseModel):
 class DashboardRead(BaseModel):
     projects: list[ProjectSummary]
     recent_events: list[EventRecord]
+    waiting_questions: list[WaitingQuestionRead]
+    blocked_tasks: list[TaskRead]
+    active_sessions: list[AgentSessionRead]
     waiting_count: int
     blocked_count: int
     running_sessions: int

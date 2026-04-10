@@ -1118,12 +1118,39 @@ class DashboardService:
     def get_dashboard(self) -> DashboardRead:
         projects = list(self.context.db.scalars(select(Project).order_by(Project.created_at.desc()).limit(8)))
         events = list(self.context.db.scalars(select(Event).order_by(Event.created_at.desc()).limit(12)))
-        waiting_count = self.context.db.scalar(select(func.count(WaitingQuestion.id)).where(WaitingQuestion.status == "open")) or 0
-        blocked_count = self.context.db.scalar(select(func.count(Task.id)).where(Task.blocked_reason.is_not(None))) or 0
-        running_sessions = self.context.db.scalar(select(func.count(AgentSession.id)).where(AgentSession.status == "running")) or 0
+        waiting_questions = list(
+            self.context.db.scalars(
+                select(WaitingQuestion)
+                .where(WaitingQuestion.status == "open")
+                .order_by(WaitingQuestion.created_at.desc())
+                .limit(8)
+            )
+        )
+        blocked_tasks = list(
+            self.context.db.scalars(
+                select(Task)
+                .where(Task.blocked_reason.is_not(None))
+                .order_by(Task.updated_at.desc())
+                .limit(8)
+            )
+        )
+        active_sessions = list(
+            self.context.db.scalars(
+                select(AgentSession)
+                .where(AgentSession.status == "running")
+                .order_by(AgentSession.updated_at.desc())
+                .limit(8)
+            )
+        )
+        waiting_count = len(waiting_questions)
+        blocked_count = len(blocked_tasks)
+        running_sessions = len(active_sessions)
         return DashboardRead(
             projects=[ProjectSummary.model_validate(project) for project in projects],
             recent_events=[EventRecord.model_validate(event) for event in events],
+            waiting_questions=[WaitingQuestionRead.model_validate(question) for question in waiting_questions],
+            blocked_tasks=[TaskRead.model_validate(task) for task in blocked_tasks],
+            active_sessions=[AgentSessionRead.model_validate(session) for session in active_sessions],
             waiting_count=waiting_count,
             blocked_count=blocked_count,
             running_sessions=running_sessions,

@@ -41,6 +41,9 @@ export type EventRecord = {
 export type Dashboard = {
   projects: ProjectSummary[];
   recent_events: EventRecord[];
+  waiting_questions: WaitingQuestionSummary[];
+  blocked_tasks: TaskSummary[];
+  active_sessions: SessionSummary[];
   waiting_count: number;
   blocked_count: number;
   running_sessions: number;
