@@ -4,6 +4,7 @@ import type {
   RepositorySummary,
   SessionSummary,
   TaskSummary,
+  WaitingQuestionSummary,
   WorktreeSummary,
 } from "@acp/sdk";
 
@@ -45,6 +46,7 @@ type ProjectOverview = {
   repositories: RepositorySummary[];
   worktrees: WorktreeSummary[];
   sessions: SessionSummary[];
+  waiting_questions: WaitingQuestionSummary[];
 };
 
 export type SessionTail = {
@@ -55,6 +57,17 @@ export type SessionTail = {
     session_id: string;
     message_type: string;
     source: string;
+    body: string;
+    payload_json: Record<string, unknown>;
+    created_at: string;
+  }>;
+};
+
+export type WaitingQuestionDetail = WaitingQuestionSummary & {
+  replies: Array<{
+    id: string;
+    question_id: string;
+    responder_name: string;
     body: string;
     payload_json: Record<string, unknown>;
     created_at: string;
@@ -156,4 +169,26 @@ export function createSession(payload: {
 
 export function getSessionTail(sessionId: string) {
   return fetchJson<SessionTail>(`/sessions/${sessionId}/tail`);
+}
+
+export function createQuestion(payload: {
+  task_id: string;
+  session_id?: string;
+  prompt: string;
+  blocked_reason?: string;
+  urgency?: string;
+  options_json?: Array<Record<string, unknown>>;
+}) {
+  return postJson<WaitingQuestionSummary>("/questions", payload);
+}
+
+export function getQuestion(questionId: string) {
+  return fetchJson<WaitingQuestionDetail>(`/questions/${questionId}`);
+}
+
+export function answerQuestion(
+  questionId: string,
+  payload: { responder_name: string; body: string; payload_json?: Record<string, unknown> },
+) {
+  return postJson<WaitingQuestionDetail>(`/questions/${questionId}/replies`, payload);
 }

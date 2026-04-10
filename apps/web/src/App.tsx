@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import type { TaskSummary } from "@acp/sdk";
 import {
+  answerQuestion,
+  createQuestion,
   createSession,
   createProject,
   createRepository,
@@ -27,6 +29,7 @@ import {
   getDiagnostics,
   getProject,
   getProjects,
+  getQuestion,
   getSessionTail,
   patchWorktree,
 } from "@/lib/api";
@@ -52,6 +55,11 @@ export function App() {
   const [selectedSessionWorktreeId, setSelectedSessionWorktreeId] = useState<string>("");
   const [sessionProfile, setSessionProfile] = useState("executor");
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
+  const [draftQuestionPrompt, setDraftQuestionPrompt] = useState("");
+  const [draftQuestionReason, setDraftQuestionReason] = useState("");
+  const [draftQuestionUrgency, setDraftQuestionUrgency] = useState("medium");
+  const [draftReplyBody, setDraftReplyBody] = useState("");
   const deferredSearch = useDeferredValue(search);
 
   const dashboardQuery = useQuery({
@@ -85,6 +93,7 @@ export function App() {
     setSelectedSessionTaskId("");
     setSelectedSessionWorktreeId("");
     setSelectedSessionId(null);
+    setSelectedQuestionId(null);
   }, [selectedProjectId]);
 
   useEffect(() => {
@@ -93,6 +102,13 @@ export function App() {
       setSelectedRepositoryId(repositories[0].id);
     }
   }, [projectDetailQuery.data?.repositories, selectedRepositoryId]);
+
+  useEffect(() => {
+    const questions = projectDetailQuery.data?.waiting_questions ?? [];
+    if (!selectedQuestionId && questions[0]) {
+      setSelectedQuestionId(questions[0].id);
+    }
+  }, [projectDetailQuery.data?.waiting_questions, selectedQuestionId]);
 
   const createProjectMutation = useMutation({
     mutationFn: createProject,
@@ -162,6 +178,32 @@ export function App() {
     },
   });
 
+  const createQuestionMutation = useMutation({
+    mutationFn: createQuestion,
+    onSuccess: (question) => {
+      if (selectedProjectId) {
+        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      }
+      setSelectedQuestionId(question.id);
+      setDraftQuestionPrompt("");
+      setDraftQuestionReason("");
+    },
+  });
+
+  const answerQuestionMutation = useMutation({
+    mutationFn: ({ questionId, body }: { questionId: string; body: string }) =>
+      answerQuestion(questionId, { responder_name: "operator", body }),
+    onSuccess: (detail) => {
+      if (selectedProjectId) {
+        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["question", detail.id] });
+      setDraftReplyBody("");
+    },
+  });
+
   const filteredProjects = useMemo(() => {
     const projects = projectsQuery.data ?? [];
     const needle = deferredSearch.trim().toLowerCase();
@@ -204,6 +246,12 @@ export function App() {
     queryFn: () => getSessionTail(selectedSessionId!),
     enabled: Boolean(selectedSessionId),
     refetchInterval: selectedSessionId ? 2500 : false,
+  });
+
+  const questionDetailQuery = useQuery({
+    queryKey: ["question", selectedQuestionId],
+    queryFn: () => getQuestion(selectedQuestionId!),
+    enabled: Boolean(selectedQuestionId),
   });
 
   return (
@@ -635,6 +683,153 @@ export function App() {
                   </pre>
                 ) : (
                   <div className="mt-3 text-sm text-slate-500">Select a session to inspect recent runtime output.</div>
+                )}
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-white/7 bg-black/10 p-4">
+                <div className="text-sm font-medium text-slate-200">Open waiting question</div>
+                <select
+                  value={selectedSessionTaskId}
+                  onChange={(event) => setSelectedSessionTaskId(event.target.value)}
+                  className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                >
+                  <option value="">Choose task</option>
+                  {topLevelTasks.map((task) => (
+                    <option key={task.id} value={task.id}>
+                      {task.title}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={selectedSessionId ?? ""}
+                  onChange={(event) => setSelectedSessionId(event.target.value || null)}
+                  className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                >
+                  <option value="">Optional linked session</option>
+                  {(projectDetailQuery.data?.sessions ?? []).map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {session.profile} · {session.session_name}
+                    </option>
+                  ))}
+                </select>
+                <textarea
+                  value={draftQuestionPrompt}
+                  onChange={(event) => setDraftQuestionPrompt(event.target.value)}
+                  placeholder="What decision or clarification does the agent need?"
+                  className="mt-3 min-h-24 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                />
+                <input
+                  value={draftQuestionReason}
+                  onChange={(event) => setDraftQuestionReason(event.target.value)}
+                  placeholder="Why is work blocked?"
+                  className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                />
+                <select
+                  value={draftQuestionUrgency}
+                  onChange={(event) => setDraftQuestionUrgency(event.target.value)}
+                  className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                >
+                  {["low", "medium", "high", "urgent"].map((urgency) => (
+                    <option key={urgency} value={urgency}>
+                      {urgency}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() =>
+                    createQuestionMutation.mutate({
+                      task_id: selectedSessionTaskId,
+                      session_id: selectedSessionId || undefined,
+                      prompt: draftQuestionPrompt,
+                      blocked_reason: draftQuestionReason || undefined,
+                      urgency: draftQuestionUrgency,
+                    })
+                  }
+                  disabled={!selectedSessionTaskId || !draftQuestionPrompt.trim() || createQuestionMutation.isPending}
+                  className="mt-3 rounded-full bg-[color:var(--accent)] px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Open question
+                </button>
+              </div>
+            </SectionFrame>
+
+            <SectionFrame className="px-5 py-5">
+              <SectionTitle>Waiting Inbox</SectionTitle>
+              <div className="mt-4 flex flex-col gap-3">
+                {(projectDetailQuery.data?.waiting_questions ?? []).map((question) => (
+                  <button
+                    key={question.id}
+                    onClick={() => setSelectedQuestionId(question.id)}
+                    className={[
+                      "rounded-2xl border px-4 py-4 text-left",
+                      selectedQuestionId === question.id
+                        ? "border-[color:var(--accent)] bg-[color:var(--accent-soft)]"
+                        : "border-white/7 bg-white/3",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="text-sm font-semibold text-slate-100">{question.prompt}</div>
+                      <Pill className="border-white/8 text-slate-300">{question.urgency ?? "open"}</Pill>
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">{question.blocked_reason ?? "Awaiting operator input"}</div>
+                  </button>
+                ))}
+                {!projectDetailQuery.data?.waiting_questions.length ? (
+                  <div className="text-sm text-slate-500">No waiting questions right now.</div>
+                ) : null}
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-white/7 bg-black/15 p-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
+                  <MessageSquareText className="h-4 w-4 text-slate-400" />
+                  Selected question
+                </div>
+                {questionDetailQuery.data ? (
+                  <>
+                    <div className="mt-3 text-sm font-semibold text-slate-100">{questionDetailQuery.data.prompt}</div>
+                    <div className="mt-2 text-sm text-slate-400">
+                      {questionDetailQuery.data.blocked_reason ?? "No explicit blocked reason provided."}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Pill className="border-white/8 text-slate-300">{questionDetailQuery.data.status}</Pill>
+                      <Pill className="border-white/8 text-slate-300">{questionDetailQuery.data.urgency ?? "normal"}</Pill>
+                    </div>
+                    <div className="mt-4 flex flex-col gap-2">
+                      {questionDetailQuery.data.replies.map((reply) => (
+                        <div key={reply.id} className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3">
+                          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">{reply.responder_name}</div>
+                          <div className="mt-2 text-sm text-slate-200">{reply.body}</div>
+                        </div>
+                      ))}
+                      {!questionDetailQuery.data.replies.length ? (
+                        <div className="text-sm text-slate-500">No replies yet.</div>
+                      ) : null}
+                    </div>
+                    {questionDetailQuery.data.status === "open" ? (
+                      <>
+                        <textarea
+                          value={draftReplyBody}
+                          onChange={(event) => setDraftReplyBody(event.target.value)}
+                          placeholder="Reply to unblock the agent"
+                          className="mt-4 min-h-24 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                        />
+                        <button
+                          onClick={() =>
+                            answerQuestionMutation.mutate({
+                              questionId: questionDetailQuery.data!.id,
+                              body: draftReplyBody,
+                            })
+                          }
+                          disabled={!draftReplyBody.trim() || answerQuestionMutation.isPending}
+                          className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Send reply
+                        </button>
+                      </>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="mt-3 text-sm text-slate-500">Select a waiting question to inspect and answer it.</div>
                 )}
               </div>
             </SectionFrame>
