@@ -3,7 +3,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Bot, FolderGit2, GitBranch, ShieldCheck } from "lucide-react";
 import type { TaskSummary } from "@acp/sdk";
-import { Pill } from "@/components/ui";
+import { Badge, Card } from "@/components/primitives";
 
 type ProjectBoardScreenProps = {
   children: ReactNode;
@@ -100,11 +100,6 @@ function TaskCard({
   dragTransform,
   dragHandleProps,
 }: TaskCardProps) {
-  const stateTone = task.blocked_reason
-    ? "border-rose-300/25 bg-rose-300/10 text-rose-100"
-    : task.waiting_for_human
-      ? "border-amber-300/25 bg-amber-300/10 text-amber-100"
-      : "border-white/8 text-slate-300";
   const visibleSubtasks = subtasks.slice(0, 2);
   const hiddenSubtaskCount = Math.max(0, subtasks.length - visibleSubtasks.length);
 
@@ -118,7 +113,7 @@ function TaskCard({
         opacity: isDragging ? 0.62 : 1,
       }}
       className={[
-        "group w-full rounded-3xl border bg-white/4 px-5 py-4 text-left shadow-sm transition",
+        "group w-full rounded-[var(--radius-lg)] border px-5 py-4 text-left shadow-[var(--shadow-sm)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-focus-ring)]",
         selected
           ? "border-[color:var(--color-accent-primary)] bg-[color:var(--color-accent-soft)]/25"
           : "border-white/8 hover:border-white/20 hover:bg-white/7",
@@ -130,9 +125,9 @@ function TaskCard({
         <div className="text-sm font-semibold text-slate-100">{task.title}</div>
         <div className="flex items-center gap-2">
           {(task.waiting_for_human || task.blocked_reason) ? (
-            <Pill className={stateTone}>{task.waiting_for_human ? "Waiting" : "Blocked"}</Pill>
+            <Badge variant={task.waiting_for_human ? "waiting" : "blocked"}>{task.waiting_for_human ? "Waiting" : "Blocked"}</Badge>
           ) : null}
-          <Pill className="border-white/8 text-slate-300">{task.priority}</Pill>
+          <Badge>{task.priority}</Badge>
         </div>
       </div>
 
@@ -146,7 +141,7 @@ function TaskCard({
       </div>
 
       {visibleSubtasks.length ? (
-        <div className="mt-4 rounded-2xl border border-white/10 bg-black/15 px-3 py-3">
+        <Card className="mt-4 rounded-2xl bg-black/15 px-3 py-3">
           <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Subtasks</div>
           <div className="mt-2 flex flex-col gap-1.5">
             {visibleSubtasks.map((subtask) => (
@@ -158,7 +153,7 @@ function TaskCard({
               <div className="text-xs text-slate-500">+{hiddenSubtaskCount} more…</div>
             ) : null}
           </div>
-        </div>
+        </Card>
       ) : null}
     </button>
   );

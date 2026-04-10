@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { ArrowRight, CheckCircle2, CircleDot, MessageSquareText } from "lucide-react";
 import type { SessionSummary, TaskSummary, WaitingQuestionSummary } from "@acp/sdk";
 import { cn } from "@/lib/utils";
-import { Pill, SectionFrame, SectionTitle } from "@/components/ui";
+import { SectionFrame, SectionTitle } from "@/components/ui";
+import { Badge, Button, Card, Panel, Select, Textarea } from "@/components/primitives";
 import type { WaitingQuestionDetail } from "@/lib/api";
 
 type WaitingQuestionWithTimestamps = WaitingQuestionSummary & {
@@ -69,14 +70,14 @@ function ageMs(createdAt?: string) {
   return ms;
 }
 
-function toneClass(label: string) {
+function toneVariant(label: string): "success" | "info" | "warning" {
   if (label === "high") {
-    return "border-amber-300/30 bg-amber-100/10 text-amber-100";
+    return "warning";
   }
   if (label === "medium") {
-    return "border-sky-300/25 bg-sky-100/10 text-sky-100";
+    return "info";
   }
-  return "border-emerald-300/25 bg-emerald-100/10 text-emerald-100";
+  return "success";
 }
 
 export function WaitingInboxScreen({
@@ -144,12 +145,12 @@ export function WaitingInboxScreen({
     <SectionFrame className="px-5 py-5">
       <SectionTitle>Waiting Inbox</SectionTitle>
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(300px,1fr)_minmax(0,1.25fr)]">
-        <section className="rounded-2xl border border-white/8 bg-black/10 p-4">
+        <Card className="p-4">
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <Select
               value={sortBy}
               onChange={(event) => setSortBy(event.target.value as QueueSortKey)}
-              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-200"
+              className="text-xs"
             >
               <option value="urgency">Sort: urgency</option>
               <option value="impact">Sort: impact</option>
@@ -157,29 +158,29 @@ export function WaitingInboxScreen({
               <option value="project">Sort: project</option>
               <option value="session">Sort: session</option>
               <option value="task">Sort: task</option>
-            </select>
-            <select
+            </Select>
+            <Select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-200"
+              className="text-xs"
             >
               <option value="open">Open</option>
               <option value="answered">Answered</option>
               <option value="all">All</option>
-            </select>
-            <select
+            </Select>
+            <Select
               value={urgencyFilter}
               onChange={(event) =>
                 setUrgencyFilter(event.target.value as "all" | "low" | "medium" | "high" | "urgent")
               }
-              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-200"
+              className="text-xs"
             >
               <option value="all">Urgency: all</option>
               <option value="low">Urgency: low</option>
               <option value="medium">Urgency: medium</option>
               <option value="high">Urgency: high</option>
               <option value="urgent">Urgency: urgent</option>
-            </select>
+            </Select>
           </div>
 
           <div className="mt-3 flex max-h-[65vh] flex-col gap-2 overflow-auto pr-1 scrollbar-thin">
@@ -191,7 +192,7 @@ export function WaitingInboxScreen({
                   key={question.id}
                   onClick={() => onSelectQuestion(question.id)}
                   className={cn(
-                    "rounded-2xl border px-3 py-3 text-left transition",
+                    "rounded-2xl border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-focus-ring)]",
                     isSelected
                       ? "border-[color:var(--color-accent-primary)] bg-[color:var(--color-accent-soft)]"
                       : "border-white/7 bg-white/3 hover:border-white/20",
@@ -199,25 +200,12 @@ export function WaitingInboxScreen({
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="line-clamp-2 text-sm font-medium text-slate-100">{question.prompt}</div>
-                    <span
-                      className={cn(
-                        "inline-flex items-center rounded-full border px-2 py-1 text-[11px] uppercase tracking-[0.14em]",
-                        toneClass(question.urgency ?? "low"),
-                      )}
-                    >
-                      {question.urgency ?? "low"}
-                    </span>
+                    <Badge variant={toneVariant(question.urgency ?? "low")}>{question.urgency ?? "low"}</Badge>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-                    <Pill className={cn("min-h-0 px-2 py-0.5 text-[10px]", toneClass(impact.label))}>
-                      impact {impact.label}
-                    </Pill>
-                    <Pill className="min-h-0 border-white/10 px-2 py-0.5 text-[10px] text-slate-300">
-                      age {formatAge(question.created_at)}
-                    </Pill>
-                    <Pill className="min-h-0 border-white/10 px-2 py-0.5 text-[10px] text-slate-300">
-                      {question.status}
-                    </Pill>
+                    <Badge variant={toneVariant(impact.label)} className="text-[10px]">impact {impact.label}</Badge>
+                    <Badge className="text-[10px]">age {formatAge(question.created_at)}</Badge>
+                    <Badge className="text-[10px]">{question.status}</Badge>
                   </div>
                   <div className="mt-2 text-xs text-slate-400">
                     {question.blocked_reason ?? "Awaiting operator guidance."}
@@ -228,9 +216,9 @@ export function WaitingInboxScreen({
 
             {!queue.length ? <div className="text-sm text-slate-500">No questions match this triage filter.</div> : null}
           </div>
-        </section>
+        </Card>
 
-        <section className="rounded-2xl border border-white/8 bg-black/12 p-4">
+        <Card className="p-4">
           <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
             <MessageSquareText className="h-4 w-4 text-slate-400" />
             Question triage + response
@@ -244,58 +232,40 @@ export function WaitingInboxScreen({
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
-                <Pill
-                  className={cn(
-                    "border-white/10",
-                    questionDetail.status === "answered"
-                      ? "bg-emerald-100/10 text-emerald-100"
-                      : "bg-sky-100/10 text-sky-100",
-                  )}
-                >
+                <Badge variant={questionDetail.status === "answered" ? "success" : "info"}>
                   {questionDetail.status === "answered" ? (
                     <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
                   ) : (
                     <CircleDot className="mr-1 h-3.5 w-3.5" />
                   )}
                   {questionDetail.status}
-                </Pill>
-                <Pill className={cn("border-white/10", toneClass(questionDetail.urgency ?? "low"))}>
+                </Badge>
+                <Badge variant={toneVariant(questionDetail.urgency ?? "low")}>
                   urgency {questionDetail.urgency ?? "low"}
-                </Pill>
-                <Pill className="border-white/10 text-slate-300">
-                  age {formatAge(questionDetail.created_at)}
-                </Pill>
+                </Badge>
+                <Badge>age {formatAge(questionDetail.created_at)}</Badge>
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                <button
-                  onClick={onOpenProject}
-                  className="rounded-full border border-white/12 px-3 py-1.5 text-slate-200 hover:border-white/25"
-                >
+                <Button onClick={onOpenProject} className="px-3 py-1.5 text-xs">
                   Project: {projectLabel}
-                </button>
-                <button
-                  onClick={() => onOpenTask(questionDetail.task_id)}
-                  className="rounded-full border border-white/12 px-3 py-1.5 text-slate-200 hover:border-white/25"
-                >
+                </Button>
+                <Button onClick={() => onOpenTask(questionDetail.task_id)} className="px-3 py-1.5 text-xs">
                   Task: {taskNameById.get(questionDetail.task_id) ?? questionDetail.task_id.slice(0, 8)}
-                </button>
+                </Button>
                 {questionDetail.session_id ? (
-                  <button
-                    onClick={() => onOpenSession(questionDetail.session_id!)}
-                    className="rounded-full border border-white/12 px-3 py-1.5 text-slate-200 hover:border-white/25"
-                  >
+                  <Button onClick={() => onOpenSession(questionDetail.session_id!)} className="px-3 py-1.5 text-xs">
                     Session: {sessionNameById.get(questionDetail.session_id) ?? questionDetail.session_id.slice(0, 8)}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
 
               <div className="mt-4 space-y-2">
                 {questionDetail.replies.map((reply) => (
-                  <div key={reply.id} className="rounded-xl border border-white/8 bg-white/4 px-3 py-2">
+                  <Panel key={reply.id} className="px-3 py-2">
                     <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{reply.responder_name}</div>
                     <div className="mt-1 text-sm text-slate-200">{reply.body}</div>
-                  </div>
+                  </Panel>
                 ))}
                 {!questionDetail.replies.length ? <div className="text-sm text-slate-500">No replies yet.</div> : null}
               </div>
@@ -308,30 +278,31 @@ export function WaitingInboxScreen({
                       "Pause here and summarize tradeoffs before proceeding.",
                       "Escalate this blocker with a minimal reproduction and options.",
                     ].map((preset) => (
-                      <button
+                      <Button
                         key={preset}
                         onClick={() => onDraftReplyBodyChange(preset)}
-                        className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:border-white/20"
+                        className="px-3 py-1.5 text-xs"
                       >
                         {preset}
-                      </button>
+                      </Button>
                     ))}
                   </div>
 
-                  <textarea
+                  <Textarea
                     value={draftReplyBody}
                     onChange={(event) => onDraftReplyBodyChange(event.target.value)}
                     placeholder="Reply to unblock the agent"
-                    className="mt-3 min-h-24 w-full rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm outline-none"
+                    className="mt-3"
                   />
-                  <button
+                  <Button
                     onClick={() => onSendReply(questionDetail.id, draftReplyBody)}
+                    variant="primary"
                     disabled={!draftReplyBody.trim() || isSendingReply}
-                    className="mt-3 inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-3"
                   >
                     Send + mark answered
                     <ArrowRight className="ml-1.5 h-4 w-4" />
-                  </button>
+                  </Button>
                 </>
               ) : (
                 <div className="mt-4 rounded-xl border border-emerald-300/20 bg-emerald-100/10 px-3 py-2 text-sm text-emerald-100">
@@ -344,14 +315,11 @@ export function WaitingInboxScreen({
           )}
 
           {!questionDetail && selectedQuestion ? (
-            <button
-              onClick={() => onSelectQuestion(selectedQuestion.id)}
-              className="mt-3 rounded-full border border-white/12 px-3 py-1.5 text-xs text-slate-300"
-            >
+            <Button onClick={() => onSelectQuestion(selectedQuestion.id)} className="mt-3 px-3 py-1.5 text-xs">
               Reopen selected queue item
-            </button>
+            </Button>
           ) : null}
-        </section>
+        </Card>
       </div>
     </SectionFrame>
   );

@@ -18,6 +18,7 @@
   --color-separator: rgba(30, 41, 51, 0.08);
   --color-accent-primary: #0f766e;
   --color-accent-soft: rgba(15, 118, 110, 0.14);
+  --color-focus-ring: rgba(15, 118, 110, 0.32);
 
   /* status */
   --color-status-success: #1f9d67;
@@ -32,6 +33,8 @@
   --radius-md: 14px;
   --radius-lg: 18px;
   --radius-xl: 24px;
+
+  --border-width-default: 1px;
 
   /* shadow */
   --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.08);
@@ -98,6 +101,7 @@
     --color-separator: rgba(184, 202, 222, 0.14);
     --color-accent-primary: #4fd1c5;
     --color-accent-soft: rgba(79, 209, 197, 0.2);
+    --color-focus-ring: rgba(79, 209, 197, 0.42);
 
     --shadow-sm: 0 1px 2px rgba(2, 6, 23, 0.34);
     --shadow-md: 0 8px 24px rgba(2, 6, 23, 0.38);

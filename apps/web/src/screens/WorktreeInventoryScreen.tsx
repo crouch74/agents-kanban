@@ -1,9 +1,10 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { GitFork, Lock, Search, Trash2 } from "lucide-react";
+import { GitFork, Lock, Trash2 } from "lucide-react";
 import type { SessionSummary, TaskSummary, WorktreeSummary, RepositorySummary } from "@acp/sdk";
 import type { EventRecord } from "@/lib/api";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
-import { Pill, SectionFrame, SectionTitle } from "@/components/ui";
+import { SectionFrame, SectionTitle } from "@/components/ui";
+import { Badge, Button, SearchInput, Select } from "@/components/primitives";
 
 type WorktreeInventoryScreenProps = {
   active: boolean;
@@ -101,7 +102,7 @@ export function WorktreeInventoryScreen({
     {
       key: "lifecycle",
       header: "Lifecycle",
-      render: (row) => <Pill className="border-white/8 text-slate-300">{row.lifecycle}</Pill>,
+      render: (row) => <Badge variant="neutral">{row.lifecycle}</Badge>,
     },
     { key: "path", header: "Path", className: "w-[24%]", render: (row) => <span className="break-all text-xs text-slate-400">{row.path}</span> },
     { key: "recent", header: "Recent activity", className: "w-[24%]", render: (row) => <span className="text-xs text-slate-400">{row.recentActivity}</span> },
@@ -112,12 +113,12 @@ export function WorktreeInventoryScreen({
         <div className="flex flex-wrap gap-2">
           {row.raw.status === "active" ? (
             <>
-              <button onClick={() => onLock(row.id)} className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 text-xs text-slate-200"><Lock className="h-3.5 w-3.5" />Lock</button>
-              <button onClick={() => onArchive(row.id)} className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 text-xs text-slate-200"><GitFork className="h-3.5 w-3.5" />Archive</button>
+              <Button onClick={() => onLock(row.id)} className="px-2.5 py-1 text-xs"><Lock className="h-3.5 w-3.5" />Lock</Button>
+              <Button onClick={() => onArchive(row.id)} className="px-2.5 py-1 text-xs"><GitFork className="h-3.5 w-3.5" />Archive</Button>
             </>
           ) : null}
           {row.raw.status === "locked" || row.raw.status === "archived" ? (
-            <button onClick={() => onPrune(row.id)} className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 px-2.5 py-1 text-xs text-rose-100"><Trash2 className="h-3.5 w-3.5" />Prune</button>
+            <Button variant="danger" onClick={() => onPrune(row.id)} className="px-2.5 py-1 text-xs"><Trash2 className="h-3.5 w-3.5" />Prune</Button>
           ) : null}
         </div>
       ),
@@ -132,19 +133,18 @@ export function WorktreeInventoryScreen({
     <SectionFrame className="px-5 py-5">
       <SectionTitle>Worktree inventory</SectionTitle>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[280px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter by branch, owner, path, or activity"
-            className="w-full rounded-2xl border border-white/8 bg-black/15 py-2 pl-9 pr-3 text-sm outline-none"
-          />
-        </div>
-        <select
+        <SearchInput
+          className="min-w-[280px] flex-1"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Filter by branch, owner, path, or activity"
+          aria-label="Filter worktrees"
+        />
+        <Select
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value)}
-          className="rounded-2xl border border-white/8 bg-black/15 px-3 py-2 text-sm outline-none"
+          className="max-w-56"
+          aria-label="Filter lifecycle"
         >
           <option value="all">All lifecycle states</option>
           {[...new Set(worktrees.map((worktree) => worktree.status))].map((status) => (
@@ -152,7 +152,7 @@ export function WorktreeInventoryScreen({
               {status}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="mt-4">
         <DataTable
