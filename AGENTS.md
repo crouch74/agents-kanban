@@ -138,9 +138,13 @@ For meaningful changes, prefer covering the affected behavior in:
 
 Minimum expectation:
 
-- run `.venv/bin/pytest tests/integration -q`
-- run `npm --workspace @acp/web run test`
-- run `npm --workspace @acp/web run build`
+- run `bash scripts/bootstrap.sh`
+- run `bash scripts/verify.sh`
+
+Optional focused commands:
+
+- run `bash scripts/test_integration.sh`
+- run `bash scripts/test_ui.sh`
 
 ## Safe Extension Areas
 
@@ -172,3 +176,10 @@ Prefer the simpler local-first option.
 Prefer boring, explicit data over clever automation.
 Prefer adding structure over asking humans or agents to infer state.
 Prefer shared service logic over duplicating behavior in handlers or UI code.
+
+## Verification in Codex Cloud and CI
+
+- Bootstrap from repo scripts only; do not assume pre-existing `.venv` or global tools.
+- Python tests must run via interpreter invocation (`.venv/bin/python -m pytest ...`).
+- Browser verification is repo-owned through Playwright (`npm run test:e2e` / `scripts/test_ui.sh`).
+- CI artifacts come from `coverage.xml`, `playwright-report/`, and `test-results/`.
