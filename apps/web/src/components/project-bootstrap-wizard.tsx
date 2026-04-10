@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import type { ProjectBootstrapResult, StackPreset } from "@acp/sdk";
 import { ArrowRight, CheckCircle2, GitBranch, TerminalSquare } from "lucide-react";
 import { Pill, SectionTitle } from "@/components/ui";
+import { Badge, Button, Card, Input, Select, Textarea } from "@/components/primitives";
 
 const STACK_OPTIONS: Array<{ value: StackPreset; label: string }> = [
   { value: "node-library", label: "Node library" },
@@ -57,7 +58,7 @@ export function ProjectBootstrapWizard({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-8 rounded-3xl border border-white/7 bg-white/2 p-4">
+    <form onSubmit={handleSubmit}><Card className="mt-8 rounded-3xl bg-white/2 p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <SectionTitle>New Project Bootstrap</SectionTitle>
@@ -68,46 +69,46 @@ export function ProjectBootstrapWizard({
         <Pill className="border-white/8 text-slate-300">{useWorktree ? "worktree" : "repo branch"}</Pill>
       </div>
 
-      <input
+      <Input
         value={name}
         onChange={(event) => setName(event.target.value)}
         placeholder="Acme migration program"
-        className="mt-4 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+        className="mt-4"
       />
-      <input
+      <Input
         value={description}
         onChange={(event) => setDescription(event.target.value)}
         placeholder="Optional project description"
-        className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+        className="mt-3"
       />
-      <input
+      <Input
         value={repoPath}
         onChange={(event) => setRepoPath(event.target.value)}
         placeholder="/absolute/path/to/repo"
-        className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+        className="mt-3"
       />
-      <select
+      <Select
         value={stackPreset}
         onChange={(event) => setStackPreset(event.target.value as StackPreset)}
-        className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+        className="mt-3"
       >
         {STACK_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
         ))}
-      </select>
-      <textarea
+      </Select>
+      <Textarea
         value={stackNotes}
         onChange={(event) => setStackNotes(event.target.value)}
         placeholder="Optional stack notes or constraints"
-        className="mt-3 min-h-20 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+        className="mt-3 min-h-20"
       />
-      <textarea
+      <Textarea
         value={initialPrompt}
         onChange={(event) => setInitialPrompt(event.target.value)}
         placeholder="Describe the work to kick off. ACP will ask the agent to clarify requirements and create tasks/subtasks."
-        className="mt-3 min-h-32 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+        className="mt-3 min-h-32"
       />
 
       <label className="mt-3 flex items-center gap-3 rounded-2xl border border-white/8 bg-black/10 px-3 py-3 text-sm text-slate-300">
@@ -135,14 +136,15 @@ export function ProjectBootstrapWizard({
         </div>
       ) : null}
 
-      <button
+      <Button
         type="submit"
+        variant="primary"
         disabled={!name.trim() || !repoPath.trim() || !initialPrompt.trim() || isPending}
-        className="mt-4 inline-flex items-center gap-2 rounded-full bg-[color:var(--color-accent-primary)] px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+        className="mt-4"
       >
         Launch bootstrap
         <ArrowRight className="h-4 w-4" />
-      </button>
+      </Button>
 
       {result ? (
         <div className="mt-5 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-4 py-4">
@@ -151,12 +153,10 @@ export function ProjectBootstrapWizard({
             {result.project.name} is ready
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Pill className="border-emerald-300/20 text-emerald-100">{result.stack_preset}</Pill>
-            <Pill className="border-emerald-300/20 text-emerald-100">
-              {result.use_worktree ? "worktree kickoff" : "repo kickoff"}
-            </Pill>
-            {result.repo_initialized ? <Pill className="border-emerald-300/20 text-emerald-100">git initialized</Pill> : null}
-            {result.scaffold_applied ? <Pill className="border-emerald-300/20 text-emerald-100">scaffolded</Pill> : null}
+            <Badge variant="success">{result.stack_preset}</Badge>
+            <Badge variant="success">{result.use_worktree ? "worktree kickoff" : "repo kickoff"}</Badge>
+            {result.repo_initialized ? <Badge variant="success">git initialized</Badge> : null}
+            {result.scaffold_applied ? <Badge variant="success">scaffolded</Badge> : null}
           </div>
           <div className="mt-3 space-y-2 text-sm text-emerald-50">
             <div className="flex items-center gap-2">
@@ -173,6 +173,6 @@ export function ProjectBootstrapWizard({
           </div>
         </div>
       ) : null}
-    </form>
+    </Card></form>
   );
 }

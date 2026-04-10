@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { EventRecord } from "@/lib/api";
 import { SectionFrame, SectionTitle } from "@/components/ui";
+import { EmptyState, FilterBar, LoadingState, Select } from "@/components/primitives";
 import { TimelineRow } from "@/components/TimelineRow";
 
 type Option = { value: string; label: string };
@@ -72,41 +73,37 @@ export function ActivityScreen({
   return (
     <SectionFrame className="px-5 py-5">
       <SectionTitle>Activity timeline</SectionTitle>
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} className="rounded-2xl border border-white/8 bg-black/15 px-3 py-2 text-sm outline-none">
+      <FilterBar className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <Select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
           <option value="all">All projects</option>
           {projectOptions.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
-        </select>
-        <select value={taskFilter} onChange={(event) => setTaskFilter(event.target.value)} className="rounded-2xl border border-white/8 bg-black/15 px-3 py-2 text-sm outline-none">
+        </Select>
+        <Select value={taskFilter} onChange={(event) => setTaskFilter(event.target.value)}>
           <option value="all">All tasks</option>
           {taskOptions.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
-        </select>
-        <select value={sessionFilter} onChange={(event) => setSessionFilter(event.target.value)} className="rounded-2xl border border-white/8 bg-black/15 px-3 py-2 text-sm outline-none">
+        </Select>
+        <Select value={sessionFilter} onChange={(event) => setSessionFilter(event.target.value)}>
           <option value="all">All sessions</option>
           {sessionOptions.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
-        </select>
-        <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="rounded-2xl border border-white/8 bg-black/15 px-3 py-2 text-sm outline-none">
+        </Select>
+        <Select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
           {typeOptions.map((option) => (
             <option key={option} value={option}>{option === "all" ? "All event types" : option}</option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </FilterBar>
 
       <div className="mt-4 flex flex-col gap-3">
-        {loading ? <div className="rounded-2xl border border-white/7 bg-white/3 px-4 py-4 text-sm text-slate-500">Loading timeline events…</div> : null}
+        {loading ? <LoadingState label="Loading timeline events…" /> : null}
         {error ? <div className="rounded-2xl border border-rose-300/30 bg-rose-300/10 px-4 py-4 text-sm text-rose-100">{error}</div> : null}
         {!loading && !error && filtered.map((event) => <TimelineRow key={event.id} event={event} />)}
-        {!loading && !error && !filtered.length ? (
-          <div className="rounded-2xl border border-white/7 bg-white/3 px-4 py-4 text-sm text-slate-500">
-            No timeline activity matches the current filters.
-          </div>
-        ) : null}
+        {!loading && !error && !filtered.length ? (<EmptyState title="No timeline activity matches the current filters." />) : null}
       </div>
     </SectionFrame>
   );
