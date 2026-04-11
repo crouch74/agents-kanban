@@ -1,0 +1,4 @@
+# npm audit allowlist
+# Format: <ADVISORY_ID_OR_GHSA>  # expires: YYYY-MM-DD, reason: <why this is temporarily accepted>
+# Example:
+# GHSA-xxxx-yyyy-zzzz  # expires: 2026-06-30, reason: blocked by upstream package

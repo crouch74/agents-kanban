@@ -1,0 +1,226 @@
+name: Security
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  dependency-audit:
+    name: Dependency Audit (Python + Node)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/api/requirements-dev.txt
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies for audits
+        run: |
+          npm ci
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit
+
+      - name: Run pip-audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/security
+
+          mapfile -t PIP_AUDIT_IGNORES < <(
+            awk 'NF && $1 !~ /^#/' .github/security/pip-audit-ignore.txt | awk '{print $1}'
+          )
+
+          ignore_args=()
+          for vuln_id in "${PIP_AUDIT_IGNORES[@]:-}"; do
+            ignore_args+=(--ignore-vuln "$vuln_id")
+          done
+
+          pip-audit \
+            -r apps/api/requirements-dev.txt \
+            --format json \
+            "${ignore_args[@]}" \
+            > .artifacts/security/pip-audit.json || true
+
+          python <<'PY'
+          import json
+          import urllib.request
+          from pathlib import Path
+
+          ignore_ids = []
+          for raw_line in Path(".github/security/pip-audit-ignore.txt").read_text().splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+              continue
+            ignore_ids.append(line.split()[0])
+
+          report = json.loads(Path(".artifacts/security/pip-audit.json").read_text())
+          dependencies = report.get("dependencies", [])
+
+          query_ids = set()
+          findings = []
+          for dep in dependencies:
+            for vuln in dep.get("vulns", []):
+              candidate_ids = [vuln.get("id"), *(vuln.get("aliases") or [])]
+              if any(v_id in ignore_ids for v_id in candidate_ids if v_id):
+                continue
+
+              valid_ids = [v_id for v_id in candidate_ids if v_id]
+              for vuln_id in valid_ids:
+                query_ids.add(vuln_id)
+
+              findings.append(
+                {
+                  "package": dep.get("name"),
+                  "version": dep.get("version"),
+                  "id": vuln.get("id"),
+                  "aliases": vuln.get("aliases") or [],
+                  "fix_versions": vuln.get("fix_versions") or [],
+                  "description": vuln.get("description", ""),
+                }
+              )
+
+          severity_by_id = {}
+          if query_ids:
+            payload = {
+              "queries": [{"id": vuln_id} for vuln_id in sorted(query_ids)],
+            }
+            request = urllib.request.Request(
+              "https://api.osv.dev/v1/querybatch",
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=30) as response:
+              osv_data = json.loads(response.read().decode("utf-8"))
+
+            for query, result in zip(payload["queries"], osv_data.get("results", [])):
+              vuln_id = query["id"]
+              sev = None
+              for vuln in result.get("vulns", []):
+                db_sev = (vuln.get("database_specific") or {}).get("severity")
+                if db_sev:
+                  sev = str(db_sev).lower()
+                  break
+              if sev:
+                severity_by_id[vuln_id] = sev
+
+          blocked = []
+          for finding in findings:
+            severity_candidates = [
+              severity_by_id.get(finding["id"]),
+              *[severity_by_id.get(alias) for alias in finding["aliases"]],
+            ]
+            severities = {sev for sev in severity_candidates if sev}
+            if "critical" in severities or "high" in severities:
+              blocked.append(
+                {
+                  "package": finding["package"],
+                  "version": finding["version"],
+                  "id": finding["id"],
+                  "aliases": finding["aliases"],
+                  "severities": sorted(severities),
+                  "fix_versions": finding["fix_versions"],
+                }
+              )
+
+          Path(".artifacts/security/pip-audit-high-critical.json").write_text(
+            json.dumps({"blocked": blocked}, indent=2)
+          )
+
+          if blocked:
+            print(
+              f"Found {len(blocked)} non-allowlisted high/critical Python vulnerabilities."
+            )
+            raise SystemExit(1)
+
+          print("No non-allowlisted high/critical Python vulnerabilities found.")
+          PY
+
+      - name: Run npm audit (high/critical gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/security
+
+          npm audit --workspaces --json > .artifacts/security/npm-audit.json || true
+
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const allowlistPath = '.github/security/npm-audit-allowlist.txt';
+          const reportPath = '.artifacts/security/npm-audit.json';
+
+          const allowlist = new Set(
+            fs
+              .readFileSync(allowlistPath, 'utf8')
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter((line) => line && !line.startsWith('#'))
+              .map((line) => line.split(/\s+/)[0])
+          );
+
+          const data = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+          const blocked = [];
+
+          const vulnerabilities = data.vulnerabilities || {};
+          for (const [pkgName, vuln] of Object.entries(vulnerabilities)) {
+            const severity = String(vuln.severity || '').toLowerCase();
+            if (!['high', 'critical'].includes(severity)) continue;
+
+            const viaEntries = Array.isArray(vuln.via) ? vuln.via : [vuln.via];
+            const advisoryIds = new Set();
+
+            for (const via of viaEntries) {
+              if (!via || typeof via === 'string') continue;
+              if (via.source) advisoryIds.add(String(via.source));
+              if (via.url) {
+                const last = String(via.url).split('/').pop();
+                if (last) advisoryIds.add(last);
+              }
+            }
+
+            const isAllowed = [...advisoryIds].some((id) => allowlist.has(id));
+            if (!isAllowed) {
+              blocked.push({
+                package: pkgName,
+                severity,
+                advisory_ids: [...advisoryIds],
+                title: vuln.title || '',
+              });
+            }
+          }
+
+          fs.writeFileSync(
+            '.artifacts/security/npm-audit-high-critical.json',
+            JSON.stringify({ blocked }, null, 2)
+          );
+
+          if (blocked.length > 0) {
+            console.error(`Found ${blocked.length} non-allowlisted high/critical npm vulnerabilities.`);
+            process.exit(1);
+          }
+
+          console.log('No non-allowlisted high/critical npm vulnerabilities found.');
+          NODE
+
+      - name: Upload security artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-reports
+          path: .artifacts/security/
+          if-no-files-found: error
