@@ -5,6 +5,20 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
+def test_task_write_routes_reject_malformed_payloads_and_missing_foreign_keys() -> None:
+    with TestClient(app) as client:
+        malformed_create = client.post("/api/v1/tasks", json={"project_id": "proj", "title": "x"})
+        assert malformed_create.status_code == 422
+        assert malformed_create.json()["detail"][0]["loc"] == ["body", "title"]
+
+        missing_fk_create = client.post(
+            "/api/v1/tasks",
+            json={"project_id": "proj-missing", "title": "Valid title"},
+        )
+        assert missing_fk_create.status_code == 400
+        assert missing_fk_create.json() == {"detail": "Project board not found"}
+
+
 def test_create_and_move_task_through_valid_workflow() -> None:
     with TestClient(app) as client:
         project_response = client.post("/api/v1/projects", json={"name": "Task Flow"})
@@ -62,6 +76,13 @@ def test_create_and_move_task_through_valid_workflow() -> None:
         )
         assert done_response.status_code == 200
         assert done_response.json()["workflow_state"] == "done"
+
+        malformed_patch = client.patch(
+            f"/api/v1/tasks/{task['id']}",
+            json={"title": "x"},
+        )
+        assert malformed_patch.status_code == 422
+        assert malformed_patch.json()["detail"][0]["loc"] == ["body", "title"]
 
 
 def test_create_subtask_under_parent_task() -> None:

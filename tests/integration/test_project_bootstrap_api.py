@@ -47,6 +47,11 @@ class FakeRuntime:
         ]
 
 
+class FailingRuntime(FakeRuntime):
+    def spawn_session(self, *, session_name: str, working_directory: Path, profile: str, command: str | None = None):
+        raise RuntimeError("runtime unavailable")
+
+
 def create_git_repo(path: Path, *, with_agents: bool = False) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     repo = Repo.init(path)
@@ -217,6 +222,46 @@ def test_bootstrap_rejects_non_empty_non_repo_folder(tmp_path: Path) -> None:
             )
             assert response.status_code == 400
             assert "empty directory" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bootstrap_rejects_malformed_payload_with_validation_details(tmp_path: Path) -> None:
+    repo_path = create_git_repo(tmp_path / "schema-repo")
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/projects/bootstrap",
+            json={
+                "name": "Bad",
+                "repo_path": str(repo_path),
+                "stack_preset": "node-library",
+                "initial_prompt": "go",
+            },
+        )
+        assert response.status_code == 422
+        payload = response.json()
+        assert isinstance(payload["detail"], list)
+        assert payload["detail"][0]["loc"] == ["body", "initial_prompt"]
+        assert payload["detail"][0]["type"] == "string_too_short"
+
+
+def test_bootstrap_surfaces_runtime_adapter_failure(tmp_path: Path) -> None:
+    app.dependency_overrides[get_runtime_adapter] = lambda: FailingRuntime()
+    repo_path = create_git_repo(tmp_path / "runtime-failure-repo")
+
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.post(
+                "/api/v1/projects/bootstrap",
+                json={
+                    "name": "Bootstrap Runtime Failure",
+                    "repo_path": str(repo_path),
+                    "stack_preset": "node-library",
+                    "initial_prompt": "Create the first tasks.",
+                },
+            )
+            assert response.status_code == 500
+            assert response.json()["detail"] == "Internal Server Error"
     finally:
         app.dependency_overrides.clear()
 

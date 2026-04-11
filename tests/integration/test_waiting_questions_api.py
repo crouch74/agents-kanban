@@ -34,6 +34,11 @@ class FakeRuntime:
         return f"session={session_name}"
 
 
+class FailingRuntime(FakeRuntime):
+    def session_exists(self, session_name: str) -> bool:
+        raise RuntimeError("runtime session lookup failed")
+
+
 def create_git_repo(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     repo = Repo.init(path)
@@ -43,6 +48,30 @@ def create_git_repo(path: Path) -> Path:
     repo.index.add(["README.md"])
     repo.index.commit("init")
     return path
+
+
+def test_waiting_question_write_routes_reject_malformed_payloads_and_missing_foreign_keys() -> None:
+    with TestClient(app) as client:
+        malformed_open = client.post(
+            "/api/v1/questions",
+            json={"task_id": "task-1", "prompt": "x"},
+        )
+        assert malformed_open.status_code == 422
+        assert malformed_open.json()["detail"][0]["loc"] == ["body", "prompt"]
+
+        missing_fk_open = client.post(
+            "/api/v1/questions",
+            json={"task_id": "task-missing", "prompt": "Which option should we pick?"},
+        )
+        assert missing_fk_open.status_code == 400
+        assert missing_fk_open.json() == {"detail": "Task not found"}
+
+        malformed_reply = client.post(
+            "/api/v1/questions/question-missing/replies",
+            json={"responder_name": "x", "body": ""},
+        )
+        assert malformed_reply.status_code == 422
+        assert malformed_reply.json()["detail"][0]["loc"] == ["body", "responder_name"]
 
 
 def test_waiting_question_blocks_and_resumes_session(tmp_path: Path) -> None:
@@ -107,6 +136,51 @@ def test_waiting_question_blocks_and_resumes_session(tmp_path: Path) -> None:
             task_after_response = client.get(f"/api/v1/tasks/{task_id}")
             assert task_after_response.status_code == 200
             assert task_after_response.json()["waiting_for_human"] is False
+
+            duplicate_reply_response = client.post(
+                f"/api/v1/questions/{question['id']}/replies",
+                json={"responder_name": "operator", "body": "Second answer should fail."},
+            )
+            assert duplicate_reply_response.status_code == 400
+            assert duplicate_reply_response.json() == {"detail": "Question is not open"}
     finally:
         app.dependency_overrides.clear()
 
+
+def test_waiting_question_reply_surfaces_runtime_adapter_failure(tmp_path: Path) -> None:
+    app.dependency_overrides[get_runtime_adapter] = lambda: FailingRuntime()
+    repo_path = create_git_repo(tmp_path / "waiting-runtime-failure-repo")
+
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            project_id = client.post("/api/v1/projects", json={"name": "Waiting Runtime Failure"}).json()["id"]
+            repository_id = client.post(
+                "/api/v1/repositories",
+                json={"project_id": project_id, "local_path": str(repo_path)},
+            ).json()["id"]
+            task_id = client.post(
+                "/api/v1/tasks",
+                json={"project_id": project_id, "title": "Need runtime"},
+            ).json()["id"]
+            worktree_id = client.post(
+                "/api/v1/worktrees",
+                json={"repository_id": repository_id, "task_id": task_id},
+            ).json()["id"]
+            session_id = client.post(
+                "/api/v1/sessions",
+                json={"task_id": task_id, "profile": "executor", "worktree_id": worktree_id},
+            ).json()["id"]
+
+            question_id = client.post(
+                "/api/v1/questions",
+                json={"task_id": task_id, "session_id": session_id, "prompt": "Need confirmation?"},
+            ).json()["id"]
+
+            reply_response = client.post(
+                f"/api/v1/questions/{question_id}/replies",
+                json={"responder_name": "operator", "body": "Proceed with plan A."},
+            )
+            assert reply_response.status_code == 500
+            assert reply_response.json()["detail"] == "Internal Server Error"
+    finally:
+        app.dependency_overrides.clear()
