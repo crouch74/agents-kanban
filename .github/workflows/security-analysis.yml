@@ -1,0 +1,139 @@
+name: Security Analysis
+
+on:
+  pull_request:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            sarif_file: .artifacts/security/codeql-javascript-typescript.sarif
+          - language: python
+            sarif_file: .artifacts/security/codeql-python.sarif
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Analyze and generate SARIF
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}
+          output: ${{ matrix.sarif_file }}
+          upload: false
+
+      - name: Upload SARIF to GitHub code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ matrix.sarif_file }}
+          category: /language:${{ matrix.language }}
+
+      - name: Fail on high-confidence blocking findings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          sarif_path = Path('${{ matrix.sarif_file }}')
+          payload = json.loads(sarif_path.read_text())
+
+          blocking = []
+
+          def normalize_precision(rule):
+            value = (rule.get('properties') or {}).get('precision')
+            return str(value).lower() if value is not None else ''
+
+          def normalize_security(rule):
+            value = (rule.get('properties') or {}).get('security-severity')
+            try:
+              return float(value)
+            except (TypeError, ValueError):
+              return None
+
+          for run in payload.get('runs', []):
+            tool = run.get('tool', {})
+            driver = tool.get('driver', {})
+            rules = {
+              rule.get('id'): rule
+              for rule in driver.get('rules', [])
+              if isinstance(rule, dict) and rule.get('id')
+            }
+
+            for result in run.get('results', []):
+              if result.get('kind', 'fail') != 'fail':
+                continue
+
+              rule_id = result.get('ruleId')
+              rule = rules.get(rule_id, {})
+              precision = normalize_precision(rule)
+              security_severity = normalize_security(rule)
+              level = str(result.get('level', '')).lower()
+
+              is_high_confidence = precision in {'high', 'very-high'}
+              is_blocking_level = level == 'error' or (
+                security_severity is not None and security_severity >= 7.0
+              )
+
+              if is_high_confidence and is_blocking_level:
+                message = (
+                  (result.get('message') or {}).get('text')
+                  or (result.get('message') or {}).get('markdown')
+                  or ''
+                ).strip()
+                blocking.append({
+                  'rule_id': rule_id,
+                  'level': level,
+                  'precision': precision,
+                  'security_severity': security_severity,
+                  'message': message,
+                })
+
+          Path('.artifacts/security').mkdir(parents=True, exist_ok=True)
+          output = Path('.artifacts/security/blocking-findings-${{ matrix.language }}.json')
+          output.write_text(json.dumps({'blocking': blocking}, indent=2))
+
+          if blocking:
+            print(f"Found {len(blocking)} high-confidence blocking findings in {sarif_path}.")
+            for finding in blocking[:20]:
+              sev = finding['security_severity']
+              sev_txt = f", security-severity={sev}" if sev is not None else ''
+              print(
+                f" - {finding['rule_id']} (level={finding['level']}, precision={finding['precision']}{sev_txt})"
+              )
+            raise SystemExit(1)
+
+          print('No high-confidence blocking findings detected.')
+          PY
+
+      - name: Upload security analysis artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-analysis-${{ matrix.language }}
+          path: |
+            ${{ matrix.sarif_file }}
+            .artifacts/security/blocking-findings-${{ matrix.language }}.json
+          if-no-files-found: warn
