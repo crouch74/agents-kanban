@@ -224,3 +224,107 @@ jobs:
           name: security-audit-reports
           path: .artifacts/security/
           if-no-files-found: error
+
+
+  secret-scan:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          GITLEAKS_VERSION="8.24.2"
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          sudo mv gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Require explicit approval when allowlist changes
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('node:child_process');
+
+            const allowlistPath = '.github/security/gitleaks.toml';
+            const base = context.payload.pull_request.base.sha;
+            const head = context.payload.pull_request.head.sha;
+
+            const changedFiles = execSync(`git diff --name-only ${base}...${head}`, { encoding: 'utf8' })
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter(Boolean);
+
+            if (!changedFiles.includes(allowlistPath)) {
+              core.info('Allowlist file unchanged; explicit allowlist approval not required.');
+              return;
+            }
+
+            const addedAllowlistLines = execSync(
+              `git diff --unified=0 ${base}...${head} -- ${allowlistPath}`,
+              { encoding: 'utf8' }
+            )
+              .split(/\r?\n/)
+              .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+              .map((line) => line.slice(1).trim())
+              .filter((line) => line && !line.startsWith('#'));
+
+            if (addedAllowlistLines.length === 0) {
+              core.info('Allowlist file changed without new entries; explicit approval not required.');
+              return;
+            }
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              per_page: 100,
+            });
+
+            const hasExplicitApproval = reviews.some((review) =>
+              review.state === 'APPROVED' &&
+              typeof review.body === 'string' &&
+              review.body.includes('ALLOWLIST_APPROVED')
+            );
+
+            if (!hasExplicitApproval) {
+              core.setFailed(
+                'New gitleaks allowlist entries require an APPROVED review containing ALLOWLIST_APPROVED.'
+              );
+              return;
+            }
+
+            core.info('Detected explicit ALLOWLIST_APPROVED approval for new allowlist entries.');
+
+      - name: Scan git history
+        run: |
+          mkdir -p .artifacts/security
+          gitleaks git \
+            --config .github/security/gitleaks.toml \
+            --report-format sarif \
+            --report-path .artifacts/security/gitleaks-history.sarif \
+            --redact \
+            --verbose
+
+      - name: Scan working tree
+        run: |
+          gitleaks dir . \
+            --config .github/security/gitleaks.toml \
+            --report-format sarif \
+            --report-path .artifacts/security/gitleaks-working-tree.sarif \
+            --redact \
+            --verbose
+
+      - name: Upload gitleaks artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-reports
+          path: .artifacts/security/gitleaks-*.sarif
+          if-no-files-found: error
