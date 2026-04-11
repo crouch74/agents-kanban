@@ -2,99 +2,103 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
+from fastapi.testclient import TestClient
 from git import Repo
 
-from acp_core.db import SessionLocal, init_db
 from acp_core.runtime import RuntimeSessionInfo
-from acp_core.schemas import ProjectBootstrapCreate, StackPreset
-from acp_core.services import BootstrapService, ServiceContext
+from app.bootstrap.dependencies import get_runtime_adapter
+from app.main import app
 
 
 class FakeRuntime:
+    def __init__(self) -> None:
+        self.sessions: dict[str, dict[str, str]] = {}
+
     def spawn_session(self, *, session_name: str, working_directory: Path, profile: str, command: str | None = None):
+        self.sessions[session_name] = {
+            "working_directory": str(working_directory),
+            "command": command or profile,
+        }
         return RuntimeSessionInfo(
             session_name=session_name,
-            pane_id="%42",
+            pane_id="%55",
             window_name="main",
             working_directory=str(working_directory),
             command=command or profile,
         )
 
     def session_exists(self, session_name: str) -> bool:
-        return True
+        return session_name in self.sessions
 
     def capture_tail(self, session_name: str, *, lines: int = 120) -> str:
-        return ""
+        return f"session={session_name}\nlines={lines}"
 
     def terminate_session(self, session_name: str) -> None:
-        return None
+        self.sessions.pop(session_name, None)
 
 
-def _payload(*, name: str, repo_path: Path, initialize_repo: bool) -> ProjectBootstrapCreate:
-    return ProjectBootstrapCreate(
-        name=name,
-        repo_path=str(repo_path),
-        initialize_repo=initialize_repo,
-        stack_preset=StackPreset.FASTAPI_SERVICE,
-        initial_prompt="Plan the first ACP tasks and backlog.",
-    )
 
-
-def test_build_session_command_uses_non_interactive_full_auto_exec(tmp_path: Path) -> None:
-    init_db()
-    db = SessionLocal()
-    try:
-        service = BootstrapService(ServiceContext(db=db, actor_type="system", actor_name="test"), runtime=FakeRuntime())
-        command = service._build_session_command(tmp_path)
-
-        assert "codex exec" in command
-        assert "--full-auto" in command
-    finally:
-        db.close()
-
-
-def test_bootstrap_project_creates_missing_directory_when_initialize_repo_enabled(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_bootstrap_project_nonexistent_path_with_initialize_repo_creates_repo_and_uses_non_interactive_command(
+    tmp_path: Path, monkeypatch
 ) -> None:
-    init_db()
-    db = SessionLocal()
-    repo_path = tmp_path / "brand-new" / "project-repo"
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+    repo_path = tmp_path / "new" / "bootstrap-repo"
     monkeypatch.setenv("GIT_AUTHOR_NAME", "ACP Test")
     monkeypatch.setenv("GIT_AUTHOR_EMAIL", "acp@example.test")
 
     try:
-        service = BootstrapService(
-            ServiceContext(db=db, actor_type="system", actor_name="test"),
-            runtime=FakeRuntime(),
-        )
-        result = service.bootstrap_project(
-            _payload(name="Bootstrap New Directory", repo_path=repo_path, initialize_repo=True)
-        )
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/projects/bootstrap",
+                json={
+                    "name": "Bootstrap Missing Path",
+                    "repo_path": str(repo_path),
+                    "initialize_repo": True,
+                    "stack_preset": "fastapi-service",
+                    "initial_prompt": "Create initial ACP planning tasks and kickoff notes.",
+                },
+            )
+            assert response.status_code == 201
+            payload = response.json()
 
-        assert repo_path.exists()
-        assert repo_path.is_dir()
-        assert Repo(repo_path).head.is_valid()
-        assert result.project.name == "Bootstrap New Directory"
-        assert result.repo_initialized is True
+            assert repo_path.exists()
+            assert repo_path.is_dir()
+            assert Repo(repo_path).head.is_valid()
+            assert payload["project"]["name"] == "Bootstrap Missing Path"
+            assert payload["repo_initialized"] is True
+
+            kickoff_command = payload["kickoff_session"]["runtime_metadata"]["command"]
+            assert "codex mcp get" in kickoff_command
+            assert "codex mcp add" in kickoff_command
+            assert "codex exec --full-auto" in kickoff_command
+            assert " - < " in kickoff_command
     finally:
-        db.close()
+        app.dependency_overrides.clear()
 
 
-def test_bootstrap_project_rejects_missing_directory_without_initialize_repo(tmp_path: Path) -> None:
-    init_db()
-    db = SessionLocal()
+
+def test_bootstrap_project_nonexistent_path_without_initialize_repo_returns_validation_error(tmp_path: Path) -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
     repo_path = tmp_path / "missing" / "repo"
 
     try:
-        service = BootstrapService(
-            ServiceContext(db=db, actor_type="system", actor_name="test"),
-            runtime=FakeRuntime(),
-        )
-        with pytest.raises(
-            ValueError,
-            match="Repo path must point to an existing directory or enable Initialize repo with git",
-        ):
-            service.bootstrap_project(_payload(name="Bootstrap Missing Directory", repo_path=repo_path, initialize_repo=False))
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/projects/bootstrap",
+                json={
+                    "name": "Bootstrap Missing Path Error",
+                    "repo_path": str(repo_path),
+                    "initialize_repo": False,
+                    "stack_preset": "fastapi-service",
+                    "initial_prompt": "Attempt bootstrap without initializing repo.",
+                },
+            )
+            assert response.status_code == 400
+            assert (
+                response.json()["detail"]
+                == "Repo path must point to an existing directory or enable Initialize repo with git"
+            )
     finally:
-        db.close()
+        app.dependency_overrides.clear()
