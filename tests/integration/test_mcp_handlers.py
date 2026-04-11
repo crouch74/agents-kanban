@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.main import app
 from acp_mcp_server import handlers
 from acp_core.runtime import RuntimeSessionInfo
 from git import Repo
