@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from threading import Lock
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy import select
 
@@ -50,6 +50,23 @@ from acp_core.services import (
 
 _BOOTSTRAP_LOCK = Lock()
 _BOOTSTRAPPED = False
+
+IDEMPOTENT_EVENT_TYPES: dict[str, str] = {
+    "project_create": "project.created",
+    "project_bootstrap": "project.bootstrapped",
+    "task_create": "task.created",
+    "subtask_create": "task.created",
+    "task_update": "task.updated",
+    "task_claim": "task.claimed",
+    "task_comment_add": "task.comment_added",
+    "task_check_add": "task.check_added",
+    "task_artifact_add": "task.artifact_added",
+    "task_dependency_add": "task.dependency_added",
+    "session_spawn": "session.spawned",
+    "session_follow_up": "session.follow_up_spawned",
+    "question_open": "waiting_question.opened",
+    "worktree_create": "worktree.created",
+}
 
 
 def ensure_runtime_ready() -> None:
@@ -208,9 +225,37 @@ def _replay_if_exists(context: ServiceContext, event_type: str, client_request_i
     return _load_idempotent_result(context, event)
 
 
+def _run_read_operation(
+    read_fn: Callable[[ServiceContext], Any],
+    *,
+    actor_type: str = "agent",
+    actor_name: str = "mcp",
+) -> Any:
+    with service_context(actor_type=actor_type, actor_name=actor_name) as context:
+        return read_fn(context)
+
+
+def _run_idempotent_write(
+    *,
+    event_type: str,
+    client_request_id: str | None,
+    write_fn: Callable[[ServiceContext], Any],
+    serialize_fn: Callable[[ServiceContext, Any], dict[str, Any]],
+    actor_type: str = "agent",
+    actor_name: str = "mcp",
+) -> dict[str, Any]:
+    with service_context(actor_type=actor_type, actor_name=actor_name, correlation_id=client_request_id) as context:
+        replay = _replay_if_exists(context, event_type, client_request_id)
+        if replay is not None:
+            return replay
+        result = write_fn(context)
+        return serialize_fn(context, result)
+
+
 def project_list() -> list[ProjectSummary]:
-    with service_context() as context:
-        return [ProjectSummary.model_validate(item) for item in ProjectService(context).list_projects()]
+    return _run_read_operation(
+        lambda context: [ProjectSummary.model_validate(item) for item in ProjectService(context).list_projects()]
+    )
 
 
 def project_create(
@@ -218,12 +263,12 @@ def project_create(
     description: str | None = None,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context(correlation_id=client_request_id) as context:
-        replay = _replay_if_exists(context, "project.created", client_request_id)
-        if replay is not None:
-            return replay
-        project = ProjectService(context).create_project(ProjectCreate(name=name, description=description))
-        return ProjectSummary.model_validate(project).model_dump()
+    return _run_idempotent_write(
+        event_type=IDEMPOTENT_EVENT_TYPES["project_create"],
+        client_request_id=client_request_id,
+        write_fn=lambda context: ProjectService(context).create_project(ProjectCreate(name=name, description=description)),
+        serialize_fn=lambda _context, project: ProjectSummary.model_validate(project).model_dump(),
+    )
 
 
 def project_bootstrap(
@@ -237,11 +282,10 @@ def project_bootstrap(
     use_worktree: bool = False,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context(correlation_id=client_request_id) as context:
-        replay = _replay_if_exists(context, "project.bootstrapped", client_request_id)
-        if replay is not None:
-            return replay
-        result = BootstrapService(context).bootstrap_project(
+    return _run_idempotent_write(
+        event_type=IDEMPOTENT_EVENT_TYPES["project_bootstrap"],
+        client_request_id=client_request_id,
+        write_fn=lambda context: BootstrapService(context).bootstrap_project(
             ProjectBootstrapCreate(
                 name=name,
                 description=description,
@@ -252,26 +296,21 @@ def project_bootstrap(
                 initial_prompt=initial_prompt,
                 use_worktree=use_worktree,
             )
-        )
-        return result.model_dump()
+        ),
+        serialize_fn=lambda _context, result: result.model_dump(),
+    )
 
 
 def project_get(project_id: str) -> dict[str, Any]:
-    with service_context() as context:
-        overview = ProjectService(context).get_project_overview(project_id)
-        return overview.model_dump()
+    return _run_read_operation(lambda context: ProjectService(context).get_project_overview(project_id).model_dump())
 
 
 def board_get(project_id: str) -> dict[str, Any]:
-    with service_context() as context:
-        board = ProjectService(context).get_board_view(project_id)
-        return board.model_dump()
+    return _run_read_operation(lambda context: ProjectService(context).get_board_view(project_id).model_dump())
 
 
 def task_get(task_id: str) -> dict[str, Any]:
-    with service_context() as context:
-        detail = TaskService(context).get_task_detail(task_id)
-        return detail.model_dump()
+    return _run_read_operation(lambda context: TaskService(context).get_task_detail(task_id).model_dump())
 
 
 def task_create(
@@ -281,14 +320,14 @@ def task_create(
     priority: str = "medium",
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context(correlation_id=client_request_id) as context:
-        replay = _replay_if_exists(context, "task.created", client_request_id)
-        if replay is not None:
-            return replay
-        task = TaskService(context).create_task(
+    return _run_idempotent_write(
+        event_type=IDEMPOTENT_EVENT_TYPES["task_create"],
+        client_request_id=client_request_id,
+        write_fn=lambda context: TaskService(context).create_task(
             TaskCreate(project_id=project_id, title=title, description=description, priority=priority)
-        )
-        return TaskRead.model_validate(task).model_dump()
+        ),
+        serialize_fn=lambda _context, task: TaskRead.model_validate(task).model_dump(),
+    )
 
 
 def subtask_create(
@@ -298,12 +337,9 @@ def subtask_create(
     priority: str = "medium",
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context(correlation_id=client_request_id) as context:
-        replay = _replay_if_exists(context, "task.created", client_request_id)
-        if replay is not None:
-            return replay
+    def _create_subtask(context: ServiceContext) -> Any:
         parent = TaskService(context).get_task(parent_task_id)
-        task = TaskService(context).create_task(
+        return TaskService(context).create_task(
             TaskCreate(
                 project_id=parent.project_id,
                 title=title,
@@ -312,7 +348,13 @@ def subtask_create(
                 parent_task_id=parent_task_id,
             )
         )
-        return TaskRead.model_validate(task).model_dump()
+
+    return _run_idempotent_write(
+        event_type=IDEMPOTENT_EVENT_TYPES["subtask_create"],
+        client_request_id=client_request_id,
+        write_fn=_create_subtask,
+        serialize_fn=lambda _context, task: TaskRead.model_validate(task).model_dump(),
+    )
 
 
 def task_update(
@@ -324,11 +366,10 @@ def task_update(
     waiting_for_human: bool | None = None,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context(correlation_id=client_request_id) as context:
-        replay = _replay_if_exists(context, "task.updated", client_request_id)
-        if replay is not None:
-            return replay
-        task = TaskService(context).patch_task(
+    return _run_idempotent_write(
+        event_type=IDEMPOTENT_EVENT_TYPES["task_update"],
+        client_request_id=client_request_id,
+        write_fn=lambda context: TaskService(context).patch_task(
             task_id,
             TaskPatch(
                 title=title,
@@ -337,8 +378,9 @@ def task_update(
                 blocked_reason=blocked_reason,
                 waiting_for_human=waiting_for_human,
             ),
-        )
-        return TaskRead.model_validate(task).model_dump()
+        ),
+        serialize_fn=lambda _context, task: TaskRead.model_validate(task).model_dump(),
+    )
 
 
 def task_claim(
@@ -347,12 +389,13 @@ def task_claim(
     session_id: str | None = None,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context(actor_name=actor_name, correlation_id=client_request_id) as context:
-        replay = _replay_if_exists(context, "task.claimed", client_request_id)
-        if replay is not None:
-            return replay
-        task = TaskService(context).claim_task(task_id, actor_name=actor_name, session_id=session_id)
-        return TaskRead.model_validate(task).model_dump()
+    return _run_idempotent_write(
+        event_type=IDEMPOTENT_EVENT_TYPES["task_claim"],
+        client_request_id=client_request_id,
+        actor_name=actor_name,
+        write_fn=lambda context: TaskService(context).claim_task(task_id, actor_name=actor_name, session_id=session_id),
+        serialize_fn=lambda _context, task: TaskRead.model_validate(task).model_dump(),
+    )
 
 
 def task_comment_add(
@@ -362,15 +405,16 @@ def task_comment_add(
     author_type: str = "agent",
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context(actor_name=author_name, correlation_id=client_request_id) as context:
-        replay = _replay_if_exists(context, "task.comment_added", client_request_id)
-        if replay is not None:
-            return replay
-        comment = TaskService(context).add_comment(
+    return _run_idempotent_write(
+        event_type=IDEMPOTENT_EVENT_TYPES["task_comment_add"],
+        client_request_id=client_request_id,
+        actor_name=author_name,
+        write_fn=lambda context: TaskService(context).add_comment(
             task_id,
             TaskCommentCreate(author_type=author_type, author_name=author_name, body=body),
-        )
-        return _serialize_task_comment(comment)
+        ),
+        serialize_fn=lambda _context, comment: _serialize_task_comment(comment),
+    )
 
 
 def task_check_add(
@@ -380,15 +424,15 @@ def task_check_add(
     summary: str,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context(correlation_id=client_request_id) as context:
-        replay = _replay_if_exists(context, "task.check_added", client_request_id)
-        if replay is not None:
-            return replay
-        check = TaskService(context).add_check(
+    return _run_idempotent_write(
+        event_type=IDEMPOTENT_EVENT_TYPES["task_check_add"],
+        client_request_id=client_request_id,
+        write_fn=lambda context: TaskService(context).add_check(
             task_id,
             TaskCheckCreate(check_type=check_type, status=status, summary=summary),
-        )
-        return _serialize_task_check(check)
+        ),
+        serialize_fn=lambda _context, check: _serialize_task_check(check),
+    )
 
 
 def task_artifact_add(
@@ -398,27 +442,31 @@ def task_artifact_add(
     uri: str,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context(correlation_id=client_request_id) as context:
-        replay = _replay_if_exists(context, "task.artifact_added", client_request_id)
-        if replay is not None:
-            return replay
-        artifact = TaskService(context).add_artifact(
+    return _run_idempotent_write(
+        event_type=IDEMPOTENT_EVENT_TYPES["task_artifact_add"],
+        client_request_id=client_request_id,
+        write_fn=lambda context: TaskService(context).add_artifact(
             task_id,
             TaskArtifactCreate(artifact_type=artifact_type, name=name, uri=uri),
-        )
-        return _serialize_task_artifact(artifact)
+        ),
+        serialize_fn=lambda _context, artifact: _serialize_task_artifact(artifact),
+    )
 
 
 def task_next(project_id: str | None = None) -> dict[str, Any] | None:
-    with service_context() as context:
-        task = TaskService(context).next_task(project_id=project_id)
-        return TaskRead.model_validate(task).model_dump() if task else None
+    return _run_read_operation(
+        lambda context: (
+            TaskRead.model_validate(task).model_dump()
+            if (task := TaskService(context).next_task(project_id=project_id))
+            else None
+        )
+    )
 
 
 def task_dependencies_get(task_id: str) -> list[dict[str, Any]]:
-    with service_context() as context:
-        dependencies = TaskService(context).get_dependencies(task_id)
-        return [item.model_dump() for item in dependencies]
+    return _run_read_operation(
+        lambda context: [item.model_dump() for item in TaskService(context).get_dependencies(task_id)]
+    )
 
 
 def task_dependency_add(
@@ -427,21 +475,19 @@ def task_dependency_add(
     relationship_type: str = "blocks",
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context(correlation_id=client_request_id) as context:
-        replay = _replay_if_exists(context, "task.dependency_added", client_request_id)
-        if replay is not None:
-            return replay
-        dependency = TaskService(context).add_dependency(
+    return _run_idempotent_write(
+        event_type=IDEMPOTENT_EVENT_TYPES["task_dependency_add"],
+        client_request_id=client_request_id,
+        write_fn=lambda context: TaskService(context).add_dependency(
             task_id,
             TaskDependencyCreate(depends_on_task_id=depends_on_task_id, relationship_type=relationship_type),
-        )
-        return _serialize_task_dependency(dependency)
+        ),
+        serialize_fn=lambda _context, dependency: _serialize_task_dependency(dependency),
+    )
 
 
 def task_completion_readiness(task_id: str) -> dict[str, Any]:
-    with service_context() as context:
-        readiness = TaskService(context).get_completion_readiness(task_id)
-        return readiness.model_dump()
+    return _run_read_operation(lambda context: TaskService(context).get_completion_readiness(task_id).model_dump())
 
 
 def session_spawn(
@@ -452,11 +498,10 @@ def session_spawn(
     command: str | None = None,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context(correlation_id=client_request_id) as context:
-        replay = _replay_if_exists(context, "session.spawned", client_request_id)
-        if replay is not None:
-            return replay
-        session = SessionService(context).spawn_session(
+    return _run_idempotent_write(
+        event_type=IDEMPOTENT_EVENT_TYPES["session_spawn"],
+        client_request_id=client_request_id,
+        write_fn=lambda context: SessionService(context).spawn_session(
             AgentSessionCreate(
                 task_id=task_id,
                 profile=profile,
@@ -464,8 +509,9 @@ def session_spawn(
                 worktree_id=worktree_id,
                 command=command,
             )
-        )
-        return AgentSessionRead.model_validate(session).model_dump()
+        ),
+        serialize_fn=lambda _context, session: AgentSessionRead.model_validate(session).model_dump(),
+    )
 
 
 def session_follow_up(
@@ -477,11 +523,10 @@ def session_follow_up(
     command: str | None = None,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context(correlation_id=client_request_id) as context:
-        replay = _replay_if_exists(context, "session.follow_up_spawned", client_request_id)
-        if replay is not None:
-            return replay
-        session = SessionService(context).spawn_follow_up_session(
+    return _run_idempotent_write(
+        event_type=IDEMPOTENT_EVENT_TYPES["session_follow_up"],
+        client_request_id=client_request_id,
+        write_fn=lambda context: SessionService(context).spawn_follow_up_session(
             session_id,
             AgentSessionFollowUpCreate(
                 profile=profile,
@@ -490,26 +535,28 @@ def session_follow_up(
                 reuse_repository=reuse_repository,
                 command=command,
             ),
-        )
-        return AgentSessionRead.model_validate(session).model_dump()
+        ),
+        serialize_fn=lambda _context, session: AgentSessionRead.model_validate(session).model_dump(),
+    )
 
 
 def session_status(session_id: str) -> dict[str, Any]:
-    with service_context() as context:
-        session = SessionService(context).refresh_session_status(session_id)
-        return AgentSessionRead.model_validate(session).model_dump()
+    return _run_read_operation(
+        lambda context: AgentSessionRead.model_validate(SessionService(context).refresh_session_status(session_id)).model_dump()
+    )
 
 
 def session_tail(session_id: str, lines: int = 80) -> dict[str, Any]:
-    with service_context() as context:
-        tail = SessionService(context).tail_session(session_id, lines=lines)
-        return tail.model_dump()
+    return _run_read_operation(lambda context: SessionService(context).tail_session(session_id, lines=lines).model_dump())
 
 
 def session_list(project_id: str | None = None, task_id: str | None = None) -> list[dict[str, Any]]:
-    with service_context() as context:
-        sessions = SessionService(context).list_sessions(project_id=project_id, task_id=task_id)
-        return [AgentSessionRead.model_validate(item).model_dump() for item in sessions]
+    return _run_read_operation(
+        lambda context: [
+            AgentSessionRead.model_validate(item).model_dump()
+            for item in SessionService(context).list_sessions(project_id=project_id, task_id=task_id)
+        ]
+    )
 
 
 def question_open(
@@ -521,11 +568,10 @@ def question_open(
     options_json: list[dict[str, Any]] | None = None,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context(correlation_id=client_request_id) as context:
-        replay = _replay_if_exists(context, "waiting_question.opened", client_request_id)
-        if replay is not None:
-            return replay
-        question = WaitingService(context).open_question(
+    return _run_idempotent_write(
+        event_type=IDEMPOTENT_EVENT_TYPES["question_open"],
+        client_request_id=client_request_id,
+        write_fn=lambda context: WaitingService(context).open_question(
             WaitingQuestionCreate(
                 task_id=task_id,
                 session_id=session_id,
@@ -534,14 +580,13 @@ def question_open(
                 urgency=urgency,
                 options_json=options_json or [],
             )
-        )
-        return WaitingQuestionRead.model_validate(question).model_dump()
+        ),
+        serialize_fn=lambda _context, question: WaitingQuestionRead.model_validate(question).model_dump(),
+    )
 
 
 def question_answer_get(question_id: str) -> dict[str, Any]:
-    with service_context() as context:
-        question = WaitingService(context).get_question_detail(question_id)
-        return question.model_dump()
+    return _run_read_operation(lambda context: WaitingService(context).get_question_detail(question_id).model_dump())
 
 
 def worktree_create(
@@ -550,44 +595,51 @@ def worktree_create(
     label: str | None = None,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
-    with service_context(correlation_id=client_request_id) as context:
-        replay = _replay_if_exists(context, "worktree.created", client_request_id)
-        if replay is not None:
-            return replay
-        worktree = WorktreeService(context).create_worktree(
+    return _run_idempotent_write(
+        event_type=IDEMPOTENT_EVENT_TYPES["worktree_create"],
+        client_request_id=client_request_id,
+        write_fn=lambda context: WorktreeService(context).create_worktree(
             WorktreeCreate(repository_id=repository_id, task_id=task_id, label=label)
-        )
-        return WorktreeRead.model_validate(worktree).model_dump()
+        ),
+        serialize_fn=lambda _context, worktree: WorktreeRead.model_validate(worktree).model_dump(),
+    )
 
 
 def worktree_list(project_id: str | None = None) -> list[dict[str, Any]]:
-    with service_context() as context:
-        worktrees = WorktreeService(context).list_worktrees(project_id=project_id)
-        return [WorktreeRead.model_validate(item).model_dump() for item in worktrees]
+    return _run_read_operation(
+        lambda context: [
+            WorktreeRead.model_validate(item).model_dump()
+            for item in WorktreeService(context).list_worktrees(project_id=project_id)
+        ]
+    )
 
 
 def worktree_get(worktree_id: str) -> dict[str, Any]:
-    with service_context() as context:
-        worktree = WorktreeService(context).get_worktree(worktree_id)
-        return WorktreeRead.model_validate(worktree).model_dump()
+    return _run_read_operation(
+        lambda context: WorktreeRead.model_validate(WorktreeService(context).get_worktree(worktree_id)).model_dump()
+    )
 
 
 def context_search(query: str, project_id: str | None = None, limit: int = 20) -> dict[str, Any]:
-    with service_context() as context:
-        results = SearchService(context).search(query=query, project_id=project_id, limit=limit)
-        return results.model_dump()
+    return _run_read_operation(
+        lambda context: SearchService(context).search(query=query, project_id=project_id, limit=limit).model_dump()
+    )
 
 
 def diagnostics_get() -> dict[str, Any]:
-    with service_context(actor_type="system", actor_name="mcp") as context:
-        diagnostics = DiagnosticsService(context).get_diagnostics()
-        return diagnostics.model_dump()
+    return _run_read_operation(
+        lambda context: DiagnosticsService(context).get_diagnostics().model_dump(),
+        actor_type="system",
+        actor_name="mcp",
+    )
 
 
 def worktree_hygiene_list(project_id: str | None = None, task_id: str | None = None) -> list[dict[str, Any]]:
-    with service_context() as context:
-        issues = WorktreeHygieneService(context).list_issues(project_id=project_id, task_id=task_id)
-        return [item.model_dump() for item in issues]
+    return _run_read_operation(
+        lambda context: [
+            item.model_dump() for item in WorktreeHygieneService(context).list_issues(project_id=project_id, task_id=task_id)
+        ]
+    )
 
 
 def project_board_resource(project_id: str) -> dict[str, Any]:
@@ -603,9 +655,7 @@ def task_completion_resource(task_id: str) -> dict[str, Any]:
 
 
 def session_timeline_resource(session_id: str) -> dict[str, Any]:
-    with service_context() as context:
-        timeline = SessionService(context).get_session_timeline(session_id)
-        return timeline.model_dump()
+    return _run_read_operation(lambda context: SessionService(context).get_session_timeline(session_id).model_dump())
 
 
 def question_resource(question_id: str) -> dict[str, Any]:
@@ -613,7 +663,7 @@ def question_resource(question_id: str) -> dict[str, Any]:
 
 
 def repo_inventory_resource(project_id: str) -> dict[str, Any]:
-    with service_context() as context:
+    def _load_inventory(context: ServiceContext) -> dict[str, Any]:
         repositories = RepositoryService(context).list_repositories(project_id=project_id)
         worktrees = WorktreeService(context).list_worktrees(project_id=project_id)
         return {
@@ -621,16 +671,20 @@ def repo_inventory_resource(project_id: str) -> dict[str, Any]:
             "worktrees": [WorktreeRead.model_validate(item).model_dump() for item in worktrees],
         }
 
+    return _run_read_operation(_load_inventory)
+
 
 def diagnostics_resource() -> dict[str, Any]:
     return diagnostics_get()
 
 
 def recent_events_resource(project_id: str | None = None, task_id: str | None = None) -> list[dict[str, Any]]:
-    with service_context() as context:
+    def _load_events(context: ServiceContext) -> list[dict[str, Any]]:
         stmt = select(Event).order_by(Event.created_at.desc()).limit(30)
         if project_id is not None:
             stmt = stmt.where((Event.entity_type == "project") & (Event.entity_id == project_id))
         if task_id is not None:
             stmt = stmt.where((Event.entity_type == "task") & (Event.entity_id == task_id))
         return [EventRecord.model_validate(item).model_dump() for item in context.db.scalars(stmt)]
+
+    return _run_read_operation(_load_events)
