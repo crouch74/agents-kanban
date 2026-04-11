@@ -26,6 +26,7 @@ import {
 } from "@/lib/api/tasks";
 import { WS_BASE } from "@/lib/api/httpClient";
 import { createWorktree, patchWorktree } from "@/lib/api/worktrees";
+import { controlPlaneQueryKeys } from "@/features/control-plane/queryKeys";
 
 export function useLiveInvalidationSocket(invalidateAll: () => void) {
   useEffect(() => {
@@ -69,37 +70,37 @@ export function useLiveInvalidationSocket(invalidateAll: () => void) {
   }, [invalidateAll]);
 }
 
-export const useDashboardQuery = () => useQuery({ queryKey: ["dashboard"], queryFn: getDashboard });
-export const useDiagnosticsQuery = () => useQuery({ queryKey: ["diagnostics"], queryFn: getDiagnostics });
-export const useProjectsQuery = () => useQuery({ queryKey: ["projects"], queryFn: getProjects });
+export const useDashboardQuery = () => useQuery({ queryKey: controlPlaneQueryKeys.dashboard, queryFn: getDashboard });
+export const useDiagnosticsQuery = () => useQuery({ queryKey: controlPlaneQueryKeys.diagnostics, queryFn: getDiagnostics });
+export const useProjectsQuery = () => useQuery({ queryKey: controlPlaneQueryKeys.projects, queryFn: getProjects });
 export const useProjectDetailQuery = (projectId: string | null) =>
-  useQuery({ queryKey: ["project", projectId], queryFn: () => getProject(projectId!), enabled: Boolean(projectId) });
+  useQuery({ queryKey: controlPlaneQueryKeys.project(projectId), queryFn: () => getProject(projectId!), enabled: Boolean(projectId) });
 export const useEventsQuery = (projectId: string | null) =>
-  useQuery({ queryKey: ["events", projectId], queryFn: () => getEvents({ projectId: projectId ?? undefined, limit: 18 }) });
+  useQuery({ queryKey: controlPlaneQueryKeys.events(projectId), queryFn: () => getEvents({ projectId: projectId ?? undefined, limit: 18 }) });
 export const useSearchQuery = (deferredSearch: string, projectId?: string | null) =>
   useQuery({
-    queryKey: ["search", deferredSearch, projectId],
+    queryKey: controlPlaneQueryKeys.search(deferredSearch, projectId),
     queryFn: () => searchContext(deferredSearch, projectId ?? undefined),
     enabled: deferredSearch.trim().length >= 2,
   });
 export const useSessionTailQuery = (sessionId: string | null) =>
   useQuery({
-    queryKey: ["session-tail", sessionId],
+    queryKey: controlPlaneQueryKeys.sessionTail(sessionId),
     queryFn: () => getSessionTail(sessionId!),
     enabled: Boolean(sessionId),
     refetchInterval: sessionId ? 2500 : false,
   });
 export const useSessionTimelineQuery = (sessionId: string | null) =>
   useQuery({
-    queryKey: ["session-timeline", sessionId],
+    queryKey: controlPlaneQueryKeys.sessionTimeline(sessionId),
     queryFn: () => getSessionTimeline(sessionId!),
     enabled: Boolean(sessionId),
     refetchInterval: sessionId ? 3000 : false,
   });
 export const useQuestionDetailQuery = (questionId: string | null) =>
-  useQuery({ queryKey: ["question", questionId], queryFn: () => getQuestion(questionId!), enabled: Boolean(questionId) });
+  useQuery({ queryKey: controlPlaneQueryKeys.question(questionId), queryFn: () => getQuestion(questionId!), enabled: Boolean(questionId) });
 export const useTaskDetailQuery = (taskId: string | null) =>
-  useQuery({ queryKey: ["task-detail", taskId], queryFn: () => getTaskDetail(taskId!), enabled: Boolean(taskId) });
+  useQuery({ queryKey: controlPlaneQueryKeys.taskDetail(taskId), queryFn: () => getTaskDetail(taskId!), enabled: Boolean(taskId) });
 
 type MutationHookOptions<TData, TVars> = Omit<UseMutationOptions<TData, Error, TVars>, "mutationFn">;
 
