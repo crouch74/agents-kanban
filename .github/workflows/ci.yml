@@ -34,6 +34,29 @@ jobs:
       - name: Run verification
         run: bash scripts/verify.sh --skip-bootstrap
 
+
+      - name: Enforce Python coverage threshold (95%)
+        run: |
+          python - <<'PYCODE'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          coverage_xml = Path("coverage.xml")
+          if not coverage_xml.exists():
+              raise SystemExit("coverage.xml not found after verification")
+
+          root = ET.parse(coverage_xml).getroot()
+          line_rate = float(root.attrib.get("line-rate", "0"))
+          threshold = 0.95
+
+          if line_rate < threshold:
+              raise SystemExit(
+                  f"Python coverage {line_rate:.2%} is below required {threshold:.0%}"
+              )
+
+          print(f"✅ Python coverage threshold satisfied: {line_rate:.2%}")
+          PYCODE
+
       - name: Upload coverage artifact
         if: always()
         uses: actions/upload-artifact@v4
