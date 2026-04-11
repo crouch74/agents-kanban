@@ -13,9 +13,8 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { Activity, GitFork, Play, Terminal } from "lucide-react";
+import { GitFork, Play, Terminal } from "lucide-react";
 import type { TaskSummary } from "@acp/sdk";
-import { ProjectBootstrapWizard } from "@/components/project-bootstrap-wizard";
 import { DetailDrawer, type DetailDrawerSection } from "@/components/DetailDrawer";
 import { ColumnShell, Pill, SectionFrame, SectionTitle } from "@/components/ui";
 import { useUIStore } from "@/store/ui";
@@ -45,7 +44,7 @@ import {
 import type { EventRecord, SearchHit } from "@/lib/api";
 import { useAppUrlState } from "@/app-shell/useAppUrlState";
 import { useControlPlaneMutations } from "@/app-shell/useControlPlaneMutations";
-import { navItems, sectionTitleByKey, type DetailSelection, type DetailEntityType, type NavSection } from "@/app-shell/types";
+import { sectionTitleByKey, type DetailSelection, type NavSection } from "@/app-shell/types";
 import { HomeSectionContainer } from "@/features/navigation/containers/HomeSectionContainer";
 import { SearchSectionContainer } from "@/features/navigation/containers/SearchSectionContainer";
 import { ActivitySectionContainer } from "@/features/activity/containers/ActivitySectionContainer";
@@ -53,7 +52,6 @@ import { DiagnosticsSectionContainer } from "@/features/navigation/containers/Di
 import { ProjectsSectionContainer } from "@/features/project/containers/ProjectsSectionContainer";
 import { WaitingSectionContainer } from "@/features/project/containers/WaitingSectionContainer";
 import { WorktreesSectionContainer } from "@/features/project/containers/WorktreesSectionContainer";
-import { SessionsSectionContainer } from "@/features/project/containers/SessionsSectionContainer";
 
 function formatEvent(eventType: string) {
   return eventType.replaceAll(".", " ").replaceAll("_", " ");
@@ -92,26 +90,6 @@ function formatSearchSnippet(hit: SearchHit) {
   return hit.snippet;
 }
 
-
-function getSessionRelationLabel(
-  session: {
-    id: string;
-    profile: string;
-    runtime_metadata: Record<string, unknown>;
-  },
-  selectedSessionId: string | null,
-) {
-  if (session.id === selectedSessionId) {
-    return "selected";
-  }
-
-  const followUpType = session.runtime_metadata.follow_up_type;
-  if (typeof followUpType === "string" && followUpType.length > 0) {
-    return followUpType;
-  }
-
-  return "origin";
-}
 
 export function App() {
   const queryClient = useQueryClient();
