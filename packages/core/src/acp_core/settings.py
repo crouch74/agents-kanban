@@ -13,14 +13,14 @@ class Settings(BaseSettings):
     app_name: str = "Agent Control Plane"
     api_host: str = "127.0.0.1"
     api_port: int = 8000
-    web_origin: str = "http://127.0.0.1:5173"
+    web_origins: list[str] = ["http://127.0.0.1:5173", "http://localhost:5173"]
     runtime_home: Path = Field(default_factory=lambda: Path.cwd() / ".acp")
     database_name: str = "acp.sqlite3"
     bootstrap_agent_mcp_name: str = "agent-control-plane"
     bootstrap_agent_command_template: str = (
         "codex mcp get {mcp_name} >/dev/null 2>&1 || "
         "codex mcp add {mcp_name} --env PYTHONPATH={mcp_pythonpath} -- {python_executable} -m acp_mcp_server.server "
-        "&& codex --sandbox workspace-write --ask-for-approval on-request - < {prompt_file}"
+        "&& codex exec --full-auto - < {prompt_file}"
     )
 
     @property

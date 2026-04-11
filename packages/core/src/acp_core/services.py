@@ -1538,8 +1538,12 @@ class BootstrapService:
 
     def bootstrap_project(self, payload: ProjectBootstrapCreate) -> ProjectBootstrapRead:
         repo_path = Path(payload.repo_path).expanduser().resolve()
-        if not repo_path.exists() or not repo_path.is_dir():
-            raise ValueError("Repo path must point to an existing directory")
+        if not repo_path.exists():
+            if not payload.initialize_repo:
+                raise ValueError("Repo path must point to an existing directory or enable Initialize repo with git")
+            repo_path.mkdir(parents=True, exist_ok=True)
+        elif not repo_path.is_dir():
+            raise ValueError("Repo path must point to a directory")
 
         repo_initialized = False
         try:
