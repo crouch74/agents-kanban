@@ -261,7 +261,7 @@ def test_bootstrap_surfaces_runtime_adapter_failure(tmp_path: Path) -> None:
                 },
             )
             assert response.status_code == 500
-            assert response.json()["detail"] == "Internal Server Error"
+            assert response.text == "Internal Server Error"
     finally:
         app.dependency_overrides.clear()
 

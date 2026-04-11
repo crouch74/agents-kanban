@@ -181,6 +181,6 @@ def test_waiting_question_reply_surfaces_runtime_adapter_failure(tmp_path: Path)
                 json={"responder_name": "operator", "body": "Proceed with plan A."},
             )
             assert reply_response.status_code == 500
-            assert reply_response.json()["detail"] == "Internal Server Error"
+            assert reply_response.text == "Internal Server Error"
     finally:
         app.dependency_overrides.clear()

@@ -203,6 +203,6 @@ def test_session_spawn_and_follow_up_surface_runtime_adapter_failure(tmp_path: P
                 json={"task_id": task_id, "profile": "executor", "repository_id": repository_id},
             )
             assert spawn_response.status_code == 500
-            assert spawn_response.json()["detail"] == "Internal Server Error"
+            assert spawn_response.text == "Internal Server Error"
     finally:
         app.dependency_overrides.clear()
