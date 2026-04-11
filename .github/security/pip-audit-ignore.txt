@@ -1,0 +1,4 @@
+# pip-audit ignore list
+# Format: <VULN_ID>  # expires: YYYY-MM-DD, reason: <why this is temporarily accepted>
+# Example:
+# GHSA-xxxx-yyyy-zzzz  # expires: 2026-06-30, reason: waiting for upstream fix in transitive dependency
