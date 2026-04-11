@@ -1,0 +1,8 @@
+[run]
+branch = True
+omit =
+    */acp_core/models.py
+    */acp_core/schemas.py
+
+[report]
+skip_empty = True

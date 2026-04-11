@@ -21,6 +21,8 @@ log "🧪" "Running Python integration tests with coverage"
   --cov=acp_core \
   --cov=acp_mcp_server \
   --cov-report=term-missing \
-  --cov-report=xml
+  --cov-report=xml \
+  --cov-branch \
+  --cov-fail-under=95
 
 log "✅" "Python integration tests passed"
