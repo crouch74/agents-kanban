@@ -10,8 +10,9 @@ test("waiting-question pause and resume flow", async ({ page }, testInfo) => {
   await page.getByRole("button", { name: "Sessions" }).click();
   await expect(page.getByRole("heading", { name: "Session Runtime" })).toBeVisible();
 
-  const taskSelect = page.getByRole("combobox").first();
-  await taskSelect.selectOption({ label: "Kick off planning and board setup" });
+  const openQuestionPanel = page.locator("div").filter({ hasText: "Open waiting question" }).first();
+  const taskSelect = openQuestionPanel.locator("select").first();
+  await taskSelect.selectOption("task-1");
   await page
     .getByPlaceholder("What decision or clarification does the agent need?")
     .fill("Should we pause deployment until legal approval?");

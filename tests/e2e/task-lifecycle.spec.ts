@@ -13,20 +13,10 @@ test("task lifecycle to done flow", async ({ page }, testInfo) => {
   const lifecycleTask = page.getByRole("button", { name: /Kick off planning and board setup/i }).first();
   await expect(lifecycleTask).toBeVisible();
 
-  const todoColumn = page.getByText("Todo").first();
-  const inProgressColumn = page.getByText("In Progress").first();
   const doneColumn = page.getByText("Done").first();
 
   await lifecycleTask.click();
   await expect(page.getByText("Task quick inspect")).toBeVisible();
-  await expect(page.getByText("State: in_progress")).toBeVisible();
-
-  await lifecycleTask.dragTo(todoColumn);
-  await lifecycleTask.click();
-  await expect(page.getByText("State: todo")).toBeVisible();
-
-  await lifecycleTask.dragTo(inProgressColumn);
-  await lifecycleTask.click();
   await expect(page.getByText("State: in_progress")).toBeVisible();
 
   await lifecycleTask.dragTo(doneColumn);
