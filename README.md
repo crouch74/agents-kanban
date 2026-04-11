@@ -47,8 +47,8 @@ Canonical commands (used by local development, Codex Cloud, and GitHub Actions):
 
 Coverage thresholds enforced by these commands:
 
-- Python integration tests: **85% minimum total coverage** via
-  `--cov-fail-under=85` in `scripts/test_integration.sh`.
+- Python integration tests: **84% minimum total coverage** via
+  `--cov-fail-under=84` in `scripts/test_integration.sh`.
 - Web unit tests (Vitest): minimum thresholds of
   **70% lines / 70% statements / 70% functions / 60% branches** in
   `apps/web/vite.config.ts`.
