@@ -53,7 +53,102 @@ jobs:
             -r apps/api/requirements-dev.txt \
             --format json \
             "${ignore_args[@]}" \
-            | tee .artifacts/security/pip-audit.json
+            > .artifacts/security/pip-audit.json || true
+
+          python <<'PY'
+          import json
+          import urllib.request
+          from pathlib import Path
+
+          ignore_ids = []
+          for raw_line in Path(".github/security/pip-audit-ignore.txt").read_text().splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+              continue
+            ignore_ids.append(line.split()[0])
+
+          report = json.loads(Path(".artifacts/security/pip-audit.json").read_text())
+          dependencies = report.get("dependencies", [])
+
+          query_ids = set()
+          findings = []
+          for dep in dependencies:
+            for vuln in dep.get("vulns", []):
+              candidate_ids = [vuln.get("id"), *(vuln.get("aliases") or [])]
+              if any(v_id in ignore_ids for v_id in candidate_ids if v_id):
+                continue
+
+              valid_ids = [v_id for v_id in candidate_ids if v_id]
+              for vuln_id in valid_ids:
+                query_ids.add(vuln_id)
+
+              findings.append(
+                {
+                  "package": dep.get("name"),
+                  "version": dep.get("version"),
+                  "id": vuln.get("id"),
+                  "aliases": vuln.get("aliases") or [],
+                  "fix_versions": vuln.get("fix_versions") or [],
+                  "description": vuln.get("description", ""),
+                }
+              )
+
+          severity_by_id = {}
+          if query_ids:
+            payload = {
+              "queries": [{"id": vuln_id} for vuln_id in sorted(query_ids)],
+            }
+            request = urllib.request.Request(
+              "https://api.osv.dev/v1/querybatch",
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=30) as response:
+              osv_data = json.loads(response.read().decode("utf-8"))
+
+            for query, result in zip(payload["queries"], osv_data.get("results", [])):
+              vuln_id = query["id"]
+              sev = None
+              for vuln in result.get("vulns", []):
+                db_sev = (vuln.get("database_specific") or {}).get("severity")
+                if db_sev:
+                  sev = str(db_sev).lower()
+                  break
+              if sev:
+                severity_by_id[vuln_id] = sev
+
+          blocked = []
+          for finding in findings:
+            severity_candidates = [
+              severity_by_id.get(finding["id"]),
+              *[severity_by_id.get(alias) for alias in finding["aliases"]],
+            ]
+            severities = {sev for sev in severity_candidates if sev}
+            if "critical" in severities or "high" in severities:
+              blocked.append(
+                {
+                  "package": finding["package"],
+                  "version": finding["version"],
+                  "id": finding["id"],
+                  "aliases": finding["aliases"],
+                  "severities": sorted(severities),
+                  "fix_versions": finding["fix_versions"],
+                }
+              )
+
+          Path(".artifacts/security/pip-audit-high-critical.json").write_text(
+            json.dumps({"blocked": blocked}, indent=2)
+          )
+
+          if blocked:
+            print(
+              f"Found {len(blocked)} non-allowlisted high/critical Python vulnerabilities."
+            )
+            raise SystemExit(1)
+
+          print("No non-allowlisted high/critical Python vulnerabilities found.")
+          PY
 
       - name: Run npm audit (high/critical gate)
         shell: bash

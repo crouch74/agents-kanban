@@ -2,3 +2,4 @@
 # Format: <VULN_ID>  # expires: YYYY-MM-DD, reason: <why this is temporarily accepted>
 # Example:
 # GHSA-xxxx-yyyy-zzzz  # expires: 2026-06-30, reason: waiting for upstream fix in transitive dependency
+GHSA-7f5h-v6xp-fcq8  # expires: 2026-05-31, reason: FastAPI currently pins Starlette <0.49; remove after Starlette 0.49.1+ adoption
