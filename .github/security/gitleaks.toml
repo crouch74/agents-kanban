@@ -1,0 +1,14 @@
+# Baseline allowlist for known gitleaks false positives.
+#
+# Add entries only after validating the finding is not an active secret.
+# Any pull request that changes this file must include an approval review
+# containing the exact token `ALLOWLIST_APPROVED`.
+
+title = "ACP gitleaks config with explicit allowlist governance"
+
+[allowlist]
+description = "Known false positives (intentionally minimal)"
+commits = []
+paths = []
+regexes = []
+stopwords = []

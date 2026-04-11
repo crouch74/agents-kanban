@@ -54,6 +54,12 @@ bootstraps from scratch, runs `scripts/verify.sh`, and uploads coverage
 (`coverage.xml`) plus Playwright artifacts (`playwright-report/`,
 `test-results/`).
 
+Security workflow (`.github/workflows/security.yml`) also runs on pull requests
+and pushes to `main`, including a required `Secret Scan (gitleaks)` job that
+scans both git history and the current working tree. Known false positives are
+managed in `.github/security/gitleaks.toml`; any new allowlist entries require
+an explicit approval review that contains `ALLOWLIST_APPROVED`.
+
 ## Current State
 
 This repository is beyond scaffold stage. The current implementation includes:
