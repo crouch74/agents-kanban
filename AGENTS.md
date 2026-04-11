@@ -1,187 +1,275 @@
 # AGENTS.md
+> This file governs all AI agent behavior in this repository.
+> Every agent session (Codex, Claude Code, Copilot, etc.) must read
+> this file before taking any action. Last updated: 2026-04-11
 
-This file is the working agreement for future coding agents contributing to
-Agent Control Plane.
+## 1. Repo Overview
+- Agent Control Plane is a local-first control plane for one technical operator managing multiple AI agents across repositories and projects. It combines a canonical backend workflow state machine, append-only audit events, tmux-backed runtime sessions, deterministic git worktrees, a FastAPI API + WebSocket layer, a React operator UI, and an MCP server that reuses backend service logic.
+- Primary tech stack:
+  - Python 3.12+ (FastAPI 0.116.x, SQLAlchemy 2.0.x, Pydantic v2, Alembic, structlog, pytest).
+  - TypeScript + React 19 (Vite 7, Vitest 3, TanStack Query 5, Zustand, Tailwind CSS 4).
+  - MCP Python server (`mcp` package 1.9.x) sharing `acp_core` services.
+  - SQLite (WAL mode) as local durable store.
+  - tmux + git worktrees as runtime isolation primitives.
+  - npm workspaces + package-lock for JS dependency locking.
+- Architecture pattern and layer rules:
+  - Modular-monolith backend with shared service layer (`packages/core/src/acp_core/services/*`) as behavior center.
+  - API handlers and MCP handlers are thin orchestration adapters and should delegate material behavior to shared services.
+  - Backend + SQLite + append-only events are canonical truth; UI is cache/interaction layer.
+  - Blocked/waiting are overlays, not canonical task workflow states.
+- Monorepo structure:
+  - `apps/api` (FastAPI surface)
+  - `apps/web` (React operator UI)
+  - `packages/core` (domain models, schemas, settings, runtime adapters, services)
+  - `packages/mcp-server` (MCP tools/resources)
+  - `packages/sdk` (TypeScript contracts)
+  - `tests` (integration/unit/e2e)
 
-## Product Intent
+## 2. Getting Started
+Exact commands:
+- Install dependencies:
+  - `bash scripts/bootstrap.sh`
+- Set up environment:
+  - `cp .env.example .env`
+- Run dev server (full stack):
+  - `bash scripts/dev-stack.sh`
+- Run database migrations / seeds:
+  - Migrations are not the primary local path yet; current bootstrap path is implicit DB creation via service startup (`Base.metadata.create_all`).
+  - Alembic exists under `apps/api/alembic`, but a canonical migration command is **[NOT YET ESTABLISHED — recommend: document and standardize `alembic upgrade head` path]**.
+  - Seed command is **[NOT YET ESTABLISHED — recommend: add explicit `scripts/seed.sh` if needed]**.
+- Verify setup is working:
+  - `bash scripts/verify.sh`
+  - Optional focused checks:
+    - `bash scripts/test_integration.sh`
+    - `bash scripts/test_ui.sh`
 
-Build and extend a serious local-first control plane for one technical operator
-managing multiple AI agents across projects and repositories.
+## 3. Project Structure
+Annotated top-level tree:
+- `.github/` — CI/CD and security workflows, allowlists, automation policy.
+- `apps/`
+  - `apps/api/` — FastAPI entrypoint, REST routes, WebSocket hub/events, bootstrap DI.
+  - `apps/web/` — React/Vite operator UI, feature containers, state/query wiring, tests.
+- `packages/`
+  - `packages/core/` — shared backend domain entities, DB models, schemas, runtime adapters, service layer.
+  - `packages/mcp-server/` — MCP server and handlers using shared services.
+  - `packages/sdk/` — lightweight TypeScript SDK/contracts.
+- `tests/`
+  - `tests/integration/` — Python API/MCP/runtime integration tests.
+  - `tests/unit/` — targeted backend unit/service compatibility tests.
+  - `tests/e2e/` — Playwright UI workflows.
+- `scripts/` — canonical bootstrap/dev/verify/lint/test/codegen automation.
+- `docs/` — PRD, ADR, API artifacts/specs, setup guides, glossary.
+- `docker-compose.yml` — containerized local stack option.
+- `AGENTS.md` — cross-agent operating contract.
 
-This is:
+## 4. Architecture Rules
+- Layer dependency direction (enforced):
+  - `apps/api` and `packages/mcp-server` → `packages/core`.
+  - `packages/core` must not depend on API or MCP layers.
+  - UI (`apps/web`) consumes API/WebSocket contracts; it must not become system-of-record.
+- What belongs where:
+  - `packages/core`: business rules, transition validation, readiness gates, durable writes, event recording.
+  - `apps/api`: HTTP serialization, auth boundary, request/response mapping, websocket broadcast triggers.
+  - `packages/mcp-server`: MCP tool/resource schemas + handler glue to services.
+  - `apps/web`: presentation, operator workflow UX, query/mutation orchestration.
+- Import rules:
+  - Keep Python imports grouped stdlib → third-party → local package imports.
+  - Prefer domain service imports from `acp_core.services.<domain>_service` modules (compat layer exists but is transitional).
+  - Frontend uses `@/` alias for `apps/web/src` imports.
+- Business logic placement:
+  - Must live in shared service layer (`packages/core/src/acp_core/services/*`).
+  - Must NOT be duplicated in route handlers, MCP handlers, or React components.
+- Patterns:
+  - Dependency injection: FastAPI `Depends(...)` + bootstrap dependency providers.
+  - Error handling: services raise `ValueError` for domain/validation failures; API maps to `HTTPException` with 4xx.
+  - Async operations: backend endpoints are mostly sync functions; lifespan + websocket runtime use async where needed; frontend uses async/await with TanStack Query.
+  - Configuration: `pydantic-settings` via `Settings` with `ACP_` env prefix.
 
-- a control plane first
-- a kanban board second
-- a terminal viewer third
+## 5. Coding Conventions
+- File naming:
+  - Python modules: `snake_case.py` (example: `task_service.py`).
+  - React components/screens: mostly `PascalCase.tsx` (example: `ProjectBoardScreen.tsx`).
+  - Some frontend files use kebab-case (example: `project-bootstrap-wizard.tsx`) — **[NOT YET ESTABLISHED — recommend: settle on PascalCase for components and kebab-case for non-component utility files]**.
+- Function naming:
+  - Python: `snake_case` (example: `reconcile_runtime_sessions`).
+  - TS/React: `camelCase` for functions/hooks; React components in `PascalCase`.
+- Class naming:
+  - `PascalCase` (example: `TaskService`, `Settings`, SQLAlchemy model classes).
+- Constant naming:
+  - Python constants are uppercase snake case where used (example: workflow mapping constants).
+  - TS constants generally `camelCase`/`const` style in-module — **[NOT YET ESTABLISHED — recommend: uppercase snake case for exported immutable constants]**.
+- Variable naming:
+  - Python: `snake_case`.
+  - TypeScript: `camelCase`.
+- Max file size:
+  - **[NOT YET ESTABLISHED — recommend: 400 lines soft limit; split by feature responsibility]**.
+- Max function size:
+  - **[NOT YET ESTABLISHED — recommend: 60 lines soft limit excluding docstring/types]**.
+- Cyclomatic complexity limit:
+  - **[NOT YET ESTABLISHED — recommend: <= 10 per function]**.
+- Import ordering:
+  - Python: stdlib, third-party, local modules with blank lines between groups.
+  - TypeScript: external deps first, then internal `@/` imports.
+- Comment style:
+  - Explain intent/invariants and non-obvious decisions.
+  - Avoid narrating obvious code.
+  - Keep TODO/FIXME usage minimal and tracked (see behavioral rules).
 
-Do not turn it into a thin wrapper around raw terminals, and do not make the UI
-the source of truth.
+## 6. Error Handling Rules
+- Use types/scenarios:
+  - Service/domain validation failures: raise `ValueError` with operator-useful message.
+  - API routes: convert service `ValueError` to `HTTPException` (usually 400/404).
+  - Request schema violations: let FastAPI/Pydantic return 422 automatically.
+- External call failures:
+  - Wrap git/tmux/runtime failures in service-level structured errors/events with context in payload metadata; do not silently drop failures.
+- Required error context fields (logs/events):
+  - `actor_type`, `actor_name`, `entity_type`, `entity_id`, `event_type`, correlation metadata when available.
+  - Include project/task/session/worktree identifiers when known.
+- What to log on error:
+  - Emoji-prefixed structured log with subsystem marker (`⚠️`, `🧭`, `🌿`, `🤖`, etc.) and key IDs.
+- Never expose in API error responses:
+  - stack traces
+  - raw SQL queries
+  - filesystem internals beyond intended operator metadata
+  - host/container absolute paths unrelated to task context
+- Retry strategy:
+  - **[NOT YET ESTABLISHED — recommend: bounded retries with backoff only for transient runtime/tooling operations (tmux/git/network), never for deterministic validation failures]**.
 
-## Current Architecture
+## 7. Testing Standards
+- Frameworks/config:
+  - Python: `pytest` (+ `pytest-asyncio`, `pytest-cov`) configured via `pytest.ini`.
+  - Web unit: `Vitest` config in `apps/web/vite.config.ts`.
+  - E2E: Playwright config in `playwright.config.ts`.
+- Test file naming:
+  - Python: `test_*.py` by behavior slice (example: `test_tasks_api.py`).
+  - Web tests: `*.test.tsx` / `*.spec.ts` (example: `activity-timeline.test.tsx`).
+- Test naming:
+  - Python style in repo: `test_<behavior>_<condition/result>`.
+  - Vitest style in repo: sentence-style `test('renders ...', ...)`.
+  - `should ... when ...` phrasing is **[NOT YET ESTABLISHED — recommend for newly added tests]**.
+- AAA pattern:
+  - Present in many tests but not formally mandated — **[NOT YET ESTABLISHED — recommend: explicit Arrange/Act/Assert blocks for new tests]**.
+- Mocking boundary:
+  - Mock at I/O/runtime edges (tmux, git, HTTP, filesystem, time); keep service/state semantics real in integration tests.
+- Coverage thresholds:
+  - Python integration: `--cov-fail-under=84`.
+  - Web (Vitest): lines 70 / statements 70 / functions 70 / branches 60.
+- Commands:
+  - Run all tests: `bash scripts/verify.sh --skip-bootstrap`
+  - Run with coverage: `bash scripts/test_integration.sh`
+  - Run single file: `.venv/bin/python -m pytest tests/integration/test_tasks_api.py -q`
+  - Run in watch mode: **[NOT YET ESTABLISHED — recommend: add vitest watch script if needed]**
 
-- `apps/api`: FastAPI entrypoints and WebSocket broadcast layer
-- `packages/core`: models, schemas, settings, runtime adapter, and shared domain
-  services
-- `packages/mcp-server`: MCP tools/resources built on the same shared services
-- `apps/web`: operator UI
-- `packages/sdk`: lightweight TypeScript contracts
+## 8. CI/CD & Quality Gates
+- Pipeline stages/order:
+  - CI (`.github/workflows/ci.yml`): `quick-checks` → (`python-tests`, `web-unit-build`) → `playwright-e2e`; PR-only screenshot-evidence job also runs after quick checks + web build.
+  - Additional workflows: `security.yml`, `security-analysis.yml` (CodeQL), `container-image-security.yml`.
+- Must-pass gates for merge to `main`:
+  - Python import lint (`ruff F401` subset)
+  - OpenAPI artifact drift check
+  - Web TypeScript check
+  - Integration tests + coverage gate
+  - Web unit tests + build
+  - Playwright tests
+  - Security scans (dependency/secret/code scanning/container policies per workflow settings)
+- Local commands mirroring CI:
+  - Lint: `bash scripts/lint_python.sh`
+  - Format check: `.venv/bin/ruff format --check apps/api packages/core/src packages/mcp-server/src tests`
+  - Type check: `npm run lint:web`
+  - Tests: `bash scripts/verify.sh --skip-bootstrap`
+  - Full CI sim: `bash scripts/verify.sh`
 
-The shared service layer in `packages/core/src/acp_core/services.py` is the
-behavioral center of the app.
+## 9. Domain Knowledge
+- Glossary (key terms):
+  - `workflow_state`: canonical task lifecycle (`backlog`, `ready`, `in_progress`, `review`, `done`, `cancelled`).
+  - `blocked overlay`: `blocked_reason` without changing canonical workflow state.
+  - `waiting overlay`: `waiting_for_human` marker tied to waiting-question flow.
+  - `completion readiness`: gate for `done` transitions based on checks/artifacts/dependencies/open questions.
+  - `session lineage`: parent/follow-up lineage currently in `AgentSession.runtime_metadata`.
+  - `worktree hygiene`: diagnostics posture for stale/orphan/misaligned worktrees.
+  - `audit event`: append-only mutation trail.
+- Core business rules (never violate):
+  - Task transitions must follow allowed state machine.
+  - `done` requires readiness gate pass.
+  - Blocked/waiting are overlays, not replacement columns/states.
+  - Every material write should emit an event.
+  - API and MCP behavior should stay parity-aligned via shared services.
+- Invariants by entity:
+  - Project owns one board (current implementation).
+  - Task subtasks are one level deep only.
+  - Worktrees belong to repositories and may link to task/session context.
+  - Waiting questions can drive session wait/resume semantics.
+- State machines:
+  - Task transitions:
+    - `backlog <-> ready`
+    - `ready <-> in_progress`
+    - `in_progress <-> review`
+    - `review <-> done`
+    - Any state → `cancelled` (as documented)
+  - Waiting question: `open -> answered -> closed`, or `open -> dismissed`.
+  - Session statuses include: `queued`, `running`, `waiting_human`, `blocked`, `done`, `failed`, `cancelled` with runtime reconciliation on startup.
+  - Worktree lifecycle: `requested -> provisioning -> active/ error`, then archival/pruning/lock flows.
+- External service contracts and SLAs:
+  - No formal SLA docs found.
+  - External integrations currently include tmux runtime, git worktrees, MCP protocol tools/resources, and local filesystem paths.
+  - **[NOT YET ESTABLISHED — recommend: define expected response-time/error-budget targets for API and runtime operations]**.
 
-The canonical local development entrypoint is `scripts/dev-stack.sh`. 
-Alternatively, the full stack can be run via Docker using `docker-compose up`.
+## 10. Agent Behavioral Rules
+Rules that apply to EVERY agent in EVERY session:
 
-Hot reload is enabled for both backend and frontend. The backend watches both `apps/api` and `packages/core/src` to ensure changes in shared services are reflected immediately.
+### Before Starting Any Task
+- [ ] Read this entire file.
+- [ ] Run `bash scripts/verify.sh --skip-bootstrap` and confirm baseline (or report environmental blockers immediately).
+- [ ] Understand task scope; if ambiguous, follow Ambiguity Protocol.
+- [ ] Identify impacted layers/modules before editing.
 
-## Non-Negotiable Guardrails
+### What Agents MUST Do
+- Keep commits atomic (one logical slice per commit).
+- Use Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`).
+- Add/update tests for behavior changes.
+- Run full verification before PR: `bash scripts/verify.sh --skip-bootstrap` (or `bash scripts/verify.sh` when dependencies may be stale).
+- Preserve backend-as-source-of-truth model.
+- Keep API and MCP logic aligned via shared services.
+- Keep handlers thin; place material behavior in `packages/core` services.
 
-### Source of truth
+### What Agents MUST NEVER Do
+- Modify generated/dependency/runtime artifacts directly:
+  - `node_modules/`, `coverage/`, `playwright-report/`, `test-results/`, `.acp/`, `.artifacts/`.
+- Bypass workflow transition validation or completion readiness gates.
+- Change public API/MCP contract shape without docs + artifact updates (`docs/api/openapi-v1.json`, PRD/API docs as applicable).
+- Add dependencies without explicit human approval.
+- Use `Any`/`any` or type-ignore suppression without inline justification.
+- Swallow errors silently.
+- Add TODO/FIXME/HACK comments without a linked tracking issue.
+- Auto-merge PRs.
+- Commit directly to `main`.
+- Delete tests merely to satisfy coverage gates.
+- Use arbitrary sleep-based waits in tests when deterministic waits are possible.
 
-- The backend plus SQLite plus append-only events are the system of record.
-- UI state is a cache and interaction layer, not an authority.
-- tmux tail output is helpful evidence, not canonical state.
+### Ambiguity Protocol
+If a task is ambiguous:
+1. List plausible interpretations.
+2. State recommended interpretation and rationale.
+3. STOP and await human confirmation before implementation.
 
-### Workflow model
+### Scope Creep Protocol
+If related issues are discovered during assigned work:
+1. Note them in `FINDINGS.md`.
+2. Complete only assigned task.
+3. Do not bundle unrelated fixes in same PR.
 
-- Keep canonical task workflow states in the backend.
-- Blocked and waiting are overlays, not columns.
-- Do not bypass transition validation in UI, REST, or MCP code.
-- Do not bypass completion readiness when moving a task to `done`.
+## 11. Known Issues & Deferred Debt
+Known deferred items (do not fix unless explicitly tasked):
+- README badge placeholder still references `OWNER/REPO` — `README.md` — deferred until repository slug is finalized.
+- `apps/web/src/App.tsx` remains too large — frontend architecture debt tracked in docs; extract components without behavior drift when explicitly tasked.
+- Schema evolution is still largely `Base.metadata.create_all` driven — migration discipline is intentionally gradual.
+- Session lineage remains in `AgentSession.runtime_metadata` instead of dedicated relational model.
+- E2E coverage remains shallow relative to critical workflows.
 
-### API and MCP parity
+TODO/FIXME/HACK scan results:
+- `TODO(maintainer): replace OWNER/REPO in CI and coverage badges once repository slug is confirmed.` (`README.md`)
 
-- New material behavior should live in shared services first.
-- REST and MCP should call into the same service-layer logic whenever possible.
-- If you add a write flow to one surface and not the other, be explicit about
-  why.
-
-### Runtime and worktrees
-
-- tmux remains the runtime backbone.
-- git worktrees remain the isolation strategy.
-- Session and worktree metadata must stay visible in structured state, not just
-  logs.
-- Diagnostics and recovery are product features. Do not hide drift.
-
-## Current Technical Realities
-
-- The repo still relies primarily on `Base.metadata.create_all` for local DB
-  setup.
-- Alembic exists, but schema evolution is not fully migration-driven yet.
-- Session lineage is currently stored in `AgentSession.runtime_metadata`.
-- The operator UI works, but `apps/web/src/App.tsx` is still too large.
-
-This means:
-
-- be conservative with schema changes
-- prefer additive, backward-safe changes
-- if a change truly needs a new durable relational model, update docs and make
-  the migration path deliberate
-
-## Coding Patterns to Preserve
-
-### Services
-
-- Keep handlers thin and business rules in services.
-- Record an event for each material write.
-- Return structured read models from the service layer where it improves parity.
-
-### Logging
-
-Use structured logs with meaningful emoji prefixes. Current conventions:
-
-- `🧭` orchestration and recovery
-- `🗂️` project/task operations
-- `🌿` git and worktrees
-- `🤖` agent operations
-- `💬` waiting questions and replies
-- `📡` session runtime and streaming
-- `✅` checks and completions
-- `⚠️` warnings
-- `🧪` tests
-
-### Frontend
-
-- Prefer extracting focused components instead of growing `App.tsx` further.
-- Keep TanStack Query as the async state layer.
-- Use live mutation broadcasts to invalidate queries rather than inventing a
-  parallel state system.
-- Preserve the current operator-first UX: glanceable, intervention-friendly,
-  local, and not overloaded.
-
-### MCP
-
-- Keep tool names predictable.
-- Keep write operations idempotent where practical via `client_request_id`.
-- Prefer exposing structured reads rather than expecting agents to scrape text.
-
-## Documentation Rules
-
-If you materially change behavior, update the docs in the same slice:
-
-- `README.md` for onboarding/current-state summary
-- `docs/prd/current-state.md` for as-built status
-- `docs/prd/api-outline.md` for REST changes
-- `docs/prd/mcp-surface.md` for MCP changes
-- `docs/prd/state-machines.md` if transitions or gates change
-- `docs/prd/domain-model.md` if aggregates/relationships change
-- `docs/adr/*` when a durable architectural decision changes or a new one is
-  introduced
-
-## Testing Expectations
-
-For meaningful changes, prefer covering the affected behavior in:
-
-- integration tests under `tests/integration`
-- web tests in `apps/web/src/App.test.tsx` or future component tests
-- Playwright when the change is a critical end-to-end operator workflow
-
-Minimum expectation:
-
-- run `bash scripts/bootstrap.sh`
-- run `bash scripts/verify.sh`
-
-Optional focused commands:
-
-- run `bash scripts/test_integration.sh`
-- run `bash scripts/test_ui.sh`
-
-## Safe Extension Areas
-
-Good next slices:
-
-- export/import and backup flows
-- stronger diagnostics actions
-- component extraction in the web UI
-- richer e2e coverage
-- better artifact and log handling
-
-High-care areas:
-
-- schema changes
-- workflow semantics
-- session/worktree ownership semantics
-- API/MCP drift
-- hidden state that is only visible in the UI
-
-## Commit Hygiene
-
-- Use small, reviewable commits.
-- Follow Conventional Commit style.
-- Keep commit scope aligned to a single slice when possible.
-
-## If You Are Unsure
-
-Prefer the simpler local-first option.
-Prefer boring, explicit data over clever automation.
-Prefer adding structure over asking humans or agents to infer state.
-Prefer shared service logic over duplicating behavior in handlers or UI code.
-
-## Verification in Codex Cloud and CI
-
-- Bootstrap from repo scripts only; do not assume pre-existing `.venv` or global tools.
-- Python tests must run via interpreter invocation (`.venv/bin/python -m pytest ...`).
-- Browser verification is repo-owned through Playwright (`npm run test:e2e` / `scripts/test_ui.sh`).
-- CI artifacts come from `coverage.xml`, `playwright-report/`, and `test-results/`.
-- PR screenshot evidence is pipeline-owned: GitHub Actions captures screenshots, uploads `.artifacts/pr-screenshots/` as an artifact, and maintains a sticky PR comment with inline screenshot previews and the artifact link.
+## 12. Changelog
+| Date | Author | Change |
+|------|--------|--------|
+| 2026-04-11 | Codex (generated) | Replaced AGENTS.md with repository-wide cross-agent governance based on full repo scan; marked non-established conventions explicitly. |
