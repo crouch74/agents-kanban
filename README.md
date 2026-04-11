@@ -43,7 +43,27 @@ Canonical commands (used by local development, Codex Cloud, and GitHub Actions):
    ```bash
    bash scripts/test_integration.sh
    bash scripts/test_ui.sh
+   .venv/bin/python scripts/generate_openapi.py
    ```
+
+### OpenAPI artifact workflow
+
+The committed OpenAPI snapshot lives at `docs/api/openapi-v1.json` and is
+generated from the FastAPI app's `/openapi.json` schema.
+
+When API routes, request/response schemas, or FastAPI metadata change:
+
+1. Regenerate the artifact:
+   ```bash
+   .venv/bin/python scripts/generate_openapi.py
+   ```
+2. Commit the updated `docs/api/openapi-v1.json` file with your API changes.
+
+CI and `scripts/verify.sh` enforce drift detection with:
+
+```bash
+.venv/bin/python scripts/generate_openapi.py --check
+```
 
 ### Pre-commit hooks (local CI guardrails)
 

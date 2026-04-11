@@ -60,6 +60,9 @@ jobs:
       - name: Run Python import lint
         run: bash scripts/lint_python.sh
 
+      - name: Verify OpenAPI artifact is up to date
+        run: .venv/bin/python scripts/generate_openapi.py --check
+
       - name: Run web type checks
         run: npm run lint:web
 

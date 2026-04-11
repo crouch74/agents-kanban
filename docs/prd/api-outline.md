@@ -97,3 +97,13 @@ Notes:
 
 The WebSocket surface is used to broadcast committed mutation events so the web
 client can invalidate stale query results.
+
+## OpenAPI Snapshot Contract
+
+- Canonical OpenAPI artifact: `docs/api/openapi-v1.json`
+- Regeneration command: `.venv/bin/python scripts/generate_openapi.py`
+- Drift check command: `.venv/bin/python scripts/generate_openapi.py --check`
+
+Any REST route, request/response model, or FastAPI metadata change must include
+an updated `docs/api/openapi-v1.json` in the same PR so repository docs and
+automation stay in sync with the implemented API surface.
