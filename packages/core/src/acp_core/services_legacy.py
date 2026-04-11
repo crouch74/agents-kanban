@@ -1299,7 +1299,21 @@ class BootstrapService:
     def _build_session_command(self, execution_root: Path) -> str:
         return self.scaffold_writer.build_bootstrap_command(execution_root)
 
-    def bootstrap_project(self, payload: ProjectBootstrapCreate) -> ProjectBootstrapRead:
+    @dataclass
+    class BootstrapState:
+        payload: ProjectBootstrapCreate
+        repo_path: Path
+        repo_initialized: bool = False
+        scaffold_applied: bool = False
+        project: Project | None = None
+        repository: Repository | None = None
+        kickoff_task: Task | None = None
+        kickoff_worktree: Worktree | None = None
+        session: AgentSession | None = None
+        execution_path: Path | None = None
+        execution_branch: str = ""
+
+    def _validate_or_init_repo(self, payload: ProjectBootstrapCreate) -> tuple[Path, Any, bool]:
         repo_path = Path(payload.repo_path).expanduser().resolve()
         if not repo_path.exists():
             if not payload.initialize_repo:
@@ -1319,43 +1333,39 @@ class BootstrapService:
             self.git.init_repository(repo_path)
             repo_details = self.git.inspect_repository(repo_path)
             repo_initialized = True
+        return repo_path, repo_details, repo_initialized
 
-        has_commits = bool(repo_details.metadata_json.get("has_commits"))
-        is_detached = bool(repo_details.metadata_json.get("is_detached"))
-        if has_commits and not payload.use_worktree and is_detached:
-            raise ValueError("Repository is in detached HEAD; check out a branch or enable worktree kickoff")
-
-        project = ProjectService(self.context).create_project(
-            ProjectCreate(name=payload.name, description=payload.description)
-        )
-
-        scaffold_applied = False
+    def _prepare_repository_files(self, state: BootstrapState, *, has_commits: bool) -> None:
         if not has_commits:
-            scaffold_applied = self._scaffold_repo(
-                repo_path,
-                project_name=payload.name,
-                description=payload.description,
-                stack_preset=payload.stack_preset,
+            state.scaffold_applied = self._scaffold_repo(
+                state.repo_path,
+                project_name=state.payload.name,
+                description=state.payload.description,
+                stack_preset=state.payload.stack_preset,
             )
-            self._ensure_line(repo_path / ".gitignore", ".acp/")
-            self._ensure_agents_file(repo_path)
-            self._commit_initial_state(repo_path)
-        else:
-            self._ensure_line(repo_path / ".gitignore", ".acp/")
-            self._ensure_agents_file(repo_path)
+            self._ensure_line(state.repo_path / ".gitignore", ".acp/")
+            self._ensure_agents_file(state.repo_path)
+            self._commit_initial_state(state.repo_path)
+            return
 
-        repository = RepositoryService(self.context).create_repository(
-            RepositoryCreate(project_id=project.id, local_path=str(repo_path), name=repo_path.name)
+        self._ensure_line(state.repo_path / ".gitignore", ".acp/")
+        self._ensure_agents_file(state.repo_path)
+
+    def _create_project_entities(self, state: BootstrapState) -> None:
+        project = ProjectService(self.context).create_project(
+            ProjectCreate(name=state.payload.name, description=state.payload.description)
         )
-
+        repository = RepositoryService(self.context).create_repository(
+            RepositoryCreate(project_id=project.id, local_path=str(state.repo_path), name=state.repo_path.name)
+        )
         task_description = textwrap.dedent(
             f"""
             Initial operator prompt:
 
-            {payload.initial_prompt}
+            {state.payload.initial_prompt}
 
-            Stack preset: {payload.stack_preset.value}
-            Stack notes: {payload.stack_notes or "None"}
+            Stack preset: {state.payload.stack_preset.value}
+            Stack notes: {state.payload.stack_notes or "None"}
             """
         ).strip()
         kickoff_task = TaskService(self.context).create_task(
@@ -1366,98 +1376,146 @@ class BootstrapService:
                 board_column_key="in_progress",
             )
         )
+        state.project = project
+        state.repository = repository
+        state.kickoff_task = kickoff_task
 
-        kickoff_worktree = None
-        execution_path = repo_path
-        execution_branch = ""
-        if payload.use_worktree:
+    def _resolve_execution_target(self, state: BootstrapState) -> None:
+        if state.repository is None or state.kickoff_task is None:
+            raise ValueError("Bootstrap state is missing project entities")
+
+        if state.payload.use_worktree:
             kickoff_worktree = WorktreeService(self.context).create_worktree(
-                WorktreeCreate(repository_id=repository.id, task_id=kickoff_task.id)
+                WorktreeCreate(repository_id=state.repository.id, task_id=state.kickoff_task.id)
             )
-            execution_path = Path(kickoff_worktree.path)
-            execution_branch = kickoff_worktree.branch_name
-        else:
-            execution_branch = self._default_repo_branch(repo_path)
+            state.kickoff_worktree = kickoff_worktree
+            state.execution_path = Path(kickoff_worktree.path)
+            state.execution_branch = kickoff_worktree.branch_name
+            return
+
+        state.execution_path = state.repo_path
+        state.execution_branch = self._default_repo_branch(state.repo_path)
+
+    def _launch_kickoff_session(self, state: BootstrapState) -> None:
+        if (
+            state.project is None
+            or state.repository is None
+            or state.kickoff_task is None
+            or state.execution_path is None
+        ):
+            raise ValueError("Bootstrap state is missing launch prerequisites")
 
         self._write_project_local_files(
-            repository_root=repo_path,
-            execution_root=execution_path,
-            project=project,
-            repository=repository,
-            kickoff_task=kickoff_task,
-            payload=payload,
+            repository_root=state.repo_path,
+            execution_root=state.execution_path,
+            project=state.project,
+            repository=state.repository,
+            kickoff_task=state.kickoff_task,
+            payload=state.payload,
         )
-        session = SessionService(self.context, runtime=self.runtime).spawn_session(
+        state.session = SessionService(self.context, runtime=self.runtime).spawn_session(
             AgentSessionCreate(
-                task_id=kickoff_task.id,
+                task_id=state.kickoff_task.id,
                 profile="executor",
-                repository_id=repository.id if not payload.use_worktree else None,
-                worktree_id=kickoff_worktree.id if kickoff_worktree else None,
-                command=self._build_session_command(execution_path),
+                repository_id=state.repository.id if not state.payload.use_worktree else None,
+                worktree_id=state.kickoff_worktree.id if state.kickoff_worktree else None,
+                command=self._build_session_command(state.execution_path),
             )
         )
 
-        project.settings_json = {
-            **project.settings_json,
+    def _record_bootstrap_event(self, state: BootstrapState) -> None:
+        if state.project is None or state.repository is None or state.kickoff_task is None or state.session is None:
+            raise ValueError("Bootstrap state is missing persisted entities")
+        if state.execution_path is None:
+            raise ValueError("Bootstrap state is missing execution path")
+
+        state.project.settings_json = {
+            **state.project.settings_json,
             "bootstrap": {
-                "stack_preset": payload.stack_preset.value,
-                "stack_notes": payload.stack_notes,
-                "repository_id": repository.id,
-                "kickoff_task_id": kickoff_task.id,
-                "kickoff_session_id": session.id,
-                "kickoff_worktree_id": kickoff_worktree.id if kickoff_worktree else None,
-                "use_worktree": payload.use_worktree,
-                "execution_path": str(execution_path),
+                "stack_preset": state.payload.stack_preset.value,
+                "stack_notes": state.payload.stack_notes,
+                "repository_id": state.repository.id,
+                "kickoff_task_id": state.kickoff_task.id,
+                "kickoff_session_id": state.session.id,
+                "kickoff_worktree_id": state.kickoff_worktree.id if state.kickoff_worktree else None,
+                "use_worktree": state.payload.use_worktree,
+                "execution_path": str(state.execution_path),
             },
         }
         self.context.record_event(
             entity_type="project",
-            entity_id=project.id,
+            entity_id=state.project.id,
             event_type="project.bootstrapped",
             payload_json={
-                "repository_id": repository.id,
-                "kickoff_task_id": kickoff_task.id,
-                "kickoff_session_id": session.id,
-                "kickoff_worktree_id": kickoff_worktree.id if kickoff_worktree else None,
-                "execution_path": str(execution_path),
-                "execution_branch": execution_branch,
-                "stack_preset": payload.stack_preset.value,
-                "stack_notes": payload.stack_notes,
-                "use_worktree": payload.use_worktree,
-                "repo_initialized": repo_initialized,
-                "scaffold_applied": scaffold_applied,
+                "repository_id": state.repository.id,
+                "kickoff_task_id": state.kickoff_task.id,
+                "kickoff_session_id": state.session.id,
+                "kickoff_worktree_id": state.kickoff_worktree.id if state.kickoff_worktree else None,
+                "execution_path": str(state.execution_path),
+                "execution_branch": state.execution_branch,
+                "stack_preset": state.payload.stack_preset.value,
+                "stack_notes": state.payload.stack_notes,
+                "use_worktree": state.payload.use_worktree,
+                "repo_initialized": state.repo_initialized,
+                "scaffold_applied": state.scaffold_applied,
             },
         )
         self.context.db.commit()
-        self.context.db.refresh(project)
-        self.context.db.refresh(repository)
-        self.context.db.refresh(kickoff_task)
-        self.context.db.refresh(session)
-        if kickoff_worktree is not None:
-            self.context.db.refresh(kickoff_worktree)
+        self.context.db.refresh(state.project)
+        self.context.db.refresh(state.repository)
+        self.context.db.refresh(state.kickoff_task)
+        self.context.db.refresh(state.session)
+        if state.kickoff_worktree is not None:
+            self.context.db.refresh(state.kickoff_worktree)
+
+    def _build_bootstrap_read_model(self, state: BootstrapState) -> ProjectBootstrapRead:
+        if (
+            state.project is None
+            or state.repository is None
+            or state.kickoff_task is None
+            or state.session is None
+            or state.execution_path is None
+        ):
+            raise ValueError("Bootstrap state is incomplete")
+
+        return ProjectBootstrapRead(
+            project=ProjectSummary.model_validate(state.project),
+            repository=RepositoryRead.model_validate(state.repository),
+            kickoff_task=TaskRead.model_validate(state.kickoff_task),
+            kickoff_session=AgentSessionRead.model_validate(state.session),
+            kickoff_worktree=WorktreeRead.model_validate(state.kickoff_worktree) if state.kickoff_worktree else None,
+            execution_path=str(state.execution_path),
+            execution_branch=state.execution_branch,
+            stack_preset=state.payload.stack_preset,
+            stack_notes=state.payload.stack_notes,
+            use_worktree=state.payload.use_worktree,
+            repo_initialized=state.repo_initialized,
+            scaffold_applied=state.scaffold_applied,
+        )
+
+    def bootstrap_project(self, payload: ProjectBootstrapCreate) -> ProjectBootstrapRead:
+        repo_path, repo_details, repo_initialized = self._validate_or_init_repo(payload)
+        state = self.BootstrapState(payload=payload, repo_path=repo_path, repo_initialized=repo_initialized)
+        has_commits = bool(repo_details.metadata_json.get("has_commits"))
+        is_detached = bool(repo_details.metadata_json.get("is_detached"))
+        if has_commits and not payload.use_worktree and is_detached:
+            raise ValueError("Repository is in detached HEAD; check out a branch or enable worktree kickoff")
+
+        self._prepare_repository_files(state, has_commits=has_commits)
+        self._create_project_entities(state)
+        self._resolve_execution_target(state)
+        self._launch_kickoff_session(state)
+        self._record_bootstrap_event(state)
 
         logger.info(
             "🧭 project bootstrapped",
-            project_id=project.id,
-            repository_id=repository.id,
-            kickoff_task_id=kickoff_task.id,
-            session_id=session.id,
+            project_id=state.project.id if state.project else None,
+            repository_id=state.repository.id if state.repository else None,
+            kickoff_task_id=state.kickoff_task.id if state.kickoff_task else None,
+            session_id=state.session.id if state.session else None,
             use_worktree=payload.use_worktree,
         )
-        return ProjectBootstrapRead(
-            project=ProjectSummary.model_validate(project),
-            repository=RepositoryRead.model_validate(repository),
-            kickoff_task=TaskRead.model_validate(kickoff_task),
-            kickoff_session=AgentSessionRead.model_validate(session),
-            kickoff_worktree=WorktreeRead.model_validate(kickoff_worktree) if kickoff_worktree else None,
-            execution_path=str(execution_path),
-            execution_branch=execution_branch,
-            stack_preset=payload.stack_preset,
-            stack_notes=payload.stack_notes,
-            use_worktree=payload.use_worktree,
-            repo_initialized=repo_initialized,
-            scaffold_applied=scaffold_applied,
-        )
+        return self._build_bootstrap_read_model(state)
 
 
 class WaitingService:
