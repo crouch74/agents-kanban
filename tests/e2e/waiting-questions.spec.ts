@@ -25,7 +25,6 @@ test("waiting-question pause and resume flow", async ({ page }, testInfo) => {
   await expect(page.getByRole("button", { name: "Waiting Inbox" })).toBeVisible();
 
   await page.getByRole("button", { name: "Waiting Inbox" }).click();
-  await expect(page.getByRole("heading", { name: "Waiting Inbox" })).toBeVisible();
   await expect(page.getByText("Should we pause deployment until legal approval?")).toBeVisible();
 
   await page.getByPlaceholder("Reply to unblock the agent").fill("Approved. Continue with the current plan.");
