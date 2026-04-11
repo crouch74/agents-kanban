@@ -48,6 +48,9 @@ fi
 log "🧪" "Running integration verification"
 bash "$ROOT/scripts/test_integration.sh"
 
+log "🧪" "Running Python lint checks"
+bash "$ROOT/scripts/lint_python.sh"
+
 log "🧪" "Running UI verification"
 bash "$ROOT/scripts/test_ui.sh"
 

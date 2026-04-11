@@ -7,12 +7,11 @@ from typing import Any, Callable
 from sqlalchemy import select
 
 from acp_core.db import SessionLocal, init_db
-from acp_core.models import AgentSession, Event, TaskArtifact, TaskCheck, TaskComment, TaskDependency, Worktree
+from acp_core.models import AgentSession, Event, TaskArtifact, TaskCheck, TaskComment, TaskDependency
 from acp_core.schemas import (
     AgentSessionCreate,
     AgentSessionFollowUpCreate,
     AgentSessionRead,
-    DiagnosticsRead,
     EventRecord,
     ProjectBootstrapCreate,
     ProjectBootstrapRead,
@@ -28,7 +27,6 @@ from acp_core.schemas import (
     TaskPatch,
     TaskRead,
     WaitingQuestionCreate,
-    WaitingQuestionDetail,
     WaitingQuestionRead,
     WorktreeCreate,
     WorktreeRead,
