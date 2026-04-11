@@ -45,13 +45,24 @@ Canonical commands (used by local development, Codex Cloud, and GitHub Actions):
    bash scripts/test_ui.sh
    ```
 
+Coverage thresholds enforced by these commands:
+
+- Python integration tests: **85% minimum total coverage** via
+  `--cov-fail-under=85` in `scripts/test_integration.sh`.
+- Web unit tests (Vitest): minimum thresholds of
+  **70% lines / 70% statements / 70% functions / 60% branches** in
+  `apps/web/vite.config.ts`.
+
+When thresholds are not met, the underlying test command exits non-zero and CI
+fails in the `verify` job.
+
 CI workflow (`.github/workflows/ci.yml`) runs on pull requests and pushes to
 `main`. On pull requests, it first runs an automated screenshot-evidence job
 that starts the web app, captures three desktop screenshots (`home`,
 `projects`, `activity`), uploads `.artifacts/pr-screenshots/`, and creates or
 updates a sticky PR comment with inline screenshot previews plus the workflow artifact link. The existing verify job then
 bootstraps from scratch, runs `scripts/verify.sh`, and uploads coverage
-(`coverage.xml`) plus Playwright artifacts (`playwright-report/`,
+(`coverage.xml` and `coverage/web/`) plus Playwright artifacts (`playwright-report/`,
 `test-results/`). GitHub Actions used in CI are pinned to full commit SHAs.
 
 ### Action SHA maintenance

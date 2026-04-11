@@ -59,6 +59,10 @@ agent interaction.
 - integration coverage for projects, tasks, evidence, repositories, worktrees,
   sessions, waiting questions, search, diagnostics, live WebSocket behavior,
   recovery, and MCP handlers
+- Python integration coverage gate enforced at **85% minimum** total coverage
+  (`scripts/test_integration.sh` with `--cov-fail-under=85`)
+- Vitest web unit coverage reporting enabled with minimum thresholds of
+  **70% lines / 70% statements / 70% functions / 60% branches**
 - one Playwright smoke test for the web shell
 - one Vitest app-shell test
 
