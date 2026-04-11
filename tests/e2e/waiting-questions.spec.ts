@@ -22,7 +22,7 @@ test("waiting-question pause and resume flow", async ({ page }, testInfo) => {
   });
   await page.reload();
 
-  await expect(page.getByText("Waiting")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Waiting Inbox" })).toBeVisible();
 
   await page.getByRole("button", { name: "Waiting Inbox" }).click();
   await expect(page.getByRole("heading", { name: "Waiting Inbox" })).toBeVisible();
