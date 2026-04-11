@@ -99,3 +99,119 @@ A common agent loop today looks like:
   can self-correct before a human intervenes
 - `project_bootstrap` can initialize an empty repo, add ACP guidance files, and
   launch the kickoff Codex session in either repo mode or worktree mode
+
+## MCP Error Mapping Guidance
+
+MCP tools should mirror the same domain error semantics as REST, while using a
+consistent MCP error envelope for tool-call failures.
+
+Recommended tool error payload:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "transition_blocked",
+    "message": "Cannot transition task from 'in_progress' to 'done'.",
+    "details": {
+      "task_id": "task_123",
+      "from": "in_progress",
+      "to": "done"
+    },
+    "http_status": 409,
+    "retryable": false
+  }
+}
+```
+
+### Mapping from API semantics
+
+| API status/code family | MCP `error.code` | `retryable` |
+| --- | --- | --- |
+| `422 validation_error` | `validation_error` | `false` |
+| `404 *_not_found` | resource-specific code (for example `task_not_found`) | `false` |
+| `409 transition_blocked` / `invalid_transition` | same code from service layer | `false` |
+| `502 runtime_adapter_failure` | `runtime_adapter_failure` | `true` |
+| `503 runtime_unavailable` | `runtime_unavailable` | `true` |
+| `504 runtime_timeout` | `runtime_timeout` | `true` |
+| `500 internal_error` | `internal_error` | generally `false` unless handler marks transient |
+
+### Common MCP failure examples
+
+Validation failure:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "validation_error",
+    "message": "Field 'title' must not be empty.",
+    "details": {
+      "field": "title"
+    },
+    "http_status": 422,
+    "retryable": false
+  }
+}
+```
+
+Not found:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "task_not_found",
+    "message": "Task 'task_999' was not found.",
+    "details": {
+      "task_id": "task_999"
+    },
+    "http_status": 404,
+    "retryable": false
+  }
+}
+```
+
+Transition blocked:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "transition_blocked",
+    "message": "Task is not ready for done.",
+    "details": {
+      "missing": ["artifacts", "checks"]
+    },
+    "http_status": 409,
+    "retryable": false
+  }
+}
+```
+
+Runtime adapter unavailable:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "runtime_unavailable",
+    "message": "tmux server unavailable for session_spawn.",
+    "details": {
+      "adapter": "tmux",
+      "operation": "session_spawn"
+    },
+    "http_status": 503,
+    "retryable": true
+  }
+}
+```
+
+### MCP implementation guidance
+
+- Keep tool-level `error.code` values aligned with shared service exceptions.
+- Preserve structured `details` so agents can perform deterministic repair.
+- Set `retryable` only for transient runtime/infrastructure conditions.
+- If a tool wraps an internal REST call, propagate canonical codes instead of
+  inventing transport-specific variants.
+
