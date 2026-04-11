@@ -4,7 +4,6 @@ import {
   useMemo,
   useRef,
   useState,
-  startTransition,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -14,69 +13,27 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import {
-  Activity,
-  Bot,
-  ChevronRight,
-  FolderGit2,
-  GitBranch,
-  GitFork,
-  Home,
-  MessageSquareText,
-  Plus,
-  Play,
-  Search,
-  ShieldCheck,
-  SlidersHorizontal,
-  Terminal,
-  WandSparkles,
-} from "lucide-react";
+import { Activity, GitFork, Play, Terminal } from "lucide-react";
 import type { TaskSummary } from "@acp/sdk";
 import { ProjectBootstrapWizard } from "@/components/project-bootstrap-wizard";
 import { DetailDrawer, type DetailDrawerSection } from "@/components/DetailDrawer";
-import {
-  ColumnShell,
-  Pill,
-  SectionFrame,
-  SectionTitle,
-  StatTile,
-} from "@/components/ui";
-import { Button } from "@/components/primitives";
+import { ColumnShell, Pill, SectionFrame, SectionTitle } from "@/components/ui";
 import { useUIStore } from "@/store/ui";
 import { AppShell } from "@/layout/AppShell";
-import { DashboardScreen } from "@/screens/DashboardScreen";
+import { SidebarNavigation } from "@/layout/SidebarNavigation";
+import { AppHeader } from "@/layout/AppHeader";
 import {
   DraggableTaskCard,
   DroppableBoardColumn,
-  ProjectBoardScreen,
 } from "@/screens/ProjectBoardScreen";
 import { TaskDetailScreen } from "@/screens/TaskDetailScreen";
 import { SessionDetailScreen } from "@/screens/SessionDetailScreen";
-import { WaitingInboxScreen } from "@/screens/WaitingInboxScreen";
-import { WorktreeInventoryScreen } from "@/screens/WorktreeInventoryScreen";
-import { ActivityScreen } from "@/screens/ActivityScreen";
-import { DiagnosticsScreen } from "@/screens/DiagnosticsScreen";
 import { ProjectOverviewScreen } from "@/screens/ProjectOverviewScreen";
 import {
-  useAddTaskArtifactMutation,
-  useAddTaskCheckMutation,
-  useAddTaskCommentMutation,
-  useAddTaskDependencyMutation,
-  useAnswerQuestionMutation,
-  useBootstrapProjectMutation,
-  useCancelSessionMutation,
-  useCreateFollowUpSessionMutation,
-  useCreateQuestionMutation,
-  useCreateRepositoryMutation,
-  useCreateSessionMutation,
-  useCreateTaskMutation,
-  useCreateWorktreeMutation,
   useDashboardQuery,
   useDiagnosticsQuery,
   useEventsQuery,
   useLiveInvalidationSocket,
-  usePatchTaskMutation,
-  usePatchWorktreeMutation,
   useProjectDetailQuery,
   useProjectsQuery,
   useQuestionDetailQuery,
@@ -86,6 +43,17 @@ import {
   useTaskDetailQuery,
 } from "@/features/control-plane/hooks";
 import type { EventRecord, SearchHit } from "@/lib/api";
+import { useAppUrlState } from "@/app-shell/useAppUrlState";
+import { useControlPlaneMutations } from "@/app-shell/useControlPlaneMutations";
+import { navItems, sectionTitleByKey, type DetailSelection, type DetailEntityType, type NavSection } from "@/app-shell/types";
+import { HomeSectionContainer } from "@/features/navigation/containers/HomeSectionContainer";
+import { SearchSectionContainer } from "@/features/navigation/containers/SearchSectionContainer";
+import { ActivitySectionContainer } from "@/features/activity/containers/ActivitySectionContainer";
+import { DiagnosticsSectionContainer } from "@/features/navigation/containers/DiagnosticsSectionContainer";
+import { ProjectsSectionContainer } from "@/features/project/containers/ProjectsSectionContainer";
+import { WaitingSectionContainer } from "@/features/project/containers/WaitingSectionContainer";
+import { WorktreesSectionContainer } from "@/features/project/containers/WorktreesSectionContainer";
+import { SessionsSectionContainer } from "@/features/project/containers/SessionsSectionContainer";
 
 function formatEvent(eventType: string) {
   return eventType.replaceAll(".", " ").replaceAll("_", " ");
@@ -145,39 +113,6 @@ function getSessionRelationLabel(
   return "origin";
 }
 
-type NavSection =
-  | "home"
-  | "projects"
-  | "waiting"
-  | "sessions"
-  | "worktrees"
-  | "search"
-  | "activity"
-  | "diagnostics";
-
-
-type DetailEntityType = "task" | "session" | "worktree" | "question";
-
-type DetailSelection = {
-  type: DetailEntityType;
-  id: string;
-};
-
-const validSections = new Set<NavSection>([
-  "home",
-  "projects",
-  "waiting",
-  "sessions",
-  "worktrees",
-  "search",
-  "activity",
-  "diagnostics",
-]);
-
-function isDetailEntityType(value: string | null): value is DetailEntityType {
-  return value === "task" || value === "session" || value === "worktree" || value === "question";
-}
-
 export function App() {
   const queryClient = useQueryClient();
   const { selectedProjectId, setSelectedProjectId } = useUIStore();
@@ -226,35 +161,20 @@ export function App() {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const section = params.get("section");
-    const projectId = params.get("project");
-    const taskId = params.get("task");
-    const sessionId = params.get("session");
-    const questionId = params.get("question");
-    const drawerType = params.get("drawer");
-    const drawerId = params.get("drawer_id");
-
-    if (section && validSections.has(section as NavSection)) {
-      setActiveSection(section as NavSection);
-    }
-    if (projectId) {
-      setSelectedProjectId(projectId);
-    }
-    if (taskId) {
-      setInspectedTaskId(taskId);
-    }
-    if (sessionId) {
-      setSelectedSessionId(sessionId);
-    }
-    if (questionId) {
-      setSelectedQuestionId(questionId);
-    }
-    if (drawerId && isDetailEntityType(drawerType)) {
-      setDrawerSelection({ type: drawerType, id: drawerId });
-    }
-  }, [setSelectedProjectId]);
+  useAppUrlState({
+    activeSection,
+    selectedProjectId,
+    inspectedTaskId,
+    selectedSessionId,
+    selectedQuestionId,
+    drawerSelection,
+    setActiveSection,
+    setSelectedProjectId,
+    setInspectedTaskId,
+    setSelectedSessionId,
+    setSelectedQuestionId,
+    setDrawerSelection,
+  });
 
   const dashboardQuery = useDashboardQuery();
   const diagnosticsQuery = useDiagnosticsQuery();
@@ -325,17 +245,53 @@ export function App() {
     }
   }, [projectDetailQuery.data?.waiting_questions, selectedQuestionId]);
 
-  const bootstrapProjectMutation = useBootstrapProjectMutation({
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
-      queryClient.invalidateQueries({
-        queryKey: ["project", result.project.id],
-      });
-      startTransition(() => {
-        setSelectedProjectId(result.project.id);
-      });
+  const {
+    bootstrapProjectMutation,
+    createTaskMutation,
+    createSubtaskMutation,
+    patchTaskMutation,
+    createRepositoryMutation,
+    createWorktreeMutation,
+    patchWorktreeMutation,
+    createSessionMutation,
+    createFollowUpSessionMutation,
+    createQuestionMutation,
+    answerQuestionMutation,
+    addTaskCommentMutation,
+    addTaskCheckMutation,
+    addTaskArtifactMutation,
+    addTaskDependencyMutation,
+    cancelSessionMutation,
+  } = useControlPlaneMutations({
+    queryClient,
+    selectedProjectId,
+    inspectedTaskId,
+    setSelectedProjectId,
+    selectSession: (sessionId) => {
+      setSelectedSessionId(sessionId);
+      setDrawerSelection({ type: "session", id: sessionId });
     },
+    selectQuestion: (questionId) => {
+      setSelectedQuestionId(questionId);
+      setDrawerSelection({ type: "question", id: questionId });
+    },
+    setSelectedRepositoryId,
+    setInspectedTaskId,
+    setSelectedSessionId,
+    setDraftTaskTitle,
+    setDraftSubtaskTitle,
+    setDraftRepoPath,
+    setDraftRepoName,
+    setDraftWorktreeLabel,
+    setSelectedTaskId,
+    setDraftQuestionPrompt,
+    setDraftQuestionReason,
+    setDraftReplyBody,
+    setDraftCommentBody,
+    setDraftCheckSummary,
+    setDraftArtifactName,
+    setDraftArtifactUri,
+    setSelectedDependencyTaskId,
   });
 
   useEffect(() => {
@@ -348,191 +304,6 @@ export function App() {
     setSelectedSessionId(result.kickoff_session.id);
   }, [bootstrapProjectMutation.data, selectedProjectId]);
 
-  const createTaskMutation = useCreateTaskMutation({
-    onSuccess: () => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({
-          queryKey: ["project", selectedProjectId],
-        });
-      }
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      setDraftTaskTitle("");
-    },
-  });
-
-  const createSubtaskMutation = useCreateTaskMutation({
-    onSuccess: () => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({
-          queryKey: ["project", selectedProjectId],
-        });
-      }
-      if (inspectedTaskId) {
-        queryClient.invalidateQueries({
-          queryKey: ["task-detail", inspectedTaskId],
-        });
-      }
-      setDraftSubtaskTitle("");
-    },
-  });
-
-  const patchTaskMutation = usePatchTaskMutation({
-    onSuccess: () => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({
-          queryKey: ["project", selectedProjectId],
-        });
-      }
-      if (inspectedTaskId) {
-        queryClient.invalidateQueries({
-          queryKey: ["task-detail", inspectedTaskId],
-        });
-      }
-    },
-  });
-
-  const createRepositoryMutation = useCreateRepositoryMutation({
-    onSuccess: (repository) => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({
-          queryKey: ["project", selectedProjectId],
-        });
-      }
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      setSelectedRepositoryId(repository.id);
-      setDraftRepoPath("");
-      setDraftRepoName("");
-    },
-  });
-
-  const createWorktreeMutation = useCreateWorktreeMutation({
-    onSuccess: () => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({
-          queryKey: ["project", selectedProjectId],
-        });
-      }
-      setDraftWorktreeLabel("");
-      setSelectedTaskId("");
-    },
-  });
-
-  const patchWorktreeMutation = usePatchWorktreeMutation({
-    onSuccess: () => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({
-          queryKey: ["project", selectedProjectId],
-        });
-      }
-    },
-  });
-
-  const createSessionMutation = useCreateSessionMutation({
-    onSuccess: (session) => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({
-          queryKey: ["project", selectedProjectId],
-        });
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      }
-      selectSession(session.id);
-    },
-  });
-
-  const createFollowUpSessionMutation = useCreateFollowUpSessionMutation({
-    onSuccess: (session) => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({
-          queryKey: ["project", selectedProjectId],
-        });
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      }
-      queryClient.invalidateQueries({ queryKey: ["session-tail"] });
-      queryClient.invalidateQueries({ queryKey: ["session-timeline"] });
-      selectSession(session.id);
-    },
-  });
-
-  const createQuestionMutation = useCreateQuestionMutation({
-    onSuccess: (question) => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({
-          queryKey: ["project", selectedProjectId],
-        });
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      }
-      selectQuestion(question.id);
-      setDraftQuestionPrompt("");
-      setDraftQuestionReason("");
-    },
-  });
-
-  const answerQuestionMutation = useAnswerQuestionMutation({
-    onSuccess: (detail) => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({
-          queryKey: ["project", selectedProjectId],
-        });
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      }
-      queryClient.invalidateQueries({ queryKey: ["question", detail.id] });
-      setDraftReplyBody("");
-    },
-  });
-
-  const addTaskCommentMutation = useAddTaskCommentMutation({
-    onSuccess: () => {
-      if (inspectedTaskId) {
-        queryClient.invalidateQueries({
-          queryKey: ["task-detail", inspectedTaskId],
-        });
-      }
-      setDraftCommentBody("");
-    },
-  });
-
-  const addTaskCheckMutation = useAddTaskCheckMutation({
-    onSuccess: () => {
-      if (inspectedTaskId) {
-        queryClient.invalidateQueries({
-          queryKey: ["task-detail", inspectedTaskId],
-        });
-      }
-      setDraftCheckSummary("");
-    },
-  });
-
-  const addTaskArtifactMutation = useAddTaskArtifactMutation({
-    onSuccess: () => {
-      if (inspectedTaskId) {
-        queryClient.invalidateQueries({
-          queryKey: ["task-detail", inspectedTaskId],
-        });
-      }
-      setDraftArtifactName("");
-      setDraftArtifactUri("");
-    },
-  });
-
-  const addTaskDependencyMutation = useAddTaskDependencyMutation({
-    onSuccess: () => {
-      if (inspectedTaskId) {
-        queryClient.invalidateQueries({
-          queryKey: ["task-detail", inspectedTaskId],
-        });
-      }
-      setSelectedDependencyTaskId("");
-    },
-  });
-
-  const cancelSessionMutation = useCancelSessionMutation({
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["project"] });
-      queryClient.invalidateQueries({ queryKey: ["session-tail"] });
-      queryClient.invalidateQueries({ queryKey: ["session-timeline"] });
-    },
-  });
 
   const filteredProjects = useMemo(() => {
     const projects = projectsQuery.data ?? [];
@@ -689,50 +460,7 @@ export function App() {
     selectedSession?.task_id ?? null,
   );
 
-  useEffect(() => {
-    const params = new URLSearchParams();
-    params.set("section", activeSection);
-    if (selectedProjectId) params.set("project", selectedProjectId);
-    if (inspectedTaskId) params.set("task", inspectedTaskId);
-    if (selectedSessionId) params.set("session", selectedSessionId);
-    if (selectedQuestionId) params.set("question", selectedQuestionId);
-    if (drawerSelection) {
-      params.set("drawer", drawerSelection.type);
-      params.set("drawer_id", drawerSelection.id);
-    }
-    const next = `${window.location.pathname}?${params.toString()}`;
-    window.history.replaceState(null, "", next);
-  }, [
-    activeSection,
-    selectedProjectId,
-    inspectedTaskId,
-    selectedSessionId,
-    selectedQuestionId,
-    drawerSelection,
-  ]);
-
-  const navItems: Array<{ key: NavSection; label: string; icon: typeof Home }> =
-    [
-      { key: "home", label: "Home", icon: Home },
-      { key: "projects", label: "Projects", icon: FolderGit2 },
-      { key: "waiting", label: "Waiting Inbox", icon: MessageSquareText },
-      { key: "sessions", label: "Sessions", icon: Terminal },
-      { key: "worktrees", label: "Worktrees", icon: GitBranch },
-      { key: "search", label: "Search", icon: Search },
-      { key: "activity", label: "Activity", icon: Activity },
-      { key: "diagnostics", label: "Diagnostics/Settings", icon: ShieldCheck },
-    ];
-
-  const sectionTitle = {
-    home: "Home",
-    projects: "Projects",
-    waiting: "Waiting Inbox",
-    sessions: "Sessions",
-    worktrees: "Worktrees",
-    search: "Search",
-    activity: "Activity",
-    diagnostics: "Diagnostics & Settings",
-  }[activeSection];
+  const sectionTitle = sectionTitleByKey[activeSection];
 
   const breadcrumbs = useMemo(() => {
     const crumbs = [sectionTitle];
@@ -995,424 +723,98 @@ export function App() {
   return (
     <AppShell
       sidebar={
-        <>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
-                Agent Control Plane
-              </p>
-              <h1 className="mt-3 text-2xl font-semibold tracking-tight">
-                Local operator workspace
-              </h1>
-            </div>
-            <Pill className="border-emerald-400/20 bg-emerald-400/10 text-emerald-200">
-              v0.1
-            </Pill>
-          </div>
-
-          <div className="mt-8">
-            <SectionTitle>Navigation</SectionTitle>
-            <div className="mt-3 flex flex-col gap-2">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.key}
-                    onClick={() => setActiveSection(item.key)}
-                    className={[
-                      "flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition",
-                      activeSection === item.key
-                        ? "border-[color:var(--color-accent-primary)] bg-[color:var(--color-accent-soft)] text-slate-100"
-                        : "border-white/7 bg-white/2 text-slate-400 hover:bg-white/5",
-                    ].join(" ")}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {item.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="mt-8">
-            <SectionTitle>Projects</SectionTitle>
-            <div className="mt-3 flex flex-col gap-2">
-              {filteredProjects.slice(0, 6).map((project) => (
-                <button
-                  key={project.id}
-                  onClick={() => {
-                    setSelectedProjectId(project.id);
-                    setActiveSection("projects");
-                  }}
-                  className={[
-                    "rounded-2xl border px-3 py-3 text-left text-sm",
-                    selectedProjectId === project.id
-                      ? "border-[color:var(--color-accent-primary)] bg-[color:var(--color-accent-soft)]"
-                      : "border-white/7 bg-white/2",
-                  ].join(" ")}
-                >
-                  <div className="font-semibold text-slate-100">
-                    {project.name}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div ref={bootstrapWizardRef}>
-            <ProjectBootstrapWizard
-              isPending={bootstrapProjectMutation.isPending}
-              errorMessage={
-                bootstrapProjectMutation.error instanceof Error
-                  ? bootstrapProjectMutation.error.message
-                  : undefined
-              }
-              result={bootstrapProjectMutation.data}
-              onSubmit={(payload) => bootstrapProjectMutation.mutate(payload)}
-            />
-          </div>
-        </>
+        <SidebarNavigation
+          activeSection={activeSection}
+          setActiveSection={setActiveSection}
+          filteredProjects={filteredProjects}
+          selectedProjectId={selectedProjectId}
+          setSelectedProjectId={(projectId) => setSelectedProjectId(projectId)}
+          setProjectsSection={() => setActiveSection("projects")}
+          bootstrapWizardRef={bootstrapWizardRef}
+          bootstrapProjectMutation={bootstrapProjectMutation}
+        />
       }
       header={
         <>
-          <section className="surface rounded-[28px] px-5 py-4">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-500">
-                  {breadcrumbs.map((crumb, index) => (
-                    <span
-                      key={crumb}
-                      className="inline-flex items-center gap-2"
-                    >
-                      {index ? <ChevronRight className="h-3 w-3" /> : null}
-                      {crumb}
-                    </span>
-                  ))}
-                </div>
-                <h2 className="mt-2 text-2xl font-semibold text-slate-100">
-                  {sectionTitle}
-                </h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/15 px-3 py-2 text-sm text-slate-400">
-                  <Search className="h-4 w-4" />
-                  <input
-                    value={search}
-                    onChange={(event) => {
-                      setSearch(event.target.value);
-                      if (event.target.value.trim().length > 0) {
-                        setActiveSection("search");
-                      }
-                    }}
-                    className="w-52 border-0 bg-transparent p-0 text-sm outline-none placeholder:text-slate-600"
-                    placeholder="Search workspace"
-                  />
-                </label>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setQuickCreateOpen((open) => !open)}
-                    aria-expanded={quickCreateOpen}
-                    className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Quick create
-                  </button>
-                  {quickCreateOpen ? (
-                    <div className="absolute right-0 z-20 mt-2 w-64 rounded-3xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur">
-                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                        Quick create
-                      </div>
-                      <div className="mt-3 flex flex-col gap-2">
-                        <Button
-                          variant="secondary"
-                          disabled={!selectedProjectId}
-                          onClick={() => {
-                            setQuickCreateOpen(false);
-                            setActiveSection("projects");
-                            setPendingQuickCreateAction("task");
-                          }}
-                          className="justify-start rounded-2xl px-4 py-3"
-                        >
-                          <Plus className="h-4 w-4" />
-                          New task
-                        </Button>
-                        {!selectedProjectId ? (
-                          <div className="px-1 text-xs text-slate-500">
-                            Select a project first to create a task.
-                          </div>
-                        ) : null}
-                        <Button
-                          variant="secondary"
-                          onClick={() => {
-                            setQuickCreateOpen(false);
-                            setActiveSection("projects");
-                            setPendingQuickCreateAction("bootstrap");
-                          }}
-                          className="justify-start rounded-2xl px-4 py-3"
-                        >
-                          <WandSparkles className="h-4 w-4" />
-                          New project bootstrap
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-                <button className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-slate-300">
-                  <SlidersHorizontal className="h-4 w-4" />
-                  View controls
-                </button>
-              </div>
-            </div>
-          </section>
+          <AppHeader
+            breadcrumbs={breadcrumbs}
+            sectionTitle={sectionTitle}
+            search={search}
+            setSearch={setSearch}
+            onSearchActivate={() => setActiveSection("search")}
+            quickCreateOpen={quickCreateOpen}
+            selectedProjectId={selectedProjectId}
+            onToggleQuickCreate={() => setQuickCreateOpen((open) => !open)}
+            onQuickCreateTask={() => {
+              setQuickCreateOpen(false);
+              setActiveSection("projects");
+              setPendingQuickCreateAction("task");
+            }}
+            onQuickCreateBootstrap={() => {
+              setQuickCreateOpen(false);
+              setActiveSection("projects");
+              setPendingQuickCreateAction("bootstrap");
+            }}
+          />
           {activeSection === "home" ? (
-            <DashboardScreen>
-              <section className="surface rounded-[32px] px-6 py-6">
-                <div className="flex flex-wrap items-end justify-between gap-6">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
-                      Operational overview
-                    </p>
-                    <h2 className="mt-3 text-4xl font-semibold tracking-tight">
-                      Observe, steer, resume.
-                    </h2>
-                    <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-                      The control plane keeps project state, board flow, runtime
-                      context, and future agent sessions in one local-first
-                      workspace.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-slate-400">
-                    <Activity className="h-4 w-4 text-[color:var(--color-accent-primary)]" />
-                    {diagnosticsQuery.data?.environment ?? "development"}{" "}
-                    environment
-                  </div>
-                </div>
-
-                <div className="mt-8 grid gap-4 md:grid-cols-4">
-                  <StatTile
-                    label="Projects"
-                    value={dashboardQuery.data?.projects.length ?? 0}
-                  />
-                  <StatTile
-                    label="Waiting"
-                    value={dashboardQuery.data?.waiting_count ?? 0}
-                  />
-                  <StatTile
-                    label="Blocked"
-                    value={dashboardQuery.data?.blocked_count ?? 0}
-                  />
-                  <StatTile
-                    label="Running Sessions"
-                    value={dashboardQuery.data?.running_sessions ?? 0}
-                  />
-                </div>
-
-                <div className="mt-8 grid gap-4 xl:grid-cols-3">
-                  <div className="rounded-[28px] border border-white/8 bg-black/10 p-5">
-                    <SectionTitle>Waiting Across Projects</SectionTitle>
-                    <div className="mt-4 flex flex-col gap-3">
-                      {dashboardQuery.data?.waiting_questions.map(
-                        (question) => (
-                          <button
-                            key={question.id}
-                            onClick={() => {
-                              setSelectedProjectId(question.project_id);
-                              selectQuestion(question.id);
-                            }}
-                            className="rounded-2xl border border-white/7 bg-white/3 px-4 py-3 text-left"
-                          >
-                            <div className="text-sm font-semibold text-slate-100">
-                              {question.prompt}
-                            </div>
-                            <div className="mt-1 text-xs text-slate-500">
-                              {question.urgency ?? "open"} ·{" "}
-                              {question.project_id.slice(0, 8)}
-                            </div>
-                          </button>
-                        ),
-                      )}
-                      {!dashboardQuery.data?.waiting_questions.length ? (
-                        <div className="text-sm text-slate-500">
-                          No open waiting questions across projects.
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="rounded-[28px] border border-white/8 bg-black/10 p-5">
-                    <SectionTitle>Blocked Tasks</SectionTitle>
-                    <div className="mt-4 flex flex-col gap-3">
-                      {dashboardQuery.data?.blocked_tasks.map((task) => (
-                        <button
-                          key={task.id}
-                          onClick={() => {
-                            setSelectedProjectId(task.project_id);
-                            selectTask(task.id);
-                          }}
-                          className="rounded-2xl border border-white/7 bg-white/3 px-4 py-3 text-left"
-                        >
-                          <div className="text-sm font-semibold text-slate-100">
-                            {task.title}
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {task.blocked_reason ?? "Blocked"}
-                          </div>
-                        </button>
-                      ))}
-                      {!dashboardQuery.data?.blocked_tasks.length ? (
-                        <div className="text-sm text-slate-500">
-                          No blocked tasks right now.
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="rounded-[28px] border border-white/8 bg-black/10 p-5">
-                    <SectionTitle>Running Sessions</SectionTitle>
-                    <div className="mt-4 flex flex-col gap-3">
-                      {dashboardQuery.data?.active_sessions.map((session) => (
-                        <button
-                          key={session.id}
-                          onClick={() => {
-                            setSelectedProjectId(session.project_id);
-                            selectSession(session.id);
-                          }}
-                          className="rounded-2xl border border-white/7 bg-white/3 px-4 py-3 text-left"
-                        >
-                          <div className="text-sm font-semibold text-slate-100">
-                            {session.profile}
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {session.session_name}
-                          </div>
-                        </button>
-                      ))}
-                      {!dashboardQuery.data?.active_sessions.length ? (
-                        <div className="text-sm text-slate-500">
-                          No running sessions right now.
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-8 rounded-[28px] border border-white/8 bg-black/10 p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <SectionTitle>Activity Feed</SectionTitle>
-                      <div className="mt-2 text-sm text-slate-500">
-                        Recent audit events for {projectDetailQuery.data?.project.name ?? "the control plane"}.
-                      </div>
-                    </div>
-                    <Pill className="border-white/8 text-slate-300">
-                      {eventsQuery.data?.length ?? 0} visible
-                    </Pill>
-                  </div>
-                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                    {(eventsQuery.data ?? []).map((event) => (
-                      <div
-                        key={event.id}
-                        className="rounded-2xl border border-white/7 bg-white/3 px-4 py-4"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-sm font-semibold text-slate-100">
-                            {formatEvent(event.event_type)}
-                          </div>
-                          <Pill className="border-white/8 text-slate-300">
-                            {event.entity_type}
-                          </Pill>
-                        </div>
-                        <div className="mt-2 text-sm text-slate-400">
-                          {summarizeEvent(event)}
-                        </div>
-                        <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-600">
-                          {new Date(event.created_at).toLocaleString()}
-                        </div>
-                      </div>
-                    ))}
-                    {!eventsQuery.data?.length ? (
-                      <div className="text-sm text-slate-500">
-                        No events recorded yet for this scope.
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </section>
-            </DashboardScreen>
+            <HomeSectionContainer
+              environment={diagnosticsQuery.data?.environment ?? "development"}
+              dashboard={dashboardQuery.data}
+              events={eventsQuery.data ?? []}
+              projectName={projectDetailQuery.data?.project.name ?? "the control plane"}
+              onOpenQuestion={(questionId, projectId) => {
+                setSelectedProjectId(projectId);
+                selectQuestion(questionId);
+              }}
+              onOpenTask={(taskId, projectId) => {
+                setSelectedProjectId(projectId);
+                selectTask(taskId);
+              }}
+              onOpenSession={(sessionId, projectId) => {
+                setSelectedProjectId(projectId);
+                selectSession(sessionId);
+              }}
+              formatEvent={formatEvent}
+              summarizeEvent={summarizeEvent}
+            />
           ) : null}
         </>
       }
       main={
         <>
           {activeSection === "search" ? (
-            <SectionFrame className="px-5 py-5">
-              <SectionTitle>Search Results</SectionTitle>
-              <div className="mt-2 text-sm text-slate-500">
-                Workspace-wide results across projects, tasks, questions, sessions, and events.
-              </div>
-              <div className="mt-4 flex flex-col gap-3">
-                {deferredSearch.trim().length < 2 ? (
-                  <div className="text-sm text-slate-500">
-                    Type at least two characters to search the entire workspace.
-                  </div>
-                ) : null}
-                {searchQuery.data?.hits.map((hit) => (
-                  <button
-                    key={`${hit.entity_type}-${hit.entity_id}`}
-                    onClick={() => {
-                      if (hit.entity_type === "project") {
-                        setSelectedProjectId(hit.entity_id);
-                        setActiveSection("projects");
-                      } else if (hit.entity_type === "task") {
-                        selectTask(hit.entity_id);
-                        setActiveSection("projects");
-                      } else if (hit.entity_type === "waiting_question") {
-                        selectQuestion(hit.entity_id);
-                        setActiveSection("waiting");
-                      } else if (hit.entity_type === "session") {
-                        selectSession(hit.entity_id);
-                        setActiveSection("sessions");
-                      } else if (hit.entity_type === "event") {
-                        setActiveSection("activity");
-                      }
-                      if (hit.project_id && hit.entity_type !== "project") {
-                        setSelectedProjectId(hit.project_id);
-                      }
-                    }}
-                    className="rounded-2xl border border-white/7 bg-white/3 px-4 py-3 text-left"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-sm font-semibold text-slate-100">
-                        {hit.title}
-                      </div>
-                      <Pill className="border-white/8 text-slate-300">
-                        {hit.entity_type}
-                      </Pill>
-                    </div>
-                    <div className="mt-2 line-clamp-2 text-sm text-slate-500">
-                      {formatSearchSnippet(hit)}
-                    </div>
-                    {hit.project_id ? (
-                      <div className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-600">
-                        Project · {projectNameById.get(hit.project_id) ?? hit.project_id.slice(0, 8)}
-                      </div>
-                    ) : null}
-                  </button>
-                ))}
-              </div>
-            </SectionFrame>
+            <SearchSectionContainer
+              deferredSearch={deferredSearch}
+              hits={searchQuery.data?.hits ?? []}
+              formatSearchSnippet={formatSearchSnippet}
+              projectNameById={projectNameById}
+              onSelectHit={(hit) => {
+                if (hit.entity_type === "project") {
+                  setSelectedProjectId(hit.entity_id);
+                  setActiveSection("projects");
+                } else if (hit.entity_type === "task") {
+                  selectTask(hit.entity_id);
+                  setActiveSection("projects");
+                } else if (hit.entity_type === "waiting_question") {
+                  selectQuestion(hit.entity_id);
+                  setActiveSection("waiting");
+                } else if (hit.entity_type === "session") {
+                  selectSession(hit.entity_id);
+                  setActiveSection("sessions");
+                } else if (hit.entity_type === "event") {
+                  setActiveSection("activity");
+                }
+                if (hit.project_id && hit.entity_type !== "project") {
+                  setSelectedProjectId(hit.project_id);
+                }
+              }}
+            />
           ) : null}
           {activeSection === "activity" ? (
-            <ActivityScreen
-              active
+            <ActivitySectionContainer
               events={activityEventsQuery.data ?? []}
               loading={activityEventsQuery.isLoading}
-              error={
-                activityEventsQuery.error instanceof Error
-                  ? activityEventsQuery.error.message
-                  : null
-              }
+              error={activityEventsQuery.error instanceof Error ? activityEventsQuery.error.message : null}
               projectOptions={activityProjectOptions}
               taskOptions={activityTaskOptions}
               sessionOptions={activitySessionOptions}
@@ -1421,7 +823,7 @@ export function App() {
           {activeSection !== "home" && activeSection !== "search" && activeSection !== "activity" ? (
             <ProjectOverviewScreen>
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-                <ProjectBoardScreen>
+                <ProjectsSectionContainer active={activeSection === "projects"}>
                   {activeSection === "projects" ? (
                     <SectionFrame className="px-5 py-5">
                       <div className="flex items-center justify-between gap-4">
@@ -1538,7 +940,7 @@ export function App() {
                       </DndContext>
                     </SectionFrame>
                   ) : null}
-                </ProjectBoardScreen>
+                </ProjectsSectionContainer>
 
                 <div className="flex flex-col gap-6">
                   {activeSection === "projects" ? (
@@ -2069,7 +1471,7 @@ export function App() {
                     )
                   ) : null}
 
-                  <WorktreeInventoryScreen
+                  <WorktreesSectionContainer
                     active={activeSection === "worktrees"}
                     repositories={projectDetailQuery.data?.repositories ?? []}
                     worktrees={projectDetailQuery.data?.worktrees ?? []}
@@ -2611,7 +2013,7 @@ export function App() {
                     </SectionFrame>
                   ) : null}
 
-                  <WaitingInboxScreen
+                  <WaitingSectionContainer
                     active={activeSection === "waiting"}
                     questions={projectDetailQuery.data?.waiting_questions ?? []}
                     selectedQuestionId={selectedQuestionId}
@@ -2641,179 +2043,9 @@ export function App() {
                     }}
                   />
 
-                  <DiagnosticsScreen>
-                    {activeSection === "diagnostics" ? (
-                      <SectionFrame className="px-5 py-5">
-                        <SectionTitle>Runtime readiness</SectionTitle>
-                        <div className="mt-5 grid gap-3">
-                          <Signal
-                            label="tmux"
-                            ready={Boolean(
-                              diagnosticsQuery.data?.tmux_available,
-                            )}
-                            icon={Bot}
-                          />
-                          <Signal
-                            label="tmux server"
-                            ready={Boolean(
-                              diagnosticsQuery.data?.tmux_server_running,
-                            )}
-                            icon={Terminal}
-                          />
-                          <Signal
-                            label="git"
-                            ready={Boolean(
-                              diagnosticsQuery.data?.git_available,
-                            )}
-                            icon={FolderGit2}
-                          />
-                          <Signal
-                            label="runtime orphans"
-                            ready={
-                              !Boolean(
-                                diagnosticsQuery.data
-                                  ?.orphan_runtime_session_count,
-                              )
-                            }
-                            icon={Activity}
-                          />
-                          <Signal label="audit log" ready icon={ShieldCheck} />
-                          <Signal
-                            label="waiting inbox"
-                            ready
-                            icon={MessageSquareText}
-                          />
-                        </div>
-                      </SectionFrame>
-                    ) : null}
-                  </DiagnosticsScreen>
-
-                  <DiagnosticsScreen>
-                    {activeSection === "diagnostics" ? (
-                      <SectionFrame className="px-5 py-5">
-                        <SectionTitle>Diagnostics</SectionTitle>
-                        <div className="mt-4 grid gap-3">
-                          <DiagRow
-                            label="DB path"
-                            value={
-                              diagnosticsQuery.data?.database_path ?? "unknown"
-                            }
-                          />
-                          <DiagRow
-                            label="Runtime home"
-                            value={
-                              diagnosticsQuery.data?.runtime_home ?? "unknown"
-                            }
-                          />
-                          <DiagRow
-                            label="Repositories"
-                            value={String(
-                              diagnosticsQuery.data?.current_repository_count ??
-                                0,
-                            )}
-                          />
-                          <DiagRow
-                            label="Worktrees"
-                            value={String(
-                              diagnosticsQuery.data?.current_worktree_count ??
-                                0,
-                            )}
-                          />
-                          <DiagRow
-                            label="Sessions"
-                            value={String(
-                              diagnosticsQuery.data?.current_session_count ?? 0,
-                            )}
-                          />
-                          <DiagRow
-                            label="Runtime sessions"
-                            value={String(
-                              diagnosticsQuery.data
-                                ?.runtime_managed_session_count ?? 0,
-                            )}
-                          />
-                          <DiagRow
-                            label="Reconciled on check"
-                            value={String(
-                              diagnosticsQuery.data?.reconciled_session_count ??
-                                0,
-                            )}
-                          />
-                          <DiagRow
-                            label="Orphan tmux sessions"
-                            value={String(
-                              diagnosticsQuery.data
-                                ?.orphan_runtime_session_count ?? 0,
-                            )}
-                          />
-                          <DiagRow
-                            label="Stale worktrees"
-                            value={String(
-                              diagnosticsQuery.data?.stale_worktree_count ?? 0,
-                            )}
-                          />
-                          <DiagRow
-                            label="Open questions"
-                            value={String(
-                              diagnosticsQuery.data
-                                ?.current_open_question_count ?? 0,
-                            )}
-                          />
-                          <DiagRow
-                            label="Events"
-                            value={String(
-                              diagnosticsQuery.data?.current_event_count ?? 0,
-                            )}
-                          />
-                        </div>
-                        {diagnosticsQuery.data?.orphan_runtime_sessions
-                          .length ? (
-                          <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-4">
-                            <div className="text-sm font-medium text-amber-100">
-                              Orphan runtime sessions
-                            </div>
-                            <div className="mt-2 flex flex-col gap-2">
-                              {diagnosticsQuery.data.orphan_runtime_sessions.map(
-                                (sessionName) => (
-                                  <div
-                                    key={sessionName}
-                                    className="text-sm text-amber-50"
-                                  >
-                                    {sessionName}
-                                  </div>
-                                ),
-                              )}
-                            </div>
-                          </div>
-                        ) : null}
-                        {diagnosticsQuery.data?.stale_worktrees.length ? (
-                          <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-4">
-                            <div className="text-sm font-medium text-amber-100">
-                              Worktree recommendations
-                            </div>
-                            <div className="mt-2 flex flex-col gap-3">
-                              {diagnosticsQuery.data.stale_worktrees.map(
-                                (issue) => (
-                                  <div
-                                    key={issue.worktree_id}
-                                    className="rounded-2xl border border-amber-300/15 bg-black/10 px-3 py-3"
-                                  >
-                                    <div className="text-sm font-medium text-amber-50">
-                                      {issue.branch_name}
-                                    </div>
-                                    <div className="mt-1 text-xs text-amber-100">
-                                      {issue.recommendation} ·{" "}
-                                      {issue.reasons.join(", ")}
-                                    </div>
-                                  </div>
-                                ),
-                              )}
-                            </div>
-                          </div>
-                        ) : null}
-                      </SectionFrame>
-                    ) : null}
-                  </DiagnosticsScreen>
+                  {activeSection === "diagnostics" ? (
+                    <DiagnosticsSectionContainer diagnostics={diagnosticsQuery.data} />
+                  ) : null}
 
                 </div>
               </div>
@@ -2823,44 +2055,5 @@ export function App() {
       }
       drawer={drawerContent}
     />
-  );
-}
-
-function Signal({
-  label,
-  ready,
-  icon: Icon,
-}: {
-  label: string;
-  ready: boolean;
-  icon: typeof Activity;
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-2xl border border-white/7 bg-white/3 px-4 py-3">
-      <div className="flex items-center gap-3">
-        <Icon className="h-4 w-4 text-slate-400" />
-        <span className="text-sm text-slate-300">{label}</span>
-      </div>
-      <Pill
-        className={
-          ready
-            ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
-            : "border-amber-400/20 bg-amber-400/10 text-amber-100"
-        }
-      >
-        {ready ? "ready" : "pending"}
-      </Pill>
-    </div>
-  );
-}
-
-function DiagRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4 rounded-2xl border border-white/7 bg-white/3 px-4 py-3">
-      <div className="text-sm text-slate-400">{label}</div>
-      <div className="max-w-[60%] break-all text-right text-sm text-slate-200">
-        {value}
-      </div>
-    </div>
   );
 }
