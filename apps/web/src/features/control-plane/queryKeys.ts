@@ -1,0 +1,19 @@
+export const controlPlaneQueryKeys = {
+  dashboard: ["dashboard"] as const,
+  diagnostics: ["diagnostics"] as const,
+  projects: ["projects"] as const,
+  projectRoot: ["project"] as const,
+  project: (projectId: string | null) => ["project", projectId] as const,
+  taskDetailRoot: ["task-detail"] as const,
+  taskDetail: (taskId: string | null) => ["task-detail", taskId] as const,
+  questionRoot: ["question"] as const,
+  question: (questionId: string | null) => ["question", questionId] as const,
+  sessionTailRoot: ["session-tail"] as const,
+  sessionTail: (sessionId: string | null) => ["session-tail", sessionId] as const,
+  sessionTimelineRoot: ["session-timeline"] as const,
+  sessionTimeline: (sessionId: string | null) => ["session-timeline", sessionId] as const,
+  eventsRoot: ["events"] as const,
+  events: (projectId: string | null) => ["events", projectId] as const,
+  search: (query: string, projectId?: string | null) =>
+    ["search", query, projectId] as const,
+};

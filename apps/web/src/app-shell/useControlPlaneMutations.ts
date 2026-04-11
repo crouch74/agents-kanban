@@ -17,6 +17,7 @@ import {
   usePatchTaskMutation,
   usePatchWorktreeMutation,
 } from "@/features/control-plane/hooks";
+import { createControlPlaneInvalidation } from "@/features/control-plane/invalidation";
 
 type Params = {
   queryClient: QueryClient;
@@ -69,11 +70,19 @@ export function useControlPlaneMutations({
   setDraftArtifactUri,
   setSelectedDependencyTaskId,
 }: Params) {
+  const invalidation = createControlPlaneInvalidation({
+    queryClient,
+    projectId: selectedProjectId,
+    taskId: inspectedTaskId,
+  });
+
   const bootstrapProjectMutation = useBootstrapProjectMutation({
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
-      queryClient.invalidateQueries({ queryKey: ["project", result.project.id] });
+      invalidation.invalidateProjectMutation({
+        projectId: result.project.id,
+        includeDashboard: true,
+        includeProjects: true,
+      });
       startTransition(() => {
         setSelectedProjectId(result.project.id);
       });
@@ -82,43 +91,27 @@ export function useControlPlaneMutations({
 
   const createTaskMutation = useCreateTaskMutation({
     onSuccess: () => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
-      }
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      invalidation.invalidateProjectMutation({ includeDashboard: true });
       setDraftTaskTitle("");
     },
   });
 
   const createSubtaskMutation = useCreateTaskMutation({
     onSuccess: () => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
-      }
-      if (inspectedTaskId) {
-        queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
-      }
+      invalidation.invalidateProjectMutation();
       setDraftSubtaskTitle("");
     },
   });
 
   const patchTaskMutation = usePatchTaskMutation({
     onSuccess: () => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
-      }
-      if (inspectedTaskId) {
-        queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
-      }
+      invalidation.invalidateProjectMutation();
     },
   });
 
   const createRepositoryMutation = useCreateRepositoryMutation({
     onSuccess: (repository) => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
-      }
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      invalidation.invalidateProjectMutation({ includeDashboard: true });
       setSelectedRepositoryId(repository.id);
       setDraftRepoPath("");
       setDraftRepoName("");
@@ -127,9 +120,7 @@ export function useControlPlaneMutations({
 
   const createWorktreeMutation = useCreateWorktreeMutation({
     onSuccess: () => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
-      }
+      invalidation.invalidateProjectMutation();
       setDraftWorktreeLabel("");
       setSelectedTaskId("");
     },
@@ -137,40 +128,27 @@ export function useControlPlaneMutations({
 
   const patchWorktreeMutation = usePatchWorktreeMutation({
     onSuccess: () => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
-      }
+      invalidation.invalidateProjectMutation();
     },
   });
 
   const createSessionMutation = useCreateSessionMutation({
     onSuccess: (session) => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      }
+      invalidation.invalidateSessionMutation({ includeSessionStreams: false });
       selectSession(session.id);
     },
   });
 
   const createFollowUpSessionMutation = useCreateFollowUpSessionMutation({
     onSuccess: (session) => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      }
-      queryClient.invalidateQueries({ queryKey: ["session-tail"] });
-      queryClient.invalidateQueries({ queryKey: ["session-timeline"] });
+      invalidation.invalidateSessionMutation();
       selectSession(session.id);
     },
   });
 
   const createQuestionMutation = useCreateQuestionMutation({
     onSuccess: (question) => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      }
+      invalidation.invalidateProjectMutation({ includeDashboard: true });
       selectQuestion(question.id);
       setDraftQuestionPrompt("");
       setDraftQuestionReason("");
@@ -179,38 +157,31 @@ export function useControlPlaneMutations({
 
   const answerQuestionMutation = useAnswerQuestionMutation({
     onSuccess: (detail) => {
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      }
-      queryClient.invalidateQueries({ queryKey: ["question", detail.id] });
+      invalidation.invalidateProjectMutation({
+        includeDashboard: true,
+        questionId: detail.id,
+      });
       setDraftReplyBody("");
     },
   });
 
   const addTaskCommentMutation = useAddTaskCommentMutation({
     onSuccess: () => {
-      if (inspectedTaskId) {
-        queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
-      }
+      invalidation.invalidateTaskDetailMutation();
       setDraftCommentBody("");
     },
   });
 
   const addTaskCheckMutation = useAddTaskCheckMutation({
     onSuccess: () => {
-      if (inspectedTaskId) {
-        queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
-      }
+      invalidation.invalidateTaskDetailMutation();
       setDraftCheckSummary("");
     },
   });
 
   const addTaskArtifactMutation = useAddTaskArtifactMutation({
     onSuccess: () => {
-      if (inspectedTaskId) {
-        queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
-      }
+      invalidation.invalidateTaskDetailMutation();
       setDraftArtifactName("");
       setDraftArtifactUri("");
     },
@@ -218,19 +189,14 @@ export function useControlPlaneMutations({
 
   const addTaskDependencyMutation = useAddTaskDependencyMutation({
     onSuccess: () => {
-      if (inspectedTaskId) {
-        queryClient.invalidateQueries({ queryKey: ["task-detail", inspectedTaskId] });
-      }
+      invalidation.invalidateTaskDetailMutation();
       setSelectedDependencyTaskId("");
     },
   });
 
   const cancelSessionMutation = useCancelSessionMutation({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["project"] });
-      queryClient.invalidateQueries({ queryKey: ["session-tail"] });
-      queryClient.invalidateQueries({ queryKey: ["session-timeline"] });
+      invalidation.invalidateSessionMutation({ includeProjectRoot: true });
       setInspectedTaskId(null);
       setSelectedSessionId(null);
     },

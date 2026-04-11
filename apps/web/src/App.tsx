@@ -52,6 +52,7 @@ import { DiagnosticsSectionContainer } from "@/features/navigation/containers/Di
 import { ProjectsSectionContainer } from "@/features/project/containers/ProjectsSectionContainer";
 import { WaitingSectionContainer } from "@/features/project/containers/WaitingSectionContainer";
 import { WorktreesSectionContainer } from "@/features/project/containers/WorktreesSectionContainer";
+import { createControlPlaneInvalidation } from "@/features/control-plane/invalidation";
 
 function formatEvent(eventType: string) {
   return eventType.replaceAll(".", " ").replaceAll("_", " ");
@@ -160,6 +161,7 @@ export function App() {
   const activityEventsQuery = useEventsQuery(null);
   const projectsQuery = useProjectsQuery();
   const searchQuery = useSearchQuery(deferredSearch);
+  const invalidation = createControlPlaneInvalidation({ queryClient });
 
   useEffect(() => {
     if (!selectedProjectId && projectsQuery.data?.[0]) {
@@ -167,17 +169,7 @@ export function App() {
     }
   }, [projectsQuery.data, selectedProjectId, setSelectedProjectId]);
 
-  useLiveInvalidationSocket(() => {
-    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    queryClient.invalidateQueries({ queryKey: ["diagnostics"] });
-    queryClient.invalidateQueries({ queryKey: ["projects"] });
-    queryClient.invalidateQueries({ queryKey: ["project"] });
-    queryClient.invalidateQueries({ queryKey: ["task-detail"] });
-    queryClient.invalidateQueries({ queryKey: ["question"] });
-    queryClient.invalidateQueries({ queryKey: ["session-tail"] });
-    queryClient.invalidateQueries({ queryKey: ["session-timeline"] });
-    queryClient.invalidateQueries({ queryKey: ["events"] });
-  });
+  useLiveInvalidationSocket(invalidation.invalidateLiveUpdate);
 
   const projectDetailQuery = useProjectDetailQuery(selectedProjectId);
 
