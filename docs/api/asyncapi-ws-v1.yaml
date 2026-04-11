@@ -298,3 +298,58 @@ x-backwardCompatibility:
     - "New `event_type` enum members may be added in v1 without breaking existing members."
     - "Existing `event_type` strings and existing detail keys are not renamed or removed in v1."
     - "Unknown message types should be safely ignored by clients for forward compatibility."
+
+
+x-routeBroadcasters:
+  description: |
+    REST route broadcasters currently emitting `mutation.committed` payloads.
+    Method/path entries reflect the write endpoints calling `broadcast_change`.
+  routes:
+    project.created:
+      method: POST
+      path: /api/v1/projects
+    project.bootstrapped:
+      method: POST
+      path: /api/v1/projects/bootstrap
+    task.created:
+      method: POST
+      path: /api/v1/tasks
+    task.updated:
+      method: PATCH
+      path: /api/v1/tasks/{task_id}
+    task.comment_added:
+      method: POST
+      path: /api/v1/tasks/{task_id}/comments
+    task.check_added:
+      method: POST
+      path: /api/v1/tasks/{task_id}/checks
+    task.artifact_added:
+      method: POST
+      path: /api/v1/tasks/{task_id}/artifacts
+    task.dependency_added:
+      method: POST
+      path: /api/v1/tasks/{task_id}/dependencies
+    session.spawned:
+      method: POST
+      path: /api/v1/sessions
+    session.follow_up_spawned:
+      method: POST
+      path: /api/v1/sessions/{session_id}/follow-up
+    session.cancelled:
+      method: POST
+      path: /api/v1/sessions/{session_id}/cancel
+    repository.created:
+      method: POST
+      path: /api/v1/repositories
+    waiting_question.opened:
+      method: POST
+      path: /api/v1/questions
+    waiting_question.answered:
+      method: POST
+      path: /api/v1/questions/{question_id}/replies
+    worktree.created:
+      method: POST
+      path: /api/v1/worktrees
+    worktree.updated:
+      method: PATCH
+      path: /api/v1/worktrees/{worktree_id}
