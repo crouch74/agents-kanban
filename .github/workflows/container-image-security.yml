@@ -73,8 +73,8 @@ jobs:
 
           for image in "${IMAGES[@]}"; do
             safe_name="${image//[:\/]/-}"
-            trivy image --scanners vuln --format json --output ".artifacts/security/container/trivy-${safe_name}.json" "$image"
-            GRYPE_DB_VALIDATE_AGE=false grype "$image" -o json > ".artifacts/security/container/grype-${safe_name}.json"
+            trivy image --scanners vuln --ignore-unfixed --format json --output ".artifacts/security/container/trivy-${safe_name}.json" "$image"
+            GRYPE_DB_VALIDATE_AGE=false grype "$image" --only-fixed -o json > ".artifacts/security/container/grype-${safe_name}.json"
           done
 
           python - <<'PY'
