@@ -3,6 +3,9 @@
 ## Purpose
 `apps/web` is the operator UI for Agent Control Plane. It presents a glanceable local-first dashboard/kanban experience, drives operator actions, and consumes REST + WebSocket signals from the backend.
 
+## Shared Glossary
+- Canonical terms used by this module (for example `workflow_state`, blocked/waiting overlays, completion readiness, and waiting questions) are defined in [`docs/glossary.md`](../../docs/glossary.md).
+
 ## Key Inputs / Outputs
 - **Inputs**
   - REST API responses from `apps/api`.

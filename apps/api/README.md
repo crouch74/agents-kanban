@@ -3,6 +3,9 @@
 ## Purpose
 `apps/api` hosts the FastAPI application that exposes Agent Control Plane REST APIs and WebSocket broadcast endpoints. It is the primary operator-facing backend surface and delegates business logic to shared services in `packages/core`.
 
+## Shared Glossary
+- Canonical terms used by this module (for example `workflow_state`, blocked/waiting overlays, completion readiness, and audit events) are defined in [`docs/glossary.md`](../../docs/glossary.md).
+
 ## Key Inputs / Outputs
 - **Inputs**
   - HTTP requests under `/api/v1/*` (projects, tasks, sessions, diagnostics, search, etc.).

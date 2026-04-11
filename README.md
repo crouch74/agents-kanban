@@ -215,6 +215,7 @@ This will:
 
 ## Docs
 
+- [Glossary](docs/glossary.md)
 - [Module Guides](#module-guides)
 - [Current State](docs/prd/current-state.md)
 - [Refined PRD](docs/prd/refined-prd.md)
