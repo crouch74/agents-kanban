@@ -20,6 +20,17 @@ def list_questions(
     status: str | None = Query(default=None),
     service=Depends(get_waiting_service),
 ) -> list[WaitingQuestionRead]:
+    """Handle list questions requests.
+
+    Args:
+        project_id: from request/signature.; status: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     return [
         WaitingQuestionRead.model_validate(item)
         for item in service.list_questions(project_id=project_id, status=status)
@@ -28,6 +39,17 @@ def list_questions(
 
 @router.post("/questions", response_model=WaitingQuestionRead, status_code=201)
 def open_question(payload: WaitingQuestionCreate, request: Request, service=Depends(get_waiting_service)) -> WaitingQuestionRead:
+    """Handle open question requests.
+
+    Args:
+        payload: from request/signature.; request: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         question = service.open_question(payload)
     except ValueError as exc:
@@ -48,6 +70,17 @@ def open_question(payload: WaitingQuestionCreate, request: Request, service=Depe
 
 @router.get("/questions/{question_id}", response_model=WaitingQuestionDetail)
 def get_question(question_id: str, service=Depends(get_waiting_service)) -> WaitingQuestionDetail:
+    """Handle get question requests.
+
+    Args:
+        question_id: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         return service.get_question_detail(question_id)
     except ValueError as exc:
@@ -61,6 +94,19 @@ def answer_question(
     request: Request,
     service=Depends(get_waiting_service),
 ) -> WaitingQuestionDetail:
+    """Handle answer question requests.
+
+    Args:
+        question_id: from request/signature.; payload: from request/signature.; request: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    WHY:
+        Keeps workflow/event semantics centralized in services before broadcasting UI invalidation.
+    """
     try:
         service.answer_question(question_id, payload)
         response = service.get_question_detail(question_id)

@@ -11,11 +11,33 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 @router.get("", response_model=list[ProjectSummary])
 def list_projects(service=Depends(get_project_service)) -> list[ProjectSummary]:
+    """Handle list projects requests.
+
+    Args:
+        service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     return [ProjectSummary.model_validate(project) for project in service.list_projects()]
 
 
 @router.post("", response_model=ProjectSummary, status_code=201)
 def create_project(payload: ProjectCreate, request: Request, service=Depends(get_project_service)) -> ProjectSummary:
+    """Handle create project requests.
+
+    Args:
+        payload: from request/signature.; request: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     project = service.create_project(payload)
     response = ProjectSummary.model_validate(project)
     broadcast_change(
@@ -35,6 +57,19 @@ def bootstrap_project(
     request: Request,
     service=Depends(get_bootstrap_service),
 ) -> ProjectBootstrapRead:
+    """Handle bootstrap project requests.
+
+    Args:
+        payload: from request/signature.; request: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    WHY:
+        Keeps workflow/event semantics centralized in services before broadcasting UI invalidation.
+    """
     try:
         response = service.bootstrap_project(payload)
     except ValueError as exc:
@@ -54,6 +89,17 @@ def bootstrap_project(
 
 @router.get("/{project_id}", response_model=ProjectOverview)
 def get_project(project_id: str, service=Depends(get_project_service)) -> ProjectOverview:
+    """Handle get project requests.
+
+    Args:
+        project_id: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         return service.get_project_overview(project_id)
     except ValueError as exc:

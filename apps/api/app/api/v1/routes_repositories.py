@@ -14,11 +14,33 @@ def list_repositories(
     project_id: str | None = Query(default=None),
     service=Depends(get_repository_service),
 ) -> list[RepositoryRead]:
+    """Handle list repositories requests.
+
+    Args:
+        project_id: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     return [RepositoryRead.model_validate(item) for item in service.list_repositories(project_id=project_id)]
 
 
 @router.post("/repositories", response_model=RepositoryRead, status_code=201)
 def create_repository(payload: RepositoryCreate, request: Request, service=Depends(get_repository_service)) -> RepositoryRead:
+    """Handle create repository requests.
+
+    Args:
+        payload: from request/signature.; request: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         repository = service.create_repository(payload)
     except ValueError as exc:
@@ -37,6 +59,17 @@ def create_repository(payload: RepositoryCreate, request: Request, service=Depen
 
 @router.get("/repositories/{repository_id}", response_model=RepositoryRead)
 def get_repository(repository_id: str, service=Depends(get_repository_service)) -> RepositoryRead:
+    """Handle get repository requests.
+
+    Args:
+        repository_id: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         repository = service.get_repository(repository_id)
     except ValueError as exc:
