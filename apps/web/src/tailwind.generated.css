@@ -7,7 +7,6 @@
       "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
       "Courier New", monospace;
-    --color-amber-50: oklch(98.7% 0.022 95.277);
     --color-amber-100: oklch(96.2% 0.059 95.617);
     --color-amber-300: oklch(87.9% 0.169 91.605);
     --color-amber-400: oklch(82.8% 0.189 84.429);
@@ -568,18 +567,6 @@
   .border-\[color\:var\(--color-stroke-default\)\] {
     border-color: var(--color-stroke-default);
   }
-  .border-amber-300\/15 {
-    border-color: color-mix(in srgb, oklch(87.9% 0.169 91.605) 15%, transparent);
-    @supports (color: color-mix(in lab, red, red)) {
-      border-color: color-mix(in oklab, var(--color-amber-300) 15%, transparent);
-    }
-  }
-  .border-amber-300\/20 {
-    border-color: color-mix(in srgb, oklch(87.9% 0.169 91.605) 20%, transparent);
-    @supports (color: color-mix(in lab, red, red)) {
-      border-color: color-mix(in oklab, var(--color-amber-300) 20%, transparent);
-    }
-  }
   .border-amber-300\/40 {
     border-color: color-mix(in srgb, oklch(87.9% 0.169 91.605) 40%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
@@ -711,12 +698,6 @@
   }
   .bg-\[color\:var\(--color-surface-panel-elevated\)\] {
     background-color: var(--color-surface-panel-elevated);
-  }
-  .bg-amber-300\/10 {
-    background-color: color-mix(in srgb, oklch(87.9% 0.169 91.605) 10%, transparent);
-    @supports (color: color-mix(in lab, red, red)) {
-      background-color: color-mix(in oklab, var(--color-amber-300) 10%, transparent);
-    }
   }
   .bg-amber-400\/10 {
     background-color: color-mix(in srgb, oklch(82.8% 0.189 84.429) 10%, transparent);
@@ -1082,9 +1063,6 @@
   }
   .text-\[color\:var\(--color-text-secondary\)\] {
     color: var(--color-text-secondary);
-  }
-  .text-amber-50 {
-    color: var(--color-amber-50);
   }
   .text-amber-100 {
     color: var(--color-amber-100);
