@@ -45,6 +45,31 @@ Canonical commands (used by local development, Codex Cloud, and GitHub Actions):
    bash scripts/test_ui.sh
    ```
 
+### Pre-commit hooks (local CI guardrails)
+
+To reduce CI-only failures, this repository includes a root
+`.pre-commit-config.yaml` that mirrors key verification behavior:
+
+- Python import hygiene (`ruff check --select F401`) on the same paths used by
+  `scripts/lint_python.sh`
+- Ruff formatting checks (`ruff format --check`) for backend/test Python files
+- lightweight TypeScript validation via `npm --workspace @acp/web run lint`
+- file hygiene checks (YAML validity, trailing whitespace, merge markers, etc.)
+
+Setup:
+
+```bash
+bash scripts/bootstrap.sh
+.venv/bin/python -m pip install pre-commit
+.venv/bin/pre-commit install
+```
+
+Run all hooks on demand:
+
+```bash
+.venv/bin/pre-commit run --all-files
+```
+
 Coverage thresholds enforced by these commands:
 
 - Python integration tests: **84% minimum total coverage** via
