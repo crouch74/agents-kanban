@@ -152,6 +152,9 @@ Recommended single entrypoint:
 
 1. Run `scripts/dev-stack.sh`
 
+Environment variables and `.env` setup are documented in
+[`docs/setup/environment.md`](docs/setup/environment.md).
+
 This script:
 
 - bootstraps local dependencies when needed
