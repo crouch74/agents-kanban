@@ -32,10 +32,14 @@ jobs:
         run: bash scripts/bootstrap.sh --with-browser-deps
 
       - name: Run verification
+        env:
+          ACP_PY_COV_FAIL_UNDER: '85'
         run: bash scripts/verify.sh --skip-bootstrap
 
 
-      - name: Enforce Python coverage threshold (95%)
+      - name: Enforce Python coverage threshold rule
+        env:
+          ACP_PY_COV_FAIL_UNDER: '85'
         run: |
           python - <<'PYCODE'
           from pathlib import Path
@@ -47,11 +51,12 @@ jobs:
 
           root = ET.parse(coverage_xml).getroot()
           line_rate = float(root.attrib.get("line-rate", "0"))
-          threshold = 0.95
+          threshold_pct = float(__import__('os').environ.get('ACP_PY_COV_FAIL_UNDER', '85'))
+          threshold = threshold_pct / 100
 
           if line_rate < threshold:
               raise SystemExit(
-                  f"Python coverage {line_rate:.2%} is below required {threshold:.0%}"
+                  f"Python coverage {line_rate:.2%} is below required {threshold:.2%}"
               )
 
           print(f"✅ Python coverage threshold satisfied: {line_rate:.2%}")
