@@ -20,9 +20,9 @@ jobs:
       matrix:
         include:
           - language: javascript-typescript
-            sarif_file: .artifacts/security/codeql-javascript-typescript.sarif
+            sarif_output: .artifacts/security/codeql-javascript-typescript
           - language: python
-            sarif_file: .artifacts/security/codeql-python.sarif
+            sarif_output: .artifacts/security/codeql-python
 
     steps:
       - name: Checkout
@@ -40,13 +40,13 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: /language:${{ matrix.language }}
-          output: ${{ matrix.sarif_file }}
+          output: ${{ matrix.sarif_output }}
           upload: false
 
       - name: Upload SARIF to GitHub code scanning
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: ${{ matrix.sarif_file }}
+          sarif_file: ${{ matrix.sarif_output }}
           category: /language:${{ matrix.language }}
 
       - name: Fail on high-confidence blocking findings
@@ -57,7 +57,12 @@ jobs:
           import json
           from pathlib import Path
 
-          sarif_path = Path('${{ matrix.sarif_file }}')
+          sarif_output = Path('${{ matrix.sarif_output }}')
+          sarif_candidates = sorted(sarif_output.rglob('*.sarif'))
+          if not sarif_candidates:
+            raise SystemExit(f'No SARIF files found under {sarif_output}')
+
+          sarif_path = sarif_candidates[0]
           payload = json.loads(sarif_path.read_text())
 
           blocking = []
@@ -134,6 +139,6 @@ jobs:
         with:
           name: security-analysis-${{ matrix.language }}
           path: |
-            ${{ matrix.sarif_file }}
+            ${{ matrix.sarif_output }}
             .artifacts/security/blocking-findings-${{ matrix.language }}.json
           if-no-files-found: warn
