@@ -40,7 +40,8 @@ agent interaction.
 - task transitions enforced in the service layer
 - task completion readiness gate
 - repository registration and metadata capture
-- bootstrap flow for existing repos or empty folders with optional `git init`
+- bootstrap flow for existing repos, empty folders, or brand-new paths when `initialize_repo` is enabled
+- kickoff agent command runs in non-interactive mode via `codex exec --full-auto` for tmux bootstrap sessions
 - minimal starter scaffolds for a focused set of stack presets
 - deterministic worktree allocation and lifecycle updates
 - tmux-backed sessions with cancel and follow-up flows
