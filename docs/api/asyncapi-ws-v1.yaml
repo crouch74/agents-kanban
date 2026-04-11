@@ -1,0 +1,300 @@
+asyncapi: 2.6.0
+id: urn:acp:websocket:api:v1
+info:
+  title: Agent Control Plane WebSocket Contract
+  version: 1.0.0
+  description: |
+    Contract for live mutation streaming at `/api/v1/ws`.
+
+    This channel emits:
+      - connection lifecycle messages (`system.connected`, `system.ping`)
+      - mutation notifications (`mutation.committed`)
+
+    The server is the source of truth. Clients should treat events as cache-
+    invalidation hints and refresh canonical read models over REST when needed.
+defaultContentType: application/json
+servers:
+  local:
+    url: localhost:8000
+    protocol: ws
+    description: Local development server.
+channels:
+  /api/v1/ws:
+    description: |
+      Live mutation stream.
+
+      Optional query filters:
+        - `project_id` (string)
+        - `task_id` (string)
+        - `session_id` (string)
+
+      Filtering is exact-match on top-level event fields with the same names.
+      If multiple filters are provided, all must match.
+    bindings:
+      ws:
+        query:
+          type: object
+          additionalProperties: false
+          properties:
+            project_id:
+              type: string
+              description: Restrict events to this project.
+            task_id:
+              type: string
+              description: Restrict events to this task.
+            session_id:
+              type: string
+              description: Restrict events to this session.
+    subscribe:
+      operationId: subscribeMutationEventsV1
+      summary: Receive server-sent system and mutation events.
+      message:
+        oneOf:
+          - $ref: '#/components/messages/SystemConnected'
+          - $ref: '#/components/messages/SystemPing'
+          - $ref: '#/components/messages/MutationCommitted'
+components:
+  messages:
+    SystemConnected:
+      name: systemConnected
+      title: Connection acknowledged
+      summary: Sent once immediately after successful subscription.
+      payload:
+        $ref: '#/components/schemas/SystemConnectedPayload'
+      examples:
+        - name: connectedWithProjectScope
+          payload:
+            type: system.connected
+            message: "📡 Live mutation streaming connected."
+            project_id: proj_123
+            task_id: null
+            session_id: null
+
+    SystemPing:
+      name: systemPing
+      title: Keepalive heartbeat
+      summary: Sent when no events were available for ~20 seconds.
+      payload:
+        $ref: '#/components/schemas/SystemPingPayload'
+      examples:
+        - name: idleHeartbeat
+          payload:
+            type: system.ping
+
+    MutationCommitted:
+      name: mutationCommitted
+      title: Mutation commit event
+      summary: |
+        Emitted when a write route commits a material mutation.
+      payload:
+        $ref: '#/components/schemas/MutationCommittedPayload'
+      examples:
+        - name: taskCreated
+          payload:
+            type: mutation.committed
+            event_type: task.created
+            entity_type: task
+            entity_id: task_123
+            project_id: proj_123
+            task_id: task_123
+            session_id: null
+            detail:
+              title: "Implement API contract"
+              workflow_state: todo
+        - name: waitingQuestionAnswered
+          payload:
+            type: mutation.committed
+            event_type: waiting_question.answered
+            entity_type: waiting_question
+            entity_id: wq_123
+            project_id: proj_123
+            task_id: task_123
+            session_id: sess_123
+            detail:
+              status: answered
+              reply_count: 2
+
+  schemas:
+    NullableId:
+      oneOf:
+        - type: string
+        - type: 'null'
+
+    SystemConnectedPayload:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - message
+        - project_id
+        - task_id
+        - session_id
+      properties:
+        type:
+          type: string
+          const: system.connected
+        message:
+          type: string
+          description: Human-readable connection acknowledgement.
+        project_id:
+          $ref: '#/components/schemas/NullableId'
+        task_id:
+          $ref: '#/components/schemas/NullableId'
+        session_id:
+          $ref: '#/components/schemas/NullableId'
+
+    SystemPingPayload:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          const: system.ping
+
+    MutationCommittedPayload:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - event_type
+        - entity_type
+        - entity_id
+        - project_id
+        - task_id
+        - session_id
+        - detail
+      properties:
+        type:
+          type: string
+          const: mutation.committed
+        event_type:
+          type: string
+          enum:
+            - project.created
+            - project.bootstrapped
+            - task.created
+            - task.updated
+            - task.comment_added
+            - task.check_added
+            - task.artifact_added
+            - task.dependency_added
+            - session.spawned
+            - session.follow_up_spawned
+            - session.cancelled
+            - repository.created
+            - waiting_question.opened
+            - waiting_question.answered
+            - worktree.created
+            - worktree.updated
+          description: Domain mutation classification.
+        entity_type:
+          type: string
+          enum:
+            - project
+            - task
+            - task_comment
+            - task_check
+            - task_artifact
+            - task_dependency
+            - session
+            - repository
+            - waiting_question
+            - worktree
+          description: Primary entity kind affected by the mutation.
+        entity_id:
+          type: string
+          description: ID of the mutated entity.
+        project_id:
+          $ref: '#/components/schemas/NullableId'
+        task_id:
+          $ref: '#/components/schemas/NullableId'
+        session_id:
+          $ref: '#/components/schemas/NullableId'
+        detail:
+          type: object
+          description: Event-specific additive metadata.
+          additionalProperties: true
+          properties:
+            # project.*
+            name:
+              type: string
+            use_worktree:
+              type: boolean
+            # task.*
+            title:
+              type: string
+            workflow_state:
+              type: string
+            waiting_for_human:
+              type: boolean
+            author_name:
+              type: string
+            status:
+              type: string
+            check_type:
+              type: string
+            artifact_type:
+              type: string
+            depends_on_task_id:
+              type: string
+            # session.*
+            profile:
+              type: string
+            # waiting_question.*
+            urgency:
+              type: string
+            reply_count:
+              type: integer
+              minimum: 0
+            # worktree.*
+            branch_name:
+              type: string
+
+x-eventTypeDetailContract:
+  description: |
+    Detail object keys currently emitted for each `event_type`.
+    Consumers SHOULD ignore unknown keys and tolerate missing optional keys.
+  map:
+    project.created:
+      detail_fields: [name]
+    project.bootstrapped:
+      detail_fields: [name, use_worktree]
+    task.created:
+      detail_fields: [title, workflow_state]
+    task.updated:
+      detail_fields: [workflow_state, waiting_for_human]
+    task.comment_added:
+      detail_fields: [author_name]
+    task.check_added:
+      detail_fields: [status, check_type]
+    task.artifact_added:
+      detail_fields: [artifact_type, name]
+    task.dependency_added:
+      detail_fields: [depends_on_task_id]
+    session.spawned:
+      detail_fields: [profile, status]
+    session.follow_up_spawned:
+      detail_fields: [profile, status]
+    session.cancelled:
+      detail_fields: [status]
+    repository.created:
+      detail_fields: [name]
+    waiting_question.opened:
+      detail_fields: [urgency, status]
+    waiting_question.answered:
+      detail_fields: [status, reply_count]
+    worktree.created:
+      detail_fields: [branch_name]
+    worktree.updated:
+      detail_fields: [status]
+
+x-backwardCompatibility:
+  policy:
+    - "Message `type` values (`system.connected`, `system.ping`, `mutation.committed`) are stable within v1."
+    - "For `mutation.committed`, existing top-level fields are stable and remain present."
+    - "`detail` is additive: clients must ignore unknown keys."
+    - "New `event_type` enum members may be added in v1 without breaking existing members."
+    - "Existing `event_type` strings and existing detail keys are not renamed or removed in v1."
+    - "Unknown message types should be safely ignored by clients for forward compatibility."

@@ -97,3 +97,5 @@ Notes:
 
 The WebSocket surface is used to broadcast committed mutation events so the web
 client can invalidate stale query results.
+
+Contract: [`docs/api/asyncapi-ws-v1.yaml`](../api/asyncapi-ws-v1.yaml).
