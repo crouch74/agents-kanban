@@ -44,6 +44,10 @@ class FakeRuntime:
         ]
 
 
+def _assert_snapshot_keys(payload: dict[str, object], expected_keys: tuple[str, ...]) -> None:
+    assert tuple(payload.keys()) == expected_keys
+
+
 def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path: Path) -> None:
     fake_runtime = FakeRuntime()
     original_session_service = handlers.SessionService
@@ -94,14 +98,51 @@ def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path:
 
     task = handlers.task_create(project_id=project_id, title="Ship MCP tools", client_request_id="task-1")
     task_id = task["id"]
+    _assert_snapshot_keys(
+        task,
+        (
+            "id",
+            "project_id",
+            "board_column_id",
+            "parent_task_id",
+            "title",
+            "description",
+            "workflow_state",
+            "priority",
+            "tags",
+            "blocked_reason",
+            "waiting_for_human",
+            "created_at",
+            "updated_at",
+        ),
+    )
     task_replayed = handlers.task_create(project_id=project_id, title="Ship MCP tools", client_request_id="task-1")
-    assert task_replayed["id"] == task_id
+    assert task_replayed == task
+
+    task_updated = handlers.task_update(
+        task_id=task_id,
+        description="End-to-end handler flow",
+        waiting_for_human=True,
+        client_request_id="task-update-1",
+    )
+    _assert_snapshot_keys(task_updated, tuple(task.keys()))
+    task_updated_replayed = handlers.task_update(
+        task_id=task_id,
+        description="End-to-end handler flow",
+        waiting_for_human=True,
+        client_request_id="task-update-1",
+    )
+    assert task_updated_replayed == task_updated
 
     comment = handlers.task_comment_add(
         task_id=task_id,
         author_name="agent",
         body="starting work",
         client_request_id="comment-1",
+    )
+    _assert_snapshot_keys(
+        comment,
+        ("id", "task_id", "author_type", "author_name", "body", "metadata_json", "created_at"),
     )
     assert comment["task_id"] == task_id
     comment_replayed = handlers.task_comment_add(
@@ -110,7 +151,7 @@ def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path:
         body="starting work",
         client_request_id="comment-1",
     )
-    assert comment_replayed["id"] == comment["id"]
+    assert comment_replayed == comment
 
     check = handlers.task_check_add(
         task_id=task_id,
@@ -189,7 +230,56 @@ def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path:
     assert completion["open_waiting_question_count"] == 1
 
     session = handlers.session_spawn(task_id=task_id, profile="executor", client_request_id="session-1")
+    _assert_snapshot_keys(
+        session,
+        (
+            "id",
+            "project_id",
+            "task_id",
+            "repository_id",
+            "worktree_id",
+            "profile",
+            "status",
+            "session_name",
+            "runtime_metadata",
+            "created_at",
+            "updated_at",
+        ),
+    )
     assert session["task_id"] == task_id
+    session_replayed = handlers.session_spawn(task_id=task_id, profile="executor", client_request_id="session-1")
+    assert session_replayed == session
+
+    worktree = handlers.worktree_create(
+        repository_id=bootstrap["repository"]["id"],
+        task_id=task_id,
+        label="handler-test",
+        client_request_id="worktree-1",
+    )
+    _assert_snapshot_keys(
+        worktree,
+        (
+            "id",
+            "repository_id",
+            "task_id",
+            "session_id",
+            "branch_name",
+            "path",
+            "status",
+            "lock_reason",
+            "metadata_json",
+            "created_at",
+            "updated_at",
+        ),
+    )
+    worktree_replayed = handlers.worktree_create(
+        repository_id=bootstrap["repository"]["id"],
+        task_id=task_id,
+        label="handler-test",
+        client_request_id="worktree-1",
+    )
+    assert worktree_replayed == worktree
+
     follow_up = handlers.session_follow_up(
         session["id"],
         profile="verifier",
