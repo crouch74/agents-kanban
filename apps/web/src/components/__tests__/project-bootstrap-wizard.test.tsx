@@ -1,11 +1,10 @@
 import { beforeEach, expect, test } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { useUIStore } from '@/store/ui';
+import { resetUIStore } from '@/test/reset-ui-store';
 import { renderApp } from '@/test/render-app';
 
 beforeEach(() => {
-  useUIStore.getState().setSelectedProjectId(null);
-  window.history.replaceState({}, '', '/');
+  resetUIStore();
 });
 
 test('submits the project bootstrap wizard and shows kickoff summary details', async () => {

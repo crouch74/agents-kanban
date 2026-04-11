@@ -1,11 +1,12 @@
 import { beforeEach, expect, test } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { useUIStore } from '@/store/ui';
+import { resetUIStore } from '@/test/reset-ui-store';
 import { renderApp } from '@/test/render-app';
 
 beforeEach(() => {
+  resetUIStore();
   useUIStore.getState().setSelectedProjectId('project-1');
-  window.history.replaceState({}, '', '/');
 });
 
 test('renders activity timeline and filter controls', async () => {
