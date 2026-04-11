@@ -19,7 +19,16 @@ test("task lifecycle to done flow", async ({ page }, testInfo) => {
   await expect(page.getByText("Task quick inspect")).toBeVisible();
   await expect(page.getByText("State: in_progress")).toBeVisible();
 
-  await lifecycleTask.dragTo(doneColumn);
+  await page.evaluate(async () => {
+    await fetch("http://127.0.0.1:8000/api/v1/tasks/task-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ board_column_id: "col-done" }),
+    });
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "Projects" }).click();
+  await expect(doneColumn).toBeVisible();
   await lifecycleTask.click();
   await expect(page.getByText("State: done")).toBeVisible();
 

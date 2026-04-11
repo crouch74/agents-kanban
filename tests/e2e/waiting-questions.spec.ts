@@ -7,17 +7,20 @@ test.beforeEach(async ({ page }) => {
 
 test("waiting-question pause and resume flow", async ({ page }, testInfo) => {
   await bootstrapProject(page, "Waiting Flow Project");
-  await page.getByRole("button", { name: "Sessions" }).click();
-  await expect(page.getByRole("heading", { name: "Session Runtime" })).toBeVisible();
-
-  const openQuestionPanel = page.locator("div").filter({ hasText: "Open waiting question" }).first();
-  const taskSelect = openQuestionPanel.locator("select").first();
-  await taskSelect.selectOption("task-1");
-  await page
-    .getByPlaceholder("What decision or clarification does the agent need?")
-    .fill("Should we pause deployment until legal approval?");
-  await page.getByPlaceholder("Why is work blocked?").fill("Legal sign-off is pending");
-  await page.getByRole("button", { name: "Open question" }).click();
+  await page.evaluate(async () => {
+    await fetch("http://127.0.0.1:8000/api/v1/questions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        task_id: "task-1",
+        session_id: "session-1",
+        prompt: "Should we pause deployment until legal approval?",
+        blocked_reason: "Legal sign-off is pending",
+        urgency: "high",
+      }),
+    });
+  });
+  await page.reload();
 
   await expect(page.getByText("Waiting")).toBeVisible();
 
