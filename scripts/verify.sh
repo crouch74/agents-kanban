@@ -51,6 +51,9 @@ bash "$ROOT/scripts/test_integration.sh"
 log "🧪" "Running Python lint checks"
 bash "$ROOT/scripts/lint_python.sh"
 
+log "🧪" "Verifying committed OpenAPI artifact"
+"$ROOT/.venv/bin/python" "$ROOT/scripts/generate_openapi.py" --check
+
 log "🧪" "Running UI verification"
 bash "$ROOT/scripts/test_ui.sh"
 
