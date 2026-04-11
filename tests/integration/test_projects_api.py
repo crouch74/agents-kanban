@@ -8,6 +8,17 @@ from acp_core.models import BoardColumn, Task
 from app.main import app
 
 
+def test_create_project_rejects_malformed_payload_with_validation_details() -> None:
+    with TestClient(app) as client:
+        response = client.post("/api/v1/projects", json={"name": "x"})
+
+        assert response.status_code == 422
+        payload = response.json()
+        assert isinstance(payload["detail"], list)
+        assert payload["detail"][0]["loc"] == ["body", "name"]
+        assert payload["detail"][0]["type"] == "string_too_short"
+
+
 def test_create_project_creates_default_board_columns() -> None:
     with TestClient(app) as client:
         response = client.post(

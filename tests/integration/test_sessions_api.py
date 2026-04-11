@@ -52,6 +52,11 @@ class FakeRuntime:
         ]
 
 
+class FailingRuntime(FakeRuntime):
+    def spawn_session(self, *, session_name: str, working_directory: Path, profile: str, command: str | None = None):
+        raise RuntimeError("runtime down")
+
+
 def create_git_repo(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     repo = Repo.init(path)
@@ -61,6 +66,27 @@ def create_git_repo(path: Path) -> Path:
     repo.index.add(["README.md"])
     repo.index.commit("init")
     return path
+
+
+def test_session_write_routes_reject_malformed_payloads_and_missing_foreign_keys() -> None:
+    with TestClient(app) as client:
+        malformed_spawn = client.post("/api/v1/sessions", json={"profile": "executor"})
+        assert malformed_spawn.status_code == 422
+        assert malformed_spawn.json()["detail"][0]["loc"] == ["body", "task_id"]
+
+        missing_fk_spawn = client.post(
+            "/api/v1/sessions",
+            json={"task_id": "task-missing", "profile": "executor"},
+        )
+        assert missing_fk_spawn.status_code == 400
+        assert missing_fk_spawn.json() == {"detail": "Task not found"}
+
+        malformed_follow_up = client.post(
+            "/api/v1/sessions/session-missing/follow-up",
+            json={"profile": "invalid"},
+        )
+        assert malformed_follow_up.status_code == 422
+        assert malformed_follow_up.json()["detail"][0]["loc"] == ["body", "profile"]
 
 
 def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
@@ -152,5 +178,31 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
                 issue["worktree_id"] == worktree_id and issue["recommendation"] == "archive"
                 for issue in diagnostics["stale_worktrees"]
             )
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_session_spawn_and_follow_up_surface_runtime_adapter_failure(tmp_path: Path) -> None:
+    app.dependency_overrides[get_runtime_adapter] = lambda: FailingRuntime()
+    repo_path = create_git_repo(tmp_path / "session-runtime-failure-repo")
+
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            project_id = client.post("/api/v1/projects", json={"name": "Session Runtime Failure"}).json()["id"]
+            repository_id = client.post(
+                "/api/v1/repositories",
+                json={"project_id": project_id, "local_path": str(repo_path)},
+            ).json()["id"]
+            task_id = client.post(
+                "/api/v1/tasks",
+                json={"project_id": project_id, "title": "Runtime fail task"},
+            ).json()["id"]
+
+            spawn_response = client.post(
+                "/api/v1/sessions",
+                json={"task_id": task_id, "profile": "executor", "repository_id": repository_id},
+            )
+            assert spawn_response.status_code == 500
+            assert spawn_response.text == "Internal Server Error"
     finally:
         app.dependency_overrides.clear()
