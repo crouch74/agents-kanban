@@ -26,9 +26,10 @@ test("waiting-question pause and resume flow", async ({ page }, testInfo) => {
 
   await page.getByRole("button", { name: "Waiting Inbox" }).click();
   await expect(page.getByPlaceholder("Reply to unblock the agent")).toBeVisible();
+  await page.getByRole("button", { name: /Should we pause deployment/i }).first().click();
 
   await page.getByPlaceholder("Reply to unblock the agent").fill("Approved. Continue with the current plan.");
-  await page.getByRole("button", { name: /send reply/i }).click();
+  await page.getByRole("button", { name: "Send + mark answered" }).click();
   await expect(page.getByText("answered")).toBeVisible();
 
   await page.screenshot({ path: testInfo.outputPath("waiting-question-pause-resume-flow.png"), fullPage: true });
