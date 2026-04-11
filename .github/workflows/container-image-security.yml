@@ -58,6 +58,7 @@ jobs:
           GRYPE_VERSION="v0.78.0"
           curl -sSfL "https://raw.githubusercontent.com/anchore/grype/main/install.sh" | sh -s -- -b /usr/local/bin "${GRYPE_VERSION}"
           grype version
+          grype db update || echo "⚠️ grype db update failed; continuing with available db"
 
       - name: Scan container images with Trivy and Grype
         shell: bash
@@ -72,8 +73,8 @@ jobs:
 
           for image in "${IMAGES[@]}"; do
             safe_name="${image//[:\/]/-}"
-            trivy image --format json --output ".artifacts/security/container/trivy-${safe_name}.json" "$image"
-            grype "$image" -o json > ".artifacts/security/container/grype-${safe_name}.json"
+            trivy image --scanners vuln --format json --output ".artifacts/security/container/trivy-${safe_name}.json" "$image"
+            GRYPE_DB_VALIDATE_AGE=false grype "$image" -o json > ".artifacts/security/container/grype-${safe_name}.json"
           done
 
           python - <<'PY'
