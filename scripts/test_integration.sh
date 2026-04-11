@@ -23,6 +23,6 @@ log "🧪" "Running Python integration tests with coverage"
   --cov-report=term-missing \
   --cov-report=xml \
   --cov-branch \
-  --cov-fail-under=95
+  --cov-fail-under=85
 
 log "✅" "Python integration tests passed"

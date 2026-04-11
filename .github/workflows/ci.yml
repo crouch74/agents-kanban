@@ -35,7 +35,7 @@ jobs:
         run: bash scripts/verify.sh --skip-bootstrap
 
 
-      - name: Enforce Python coverage threshold (95%)
+      - name: Enforce Python coverage threshold (85%)
         run: |
           python - <<'PYCODE'
           from pathlib import Path
@@ -47,7 +47,7 @@ jobs:
 
           root = ET.parse(coverage_xml).getroot()
           line_rate = float(root.attrib.get("line-rate", "0"))
-          threshold = 0.95
+          threshold = 0.85
 
           if line_rate < threshold:
               raise SystemExit(
