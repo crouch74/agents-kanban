@@ -1,6 +1,9 @@
+
 # Current Implementation State
 
 ## Summary
+
+For canonical terminology, see the [Glossary](../glossary.md).
 
 The repository is currently in a meaningful pre-v1 but already-usable state. It
 is no longer a scaffold or demo shell. The app supports real local operator

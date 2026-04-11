@@ -193,6 +193,7 @@ This will:
 ## Docs
 
 - [Current State](docs/prd/current-state.md)
+- [Glossary](docs/glossary.md)
 - [Refined PRD](docs/prd/refined-prd.md)
 - [Domain Model](docs/prd/domain-model.md)
 - [State Machines](docs/prd/state-machines.md)
