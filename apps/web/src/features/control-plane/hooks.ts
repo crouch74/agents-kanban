@@ -1,34 +1,31 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, type UseMutationOptions } from "@tanstack/react-query";
 import {
+  bootstrapProject,
+  getProject,
+  getProjects,
+} from "@/lib/api/projects";
+import { answerQuestion, createQuestion, getQuestion } from "@/lib/api/questions";
+import { createRepository } from "@/lib/api/repositories";
+import {
+  cancelSession,
+  createFollowUpSession,
+  createSession,
+  getSessionTail,
+  getSessionTimeline,
+} from "@/lib/api/sessions";
+import { getDashboard, getDiagnostics, getEvents, searchContext } from "@/lib/api/system";
+import {
   addTaskArtifact,
   addTaskCheck,
   addTaskComment,
   addTaskDependency,
-  answerQuestion,
-  bootstrapProject,
-  cancelSession,
-  createFollowUpSession,
-  createQuestion,
-  createRepository,
-  createSession,
   createTask,
-  createWorktree,
-  getDashboard,
-  getDiagnostics,
-  getEvents,
-  getProject,
-  getProjects,
-  getQuestion,
-  getSessionTail,
-  getSessionTimeline,
   getTaskDetail,
   patchTask,
-  patchWorktree,
-  searchContext,
-} from "@/lib/api";
-
-const WS_BASE = "ws://127.0.0.1:8000/api/v1/ws";
+} from "@/lib/api/tasks";
+import { WS_BASE } from "@/lib/api/httpClient";
+import { createWorktree, patchWorktree } from "@/lib/api/worktrees";
 
 export function useLiveInvalidationSocket(invalidateAll: () => void) {
   useEffect(() => {
