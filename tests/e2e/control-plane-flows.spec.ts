@@ -357,17 +357,23 @@ test("task lifecycle to done flow", async ({ page }, testInfo) => {
   await page.getByRole("button", { name: "Projects" }).click();
   await expect(page.getByRole("heading", { name: "Project Board" })).toBeVisible();
 
-  await page.getByPlaceholder("Add a task").fill("Lifecycle task");
-  await page.getByRole("button", { name: "New task" }).click();
-  const lifecycleTask = page.getByRole("button", { name: /Lifecycle task/i }).first();
+  const lifecycleTask = page.getByRole("button", { name: /Kick off planning and board setup/i }).first();
   await expect(lifecycleTask).toBeVisible();
 
+  const todoColumn = page.getByText("Todo").first();
   const inProgressColumn = page.getByText("In Progress").first();
   const doneColumn = page.getByText("Done").first();
 
-  await lifecycleTask.dragTo(inProgressColumn);
   await lifecycleTask.click();
   await expect(page.getByText("Task quick inspect")).toBeVisible();
+  await expect(page.getByText("in_progress")).toBeVisible();
+
+  await lifecycleTask.dragTo(todoColumn);
+  await lifecycleTask.click();
+  await expect(page.getByText("todo")).toBeVisible();
+
+  await lifecycleTask.dragTo(inProgressColumn);
+  await lifecycleTask.click();
   await expect(page.getByText("in_progress")).toBeVisible();
 
   await lifecycleTask.dragTo(doneColumn);
@@ -380,16 +386,14 @@ test("task lifecycle to done flow", async ({ page }, testInfo) => {
 test("waiting-question pause and resume flow", async ({ page }, testInfo) => {
   await bootstrapProject(page, "Waiting Flow Project");
   await page.getByRole("button", { name: "Projects" }).click();
-  await page.getByPlaceholder("Add a task").fill("Need operator decision");
-  await page.getByRole("button", { name: "New task" }).click();
-  const taskButton = page.getByRole("button", { name: /Need operator decision/i }).first();
+  const taskButton = page.getByRole("button", { name: /Kick off planning and board setup/i }).first();
   await taskButton.click();
 
   const taskSelect = page
     .locator("select")
     .filter({ has: page.getByRole("option", { name: "Choose task" }) })
     .first();
-  await taskSelect.selectOption({ label: "Need operator decision" });
+  await taskSelect.selectOption({ label: "Kick off planning and board setup" });
   await page
     .getByPlaceholder("What decision or clarification does the agent need?")
     .fill("Should we pause deployment until legal approval?");
@@ -414,8 +418,9 @@ test("session follow-up flow", async ({ page }, testInfo) => {
   await page.getByRole("button", { name: "Sessions" }).click();
   await expect(page.getByRole("heading", { name: "Session Runtime" })).toBeVisible();
 
-  await expect(page.getByText("acp-bootstrap-kickoff")).toBeVisible();
-  await page.getByRole("button").filter({ hasText: "acp-bootstrap-kickoff" }).first().click();
+  const kickoffSessionButton = page.getByRole("button").filter({ hasText: "acp-bootstrap-kickoff" }).first();
+  await expect(kickoffSessionButton).toBeVisible();
+  await kickoffSessionButton.click();
   await expect(page.getByText("Output + runtime logs")).toBeVisible();
   await expect(page.getByText("Implemented slice")).toBeVisible();
 
