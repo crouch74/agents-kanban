@@ -192,6 +192,7 @@ This will:
 
 ## Docs
 
+- [Module Guides](#module-guides)
 - [Current State](docs/prd/current-state.md)
 - [Refined PRD](docs/prd/refined-prd.md)
 - [Domain Model](docs/prd/domain-model.md)
@@ -200,3 +201,13 @@ This will:
 - [MCP Surface](docs/prd/mcp-surface.md)
 - [Architecture Decisions](docs/adr/0001-modular-monolith.md)
 - [Agent Guide](AGENTS.md)
+
+## Module Guides
+
+- [`apps/api`](apps/api/README.md)
+- [`apps/web`](apps/web/README.md)
+- [`packages/core`](packages/core/README.md)
+- [`packages/mcp-server`](packages/mcp-server/README.md)
+- [`packages/sdk`](packages/sdk/README.md)
+- [`scripts`](scripts/README.md)
+- [`tests`](tests/README.md)
