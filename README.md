@@ -52,7 +52,31 @@ that starts the web app, captures three desktop screenshots (`home`,
 updates a sticky PR comment with inline screenshot previews plus the workflow artifact link. The existing verify job then
 bootstraps from scratch, runs `scripts/verify.sh`, and uploads coverage
 (`coverage.xml`) plus Playwright artifacts (`playwright-report/`,
-`test-results/`).
+`test-results/`). GitHub Actions used in CI are pinned to full commit SHAs.
+
+### Action SHA maintenance
+
+Keep action pins current with one of these routines:
+
+1. **Monthly bump (manual):**
+   - Check for new major-safe tags (`v4`, `v5`, etc.) on each action used in
+     `.github/workflows/ci.yml`.
+   - Resolve each tag to a commit SHA and update `uses:` lines.
+   - Verify every updated SHA still maps to the expected tag before merging.
+2. **Bot-driven bump:**
+   - Enable a dependency bot (for example Dependabot/Renovate) to open PRs for
+     GitHub Action updates.
+   - Require the same tag→SHA verification in PR review before merge.
+
+Suggested verification commands:
+
+```bash
+gh api repos/actions/checkout/git/ref/tags/v4 --jq '.object.sha'
+gh api repos/actions/setup-python/git/ref/tags/v5 --jq '.object.sha'
+gh api repos/actions/setup-node/git/ref/tags/v4 --jq '.object.sha'
+gh api repos/actions/upload-artifact/git/ref/tags/v4 --jq '.object.sha'
+gh api repos/actions/github-script/git/ref/tags/v7 --jq '.object.sha'
+```
 
 Security workflow (`.github/workflows/security.yml`) also runs on pull requests
 and pushes to `main`, including a required `Secret Scan (gitleaks)` job that
