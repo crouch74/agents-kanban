@@ -3,6 +3,9 @@
 ## Purpose
 `packages/mcp-server` provides the MCP-native surface for Agent Control Plane, exposing tools/resources for agents while reusing shared domain logic from `packages/core`.
 
+## Shared Glossary
+- Canonical domain/runtime terms used by MCP tool semantics (such as `workflow_state`, waiting questions, completion readiness, and audit events) are defined in [`docs/glossary.md`](../../docs/glossary.md).
+
 ## Key Inputs / Outputs
 - **Inputs**
   - MCP tool/resource requests from connected MCP clients.

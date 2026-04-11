@@ -5,6 +5,7 @@ Agent Control Plane loads environment variables through `packages/core/src/acp_c
 - Copy `.env.example` to `.env` for local development.
 - Values shown below are the current code defaults.
 - If a variable is omitted, ACP falls back to the default from `Settings`.
+- For domain vocabulary used throughout onboarding and module guides, see the [shared glossary](../glossary.md).
 
 ## Variables
 

@@ -3,6 +3,9 @@
 ## Purpose
 `packages/sdk` contains lightweight TypeScript contracts for frontend consumption of backend APIs, including generated OpenAPI-derived types and SDK re-exports.
 
+## Shared Glossary
+- Canonical vocabulary represented in generated contracts (for example `workflow_state`, waiting-question fields, and completion-readiness data) is defined in [`docs/glossary.md`](../../docs/glossary.md).
+
 ## Key Inputs / Outputs
 - **Inputs**
   - Backend OpenAPI schema (`/openapi.json`) for type generation.

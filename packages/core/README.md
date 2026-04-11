@@ -3,6 +3,9 @@
 ## Purpose
 `packages/core` is the shared domain/service layer for Agent Control Plane and the behavioral center of the system. It defines models, schemas, settings, runtime adapters, and canonical workflow/business logic used by both REST and MCP surfaces.
 
+## Shared Glossary
+- Canonical terms owned or enforced by core services (including `workflow_state`, blocked overlay, completion readiness, session lineage, and audit events) are defined in [`docs/glossary.md`](../../docs/glossary.md).
+
 ## Key Inputs / Outputs
 - **Inputs**
   - Service method calls from API handlers and MCP handlers.
