@@ -15,6 +15,17 @@ def list_sessions(
     task_id: str | None = Query(default=None),
     service=Depends(get_session_service),
 ) -> list[AgentSessionRead]:
+    """Handle list sessions requests.
+
+    Args:
+        project_id: from request/signature.; task_id: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     return [
         AgentSessionRead.model_validate(item)
         for item in service.list_sessions(project_id=project_id, task_id=task_id)
@@ -23,6 +34,17 @@ def list_sessions(
 
 @router.post("/sessions", response_model=AgentSessionRead, status_code=201)
 def spawn_session(payload: AgentSessionCreate, request: Request, service=Depends(get_session_service)) -> AgentSessionRead:
+    """Handle spawn session requests.
+
+    Args:
+        payload: from request/signature.; request: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         session = service.spawn_session(payload)
     except ValueError as exc:
@@ -48,6 +70,19 @@ def spawn_follow_up_session(
     request: Request,
     service=Depends(get_session_service),
 ) -> AgentSessionRead:
+    """Handle spawn follow up session requests.
+
+    Args:
+        session_id: from request/signature.; payload: from request/signature.; request: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    WHY:
+        Keeps workflow/event semantics centralized in services before broadcasting UI invalidation.
+    """
     try:
         session = service.spawn_follow_up_session(session_id, payload)
     except ValueError as exc:
@@ -68,6 +103,17 @@ def spawn_follow_up_session(
 
 @router.get("/sessions/{session_id}", response_model=AgentSessionRead)
 def get_session(session_id: str, service=Depends(get_session_service)) -> AgentSessionRead:
+    """Handle get session requests.
+
+    Args:
+        session_id: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         session = service.refresh_session_status(session_id)
     except ValueError as exc:
@@ -81,6 +127,17 @@ def tail_session(
     lines: int = Query(default=80, ge=1, le=400),
     service=Depends(get_session_service),
 ) -> SessionTailRead:
+    """Handle tail session requests.
+
+    Args:
+        session_id: from request/signature.; lines: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         return service.tail_session(session_id, lines=lines)
     except ValueError as exc:
@@ -89,6 +146,17 @@ def tail_session(
 
 @router.get("/sessions/{session_id}/timeline", response_model=SessionTimelineRead)
 def session_timeline(session_id: str, service=Depends(get_session_service)) -> SessionTimelineRead:
+    """Handle session timeline requests.
+
+    Args:
+        session_id: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         return service.get_session_timeline(session_id)
     except ValueError as exc:
@@ -97,6 +165,17 @@ def session_timeline(session_id: str, service=Depends(get_session_service)) -> S
 
 @router.post("/sessions/{session_id}/cancel", response_model=AgentSessionRead)
 def cancel_session(session_id: str, request: Request, service=Depends(get_session_service)) -> AgentSessionRead:
+    """Handle cancel session requests.
+
+    Args:
+        session_id: from request/signature.; request: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         session = service.cancel_session(session_id)
     except ValueError as exc:

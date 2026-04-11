@@ -15,4 +15,15 @@ def search(
     limit: int = Query(default=20, ge=1, le=100),
     service=Depends(get_search_service),
 ) -> SearchResults:
+    """Handle search requests.
+
+    Args:
+        q: from request/signature.; project_id: from request/signature.; limit: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     return service.search(query=q, project_id=project_id, limit=limit)

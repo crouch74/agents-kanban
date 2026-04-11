@@ -85,16 +85,44 @@ from acp_core.settings import settings
 
 
 def slugify(value: str) -> str:
+    """Normalize free-form names into a stable slug.
+
+    Args:
+        value: Raw operator-provided label.
+
+    Returns:
+        Lowercase hyphen-delimited slug; falls back to ``"project"`` when empty.
+
+    Raises:
+        This helper intentionally raises no custom errors.
+    """
     normalized = sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
     return normalized or "project"
 
 
 def task_slug(value: str) -> str:
+    """Create a branch-safe task slug.
+
+    Args:
+        value: Task title or label.
+
+    Returns:
+        Slug trimmed to 32 characters to keep branch names manageable.
+
+    Raises:
+        This helper intentionally raises no custom errors.
+    """
     return slugify(value)[:32]
 
 
 @dataclass
 class ServiceContext:
+    """Shared request-scoped dependencies for service-layer writes.
+
+    Purpose:
+        Carries DB session and actor metadata so every material write can emit
+        consistent append-only events for auditability and downstream parity.
+    """
     db: Session
     actor_type: str = "human"
     actor_name: str = "operator"
@@ -109,6 +137,21 @@ class ServiceContext:
         payload_json: dict[str, Any],
         correlation_id: str | None = None,
     ) -> Event:
+        """Create an event row without committing.
+
+        Args:
+            entity_type: Aggregate type impacted by the write.
+            entity_id: Aggregate identifier.
+            event_type: Domain event name.
+            payload_json: Structured event payload.
+            correlation_id: Optional per-flow trace id.
+
+        Returns:
+            Newly added ``Event`` ORM entity.
+
+        Raises:
+            SQLAlchemy persistence errors may surface when flush/commit occurs.
+        """
         event = Event(
             actor_type=self.actor_type,
             actor_name=self.actor_name,
@@ -123,10 +166,27 @@ class ServiceContext:
 
 
 class ProjectService:
+    """Project and board orchestration service.
+
+    WHY:
+        Keeps board topology and project reads/writes centralized so REST and
+        MCP surfaces share identical workflow behavior and event emission.
+    """
     def __init__(self, context: ServiceContext) -> None:
         self.context = context
 
     def list_projects(self) -> list[Project]:
+        """Purpose: list projects.
+
+        Args:
+            None.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         stmt = select(Project).where(Project.archived.is_(False)).order_by(Project.created_at.desc())
         return list(self.context.db.scalars(stmt))
 
@@ -158,12 +218,34 @@ class ProjectService:
         )
 
     def get_project(self, project_id: str) -> Project:
+        """Purpose: get project.
+
+        Args:
+            project_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         project = self.context.db.get(Project, project_id)
         if project is None:
             raise ValueError("Project not found")
         return project
 
     def create_project(self, payload: ProjectCreate) -> Project:
+        """Purpose: create project.
+
+        Args:
+            payload: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         slug = slugify(payload.name)
         suffix = 1
         while self.context.db.scalar(select(Project.id).where(Project.slug == slug)) is not None:
@@ -193,6 +275,17 @@ class ProjectService:
         return project
 
     def get_board_view(self, project_id: str) -> BoardView:
+        """Purpose: get board view.
+
+        Args:
+            project_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         project = self.get_project(project_id)
         if project.board is None:
             raise ValueError("Board not found")
@@ -213,6 +306,17 @@ class ProjectService:
         )
 
     def get_project_overview(self, project_id: str) -> ProjectOverview:
+        """Purpose: get project overview.
+
+        Args:
+            project_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         project = self.get_project(project_id)
         board = self.get_board_view(project_id)
         repositories = list(
@@ -251,22 +355,61 @@ class ProjectService:
 
 
 class TaskService:
+    """Task workflow service, including completion gates and evidence writes.
+
+    WHY:
+        Transition validation, done-readiness checks, and event emission happen
+        here to prevent UI/API paths from bypassing canonical workflow policy.
+    """
     def __init__(self, context: ServiceContext) -> None:
         self.context = context
 
     def list_tasks(self, project_id: str | None = None) -> list[Task]:
+        """Purpose: list tasks.
+
+        Args:
+            project_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         stmt = select(Task).order_by(Task.created_at.desc())
         if project_id is not None:
             stmt = stmt.where(Task.project_id == project_id)
         return list(self.context.db.scalars(stmt))
 
     def get_task(self, task_id: str) -> Task:
+        """Purpose: get task.
+
+        Args:
+            task_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         task = self.context.db.get(Task, task_id)
         if task is None:
             raise ValueError("Task not found")
         return task
 
     def get_task_detail(self, task_id: str) -> TaskDetail:
+        """Purpose: get task detail.
+
+        Args:
+            task_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         task = self.get_task(task_id)
         dependencies = list(
             self.context.db.scalars(
@@ -303,6 +446,19 @@ class TaskService:
         )
 
     def create_task(self, payload: TaskCreate) -> Task:
+        """Purpose: create task.
+
+        Args:
+            payload: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        WHY:
+            Enforces canonical gating/event/reconciliation semantics in the service layer.
+        """
         board_stmt = select(Board).where(Board.project_id == payload.project_id)
         board = self.context.db.scalar(board_stmt)
         if board is None:
@@ -359,6 +515,17 @@ class TaskService:
             )
 
     def get_completion_readiness(self, task_id: str) -> TaskCompletionReadinessRead:
+        """Purpose: get completion readiness.
+
+        Args:
+            task_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         task = self.get_task(task_id)
         passing_check_count = self.context.db.scalar(
             select(func.count(TaskCheck.id)).where(
@@ -403,6 +570,19 @@ class TaskService:
         )
 
     def patch_task(self, task_id: str, payload: TaskPatch) -> Task:
+        """Purpose: patch task.
+
+        Args:
+            task_id: Input parameter.; payload: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        WHY:
+            Enforces canonical gating/event/reconciliation semantics in the service layer.
+        """
         task = self.get_task(task_id)
         provided = payload.model_fields_set
         next_workflow_state = task.workflow_state
@@ -456,6 +636,17 @@ class TaskService:
         return task
 
     def add_comment(self, task_id: str, payload: TaskCommentCreate) -> TaskComment:
+        """Purpose: add comment.
+
+        Args:
+            task_id: Input parameter.; payload: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         task = self.get_task(task_id)
         comment = TaskComment(
             task_id=task.id,
@@ -478,6 +669,17 @@ class TaskService:
         return comment
 
     def add_check(self, task_id: str, payload: TaskCheckCreate) -> TaskCheck:
+        """Purpose: add check.
+
+        Args:
+            task_id: Input parameter.; payload: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         task = self.get_task(task_id)
         check = TaskCheck(
             task_id=task.id,
@@ -500,6 +702,17 @@ class TaskService:
         return check
 
     def add_artifact(self, task_id: str, payload: TaskArtifactCreate) -> TaskArtifact:
+        """Purpose: add artifact.
+
+        Args:
+            task_id: Input parameter.; payload: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         task = self.get_task(task_id)
         artifact = TaskArtifact(
             task_id=task.id,
@@ -522,6 +735,19 @@ class TaskService:
         return artifact
 
     def add_dependency(self, task_id: str, payload: TaskDependencyCreate) -> TaskDependency:
+        """Purpose: add dependency.
+
+        Args:
+            task_id: Input parameter.; payload: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        WHY:
+            Enforces canonical gating/event/reconciliation semantics in the service layer.
+        """
         task = self.get_task(task_id)
         depends_on = self.get_task(payload.depends_on_task_id)
         if depends_on.id == task.id:
@@ -562,6 +788,17 @@ class TaskService:
         return dependency
 
     def claim_task(self, task_id: str, *, actor_name: str, session_id: str | None = None) -> Task:
+        """Purpose: claim task.
+
+        Args:
+            task_id: Input parameter.; actor_name: Input parameter.; session_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         task = self.get_task(task_id)
         metadata = dict(task.metadata_json)
         metadata["claimed_by"] = actor_name
@@ -579,6 +816,17 @@ class TaskService:
         return task
 
     def get_dependencies(self, task_id: str) -> list[TaskDependencyRead]:
+        """Purpose: get dependencies.
+
+        Args:
+            task_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         self.get_task(task_id)
         dependencies = list(
             self.context.db.scalars(
@@ -590,6 +838,17 @@ class TaskService:
         return [TaskDependencyRead.model_validate(item) for item in dependencies]
 
     def next_task(self, project_id: str | None = None) -> Task | None:
+        """Purpose: next task.
+
+        Args:
+            project_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         stmt = (
             select(Task)
             .where(
@@ -608,17 +867,45 @@ class TaskService:
 
 
 class RepositoryService:
+    """Repository registration and git-inspection service.
+
+    WHY:
+        Validates repository shape once in the backend and records canonical
+        metadata/events so runtime/worktree flows remain reconcilable.
+    """
     def __init__(self, context: ServiceContext, git: GitRepositoryAdapterProtocol | None = None) -> None:
         self.context = context
         self.git = git or GitRepositoryAdapter()
 
     def list_repositories(self, project_id: str | None = None) -> list[Repository]:
+        """Purpose: list repositories.
+
+        Args:
+            project_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         stmt = select(Repository).order_by(Repository.created_at.asc())
         if project_id is not None:
             stmt = stmt.where(Repository.project_id == project_id)
         return list(self.context.db.scalars(stmt))
 
     def get_repository(self, repository_id: str) -> Repository:
+        """Purpose: get repository.
+
+        Args:
+            repository_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         repository = self.context.db.get(Repository, repository_id)
         if repository is None:
             raise ValueError("Repository not found")
@@ -626,10 +913,32 @@ class RepositoryService:
 
     @staticmethod
     def inspect_git_repository(repo_path: Path) -> tuple[str | None, dict[str, Any]]:
+        """Purpose: inspect git repository.
+
+        Args:
+            repo_path: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         details = GitRepositoryAdapter().inspect_repository(repo_path)
         return details.default_branch, details.metadata_json
 
     def create_repository(self, payload: RepositoryCreate) -> Repository:
+        """Purpose: create repository.
+
+        Args:
+            payload: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         project = self.context.db.get(Project, payload.project_id)
         if project is None:
             raise ValueError("Project not found")
@@ -665,23 +974,64 @@ class RepositoryService:
 
 
 class WorktreeService:
+    """Git worktree lifecycle service.
+
+    WHY:
+        Branch naming, path allocation, transition gating, and event recording
+        are centralized to avoid hidden state or unsafe worktree drift.
+    """
     def __init__(self, context: ServiceContext, git: GitRepositoryAdapterProtocol | None = None) -> None:
         self.context = context
         self.git = git or GitRepositoryAdapter()
 
     def list_worktrees(self, project_id: str | None = None) -> list[Worktree]:
+        """Purpose: list worktrees.
+
+        Args:
+            project_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         stmt = select(Worktree).order_by(Worktree.created_at.desc())
         if project_id is not None:
             stmt = stmt.join(Repository, Repository.id == Worktree.repository_id).where(Repository.project_id == project_id)
         return list(self.context.db.scalars(stmt))
 
     def get_worktree(self, worktree_id: str) -> Worktree:
+        """Purpose: get worktree.
+
+        Args:
+            worktree_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         worktree = self.context.db.get(Worktree, worktree_id)
         if worktree is None:
             raise ValueError("Worktree not found")
         return worktree
 
     def create_worktree(self, payload: WorktreeCreate) -> Worktree:
+        """Purpose: create worktree.
+
+        Args:
+            payload: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        WHY:
+            Enforces canonical gating/event/reconciliation semantics in the service layer.
+        """
         repository = self.context.db.get(Repository, payload.repository_id)
         if repository is None:
             raise ValueError("Repository not found")
@@ -765,6 +1115,19 @@ class WorktreeService:
         return worktree
 
     def patch_worktree(self, worktree_id: str, payload: WorktreePatch) -> Worktree:
+        """Purpose: patch worktree.
+
+        Args:
+            worktree_id: Input parameter.; payload: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        WHY:
+            Enforces canonical gating/event/reconciliation semantics in the service layer.
+        """
         worktree = self.get_worktree(worktree_id)
         repository = self.context.db.get(Repository, worktree.repository_id)
         if repository is None:
@@ -808,11 +1171,28 @@ class WorktreeService:
 
 
 class SessionService:
+    """Runtime session orchestration service for tmux-backed agents.
+
+    WHY:
+        Enforces family lineage, follow-up semantics, and status reconciliation
+        in one place so session state remains durable even when runtime drifts.
+    """
     def __init__(self, context: ServiceContext, runtime: RuntimeAdapterProtocol | None = None) -> None:
         self.context = context
         self.runtime = runtime or DefaultRuntimeAdapter()
 
     def list_sessions(self, project_id: str | None = None, task_id: str | None = None) -> list[AgentSession]:
+        """Purpose: list sessions.
+
+        Args:
+            project_id: Input parameter.; task_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         stmt = select(AgentSession).order_by(AgentSession.created_at.desc())
         if project_id is not None:
             stmt = stmt.where(AgentSession.project_id == project_id)
@@ -821,6 +1201,17 @@ class SessionService:
         return list(self.context.db.scalars(stmt))
 
     def get_session(self, session_id: str) -> AgentSession:
+        """Purpose: get session.
+
+        Args:
+            session_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         session = self.context.db.get(AgentSession, session_id)
         if session is None:
             raise ValueError("Session not found")
@@ -935,6 +1326,17 @@ class SessionService:
         return session
 
     def spawn_session(self, payload: AgentSessionCreate) -> AgentSession:
+        """Purpose: spawn session.
+
+        Args:
+            payload: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         task = self.context.db.get(Task, payload.task_id)
         if task is None:
             raise ValueError("Task not found")
@@ -966,6 +1368,19 @@ class SessionService:
         return session
 
     def spawn_follow_up_session(self, source_session_id: str, payload: AgentSessionFollowUpCreate) -> AgentSession:
+        """Purpose: spawn follow up session.
+
+        Args:
+            source_session_id: Input parameter.; payload: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        WHY:
+            Enforces canonical gating/event/reconciliation semantics in the service layer.
+        """
         source = self.get_session(source_session_id)
         task = self.context.db.get(Task, source.task_id)
         if task is None:
@@ -1046,6 +1461,19 @@ class SessionService:
         return session
 
     def refresh_session_status(self, session_id: str) -> AgentSession:
+        """Purpose: refresh session status.
+
+        Args:
+            session_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        WHY:
+            Enforces canonical gating/event/reconciliation semantics in the service layer.
+        """
         session = self.get_session(session_id)
         if session.status in {"cancelled", "failed"}:
             return session
@@ -1067,6 +1495,17 @@ class SessionService:
         return session
 
     def tail_session(self, session_id: str, *, lines: int = 80) -> SessionTailRead:
+        """Purpose: tail session.
+
+        Args:
+            session_id: Input parameter.; lines: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         session = self.refresh_session_status(session_id)
         capture_lines: list[str]
         if session.status == "running":
@@ -1089,6 +1528,19 @@ class SessionService:
         )
 
     def get_session_timeline(self, session_id: str, *, message_limit: int = 40, event_limit: int = 20) -> SessionTimelineRead:
+        """Purpose: get session timeline.
+
+        Args:
+            session_id: Input parameter.; message_limit: Input parameter.; event_limit: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        WHY:
+            Enforces canonical gating/event/reconciliation semantics in the service layer.
+        """
         session = self.refresh_session_status(session_id)
         family_id = self._session_family_id(session)
         runs = list(
@@ -1145,6 +1597,17 @@ class SessionService:
         )
 
     def cancel_session(self, session_id: str) -> AgentSession:
+        """Purpose: cancel session.
+
+        Args:
+            session_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         session = self.get_session(session_id)
         if session.status in {"done", "failed", "cancelled"}:
             return session
@@ -1184,6 +1647,13 @@ class SessionService:
 
 
 class BootstrapService:
+    """End-to-end project bootstrap orchestration service.
+
+    WHY:
+        Coordinates scaffold creation, initial task/session launch, and durable
+        event logging as one transaction-shaped flow to keep kickoff idempotent
+        and recoverable.
+    """
     def __init__(
         self,
         context: ServiceContext,
@@ -1494,6 +1964,19 @@ class BootstrapService:
         )
 
     def bootstrap_project(self, payload: ProjectBootstrapCreate) -> ProjectBootstrapRead:
+        """Purpose: bootstrap project.
+
+        Args:
+            payload: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        WHY:
+            Enforces canonical gating/event/reconciliation semantics in the service layer.
+        """
         repo_path, repo_details, repo_initialized = self._validate_or_init_repo(payload)
         state = self.BootstrapState(payload=payload, repo_path=repo_path, repo_initialized=repo_initialized)
         has_commits = bool(repo_details.metadata_json.get("has_commits"))
@@ -1519,11 +2002,28 @@ class BootstrapService:
 
 
 class WaitingService:
+    """Human-in-the-loop waiting question service.
+
+    WHY:
+        Couples question state with task/session gating so blocked workflows are
+        explicit, observable, and reversible once a human reply is persisted.
+    """
     def __init__(self, context: ServiceContext, runtime: RuntimeAdapterProtocol | None = None) -> None:
         self.context = context
         self.runtime = runtime or DefaultRuntimeAdapter()
 
     def list_questions(self, project_id: str | None = None, status: str | None = None) -> list[WaitingQuestion]:
+        """Purpose: list questions.
+
+        Args:
+            project_id: Input parameter.; status: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         stmt = select(WaitingQuestion).order_by(WaitingQuestion.created_at.desc())
         if project_id is not None:
             stmt = stmt.where(WaitingQuestion.project_id == project_id)
@@ -1532,12 +2032,36 @@ class WaitingService:
         return list(self.context.db.scalars(stmt))
 
     def get_question(self, question_id: str) -> WaitingQuestion:
+        """Purpose: get question.
+
+        Args:
+            question_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         question = self.context.db.get(WaitingQuestion, question_id)
         if question is None:
             raise ValueError("Waiting question not found")
         return question
 
     def open_question(self, payload: WaitingQuestionCreate) -> WaitingQuestion:
+        """Purpose: open question.
+
+        Args:
+            payload: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        WHY:
+            Enforces canonical gating/event/reconciliation semantics in the service layer.
+        """
         task = self.context.db.get(Task, payload.task_id)
         if task is None:
             raise ValueError("Task not found")
@@ -1592,6 +2116,19 @@ class WaitingService:
         return question
 
     def answer_question(self, question_id: str, payload: HumanReplyCreate) -> WaitingQuestion:
+        """Purpose: answer question.
+
+        Args:
+            question_id: Input parameter.; payload: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        WHY:
+            Enforces canonical gating/event/reconciliation semantics in the service layer.
+        """
         question = self.get_question(question_id)
         if question.status != "open":
             raise ValueError("Question is not open")
@@ -1638,6 +2175,17 @@ class WaitingService:
         return question
 
     def get_question_detail(self, question_id: str) -> WaitingQuestionDetail:
+        """Purpose: get question detail.
+
+        Args:
+            question_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         question = self.get_question(question_id)
         replies = list(
             self.context.db.scalars(
@@ -1650,6 +2198,7 @@ class WaitingService:
 
 
 class EventService:
+    """Read service for append-only event streams."""
     def __init__(self, context: ServiceContext) -> None:
         self.context = context
 
@@ -1661,6 +2210,17 @@ class EventService:
         session_id: str | None = None,
         limit: int = 50,
     ) -> list[EventRecord]:
+        """Purpose: list events.
+
+        Args:
+            project_id: Input parameter.; task_id: Input parameter.; session_id: Input parameter.; limit: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         stmt = select(Event).order_by(Event.created_at.desc()).limit(limit)
         if project_id is not None:
             stmt = stmt.where(
@@ -1687,11 +2247,30 @@ class EventService:
 
 
 class RecoveryService:
+    """Runtime reconciliation service between DB state and tmux state.
+
+    WHY:
+        Detects drift and reconciles stale session statuses so operators see
+        durable truth even when external runtime state changes unexpectedly.
+    """
     def __init__(self, context: ServiceContext, runtime: RuntimeAdapterProtocol | None = None) -> None:
         self.context = context
         self.runtime = runtime or DefaultRuntimeAdapter()
 
     def reconcile_runtime_sessions(self) -> dict[str, Any]:
+        """Purpose: reconcile runtime sessions.
+
+        Args:
+            None.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        WHY:
+            Enforces canonical gating/event/reconciliation semantics in the service layer.
+        """
         tracked_runtime_sessions = {
             session.session_name: session
             for session in self.context.db.scalars(
@@ -1734,10 +2313,22 @@ class RecoveryService:
 
 
 class WorktreeHygieneService:
+    """Detect stale or drifted worktrees and suggest recovery actions."""
     def __init__(self, context: ServiceContext) -> None:
         self.context = context
 
     def list_issues(self, *, project_id: str | None = None, task_id: str | None = None) -> list[WorktreeHygieneIssueRead]:
+        """Purpose: list issues.
+
+        Args:
+            project_id: Input parameter.; task_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         stmt = select(Worktree).order_by(Worktree.updated_at.desc())
         if project_id is not None:
             stmt = stmt.join(Repository, Repository.id == Worktree.repository_id).where(Repository.project_id == project_id)
@@ -1790,11 +2381,28 @@ class WorktreeHygieneService:
 
 
 class DiagnosticsService:
+    """System diagnostics and health summary service.
+
+    WHY:
+        Aggregates counts plus reconciliation/hygiene outputs so operators can
+        quickly diagnose runtime and persistence drift from one read model.
+    """
     def __init__(self, context: ServiceContext, runtime: RuntimeAdapterProtocol | None = None) -> None:
         self.context = context
         self.runtime = runtime or DefaultRuntimeAdapter()
 
     def get_diagnostics(self) -> DiagnosticsRead:
+        """Purpose: get diagnostics.
+
+        Args:
+            None.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         project_count = self.context.db.scalar(select(func.count(Project.id))) or 0
         repository_count = self.context.db.scalar(select(func.count(Repository.id))) or 0
         task_count = self.context.db.scalar(select(func.count(Task.id))) or 0
@@ -1838,10 +2446,22 @@ class DiagnosticsService:
 
 
 class DashboardService:
+    """Operator dashboard read-model service for glanceable control-plane state."""
     def __init__(self, context: ServiceContext) -> None:
         self.context = context
 
     def get_dashboard(self) -> DashboardRead:
+        """Purpose: get dashboard.
+
+        Args:
+            None.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         projects = list(self.context.db.scalars(select(Project).order_by(Project.created_at.desc()).limit(8)))
         events = list(self.context.db.scalars(select(Event).order_by(Event.created_at.desc()).limit(12)))
         waiting_questions = list(
@@ -1884,10 +2504,27 @@ class DashboardService:
 
 
 class SearchService:
+    """Cross-entity search service over project control-plane records.
+
+    WHY:
+        Builds structured hits server-side to avoid UI scraping and to preserve
+        parity for REST/MCP consumers using the same relevance rules.
+    """
     def __init__(self, context: ServiceContext) -> None:
         self.context = context
 
     def search(self, query: str, project_id: str | None = None, limit: int = 20) -> SearchResults:
+        """Purpose: search.
+
+        Args:
+            query: Input parameter.; project_id: Input parameter.; limit: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
         needle = query.strip()
         if not needle:
             return SearchResults(query=query, hits=[])

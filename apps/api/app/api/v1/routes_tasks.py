@@ -27,11 +27,33 @@ def list_tasks(
     project_id: str | None = Query(default=None),
     service=Depends(get_task_service),
 ) -> list[TaskRead]:
+    """Handle list tasks requests.
+
+    Args:
+        project_id: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     return [TaskRead.model_validate(task) for task in service.list_tasks(project_id=project_id)]
 
 
 @router.post("", response_model=TaskRead, status_code=201)
 def create_task(payload: TaskCreate, request: Request, service=Depends(get_task_service)) -> TaskRead:
+    """Handle create task requests.
+
+    Args:
+        payload: from request/signature.; request: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         task = service.create_task(payload)
     except ValueError as exc:
@@ -51,6 +73,17 @@ def create_task(payload: TaskCreate, request: Request, service=Depends(get_task_
 
 @router.get("/{task_id}", response_model=TaskRead)
 def get_task(task_id: str, service=Depends(get_task_service)) -> TaskRead:
+    """Handle get task requests.
+
+    Args:
+        task_id: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         task = service.get_task(task_id)
     except ValueError as exc:
@@ -60,6 +93,17 @@ def get_task(task_id: str, service=Depends(get_task_service)) -> TaskRead:
 
 @router.get("/{task_id}/detail", response_model=TaskDetail)
 def get_task_detail(task_id: str, service=Depends(get_task_service)) -> TaskDetail:
+    """Handle get task detail requests.
+
+    Args:
+        task_id: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         return service.get_task_detail(task_id)
     except ValueError as exc:
@@ -68,6 +112,19 @@ def get_task_detail(task_id: str, service=Depends(get_task_service)) -> TaskDeta
 
 @router.patch("/{task_id}", response_model=TaskRead)
 def patch_task(task_id: str, payload: TaskPatch, request: Request, service=Depends(get_task_service)) -> TaskRead:
+    """Handle patch task requests.
+
+    Args:
+        task_id: from request/signature.; payload: from request/signature.; request: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    WHY:
+        Keeps workflow/event semantics centralized in services before broadcasting UI invalidation.
+    """
     try:
         task = service.patch_task(task_id, payload)
     except ValueError as exc:
@@ -87,6 +144,17 @@ def patch_task(task_id: str, payload: TaskPatch, request: Request, service=Depen
 
 @router.post("/{task_id}/comments", response_model=TaskCommentRead, status_code=201)
 def add_comment(task_id: str, payload: TaskCommentCreate, request: Request, service=Depends(get_task_service)) -> TaskCommentRead:
+    """Handle add comment requests.
+
+    Args:
+        task_id: from request/signature.; payload: from request/signature.; request: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         comment = service.add_comment(task_id, payload)
     except ValueError as exc:
@@ -107,6 +175,17 @@ def add_comment(task_id: str, payload: TaskCommentCreate, request: Request, serv
 
 @router.post("/{task_id}/checks", response_model=TaskCheckRead, status_code=201)
 def add_check(task_id: str, payload: TaskCheckCreate, request: Request, service=Depends(get_task_service)) -> TaskCheckRead:
+    """Handle add check requests.
+
+    Args:
+        task_id: from request/signature.; payload: from request/signature.; request: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         check = service.add_check(task_id, payload)
     except ValueError as exc:
@@ -127,6 +206,17 @@ def add_check(task_id: str, payload: TaskCheckCreate, request: Request, service=
 
 @router.post("/{task_id}/artifacts", response_model=TaskArtifactRead, status_code=201)
 def add_artifact(task_id: str, payload: TaskArtifactCreate, request: Request, service=Depends(get_task_service)) -> TaskArtifactRead:
+    """Handle add artifact requests.
+
+    Args:
+        task_id: from request/signature.; payload: from request/signature.; request: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         artifact = service.add_artifact(task_id, payload)
     except ValueError as exc:
@@ -147,6 +237,17 @@ def add_artifact(task_id: str, payload: TaskArtifactCreate, request: Request, se
 
 @router.get("/{task_id}/dependencies", response_model=list[TaskDependencyRead])
 def list_dependencies(task_id: str, service=Depends(get_task_service)) -> list[TaskDependencyRead]:
+    """Handle list dependencies requests.
+
+    Args:
+        task_id: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         return service.get_dependencies(task_id)
     except ValueError as exc:
@@ -160,6 +261,17 @@ def add_dependency(
     request: Request,
     service=Depends(get_task_service),
 ) -> TaskDependencyRead:
+    """Handle add dependency requests.
+
+    Args:
+        task_id: from request/signature.; payload: from request/signature.; request: from request/signature.; service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
     try:
         dependency = service.add_dependency(task_id, payload)
     except ValueError as exc:
