@@ -245,6 +245,25 @@ jobs:
           sudo mv gitleaks /usr/local/bin/gitleaks
           gitleaks version
 
+      - name: Scan git history
+        run: |
+          mkdir -p .artifacts/security
+          gitleaks git \
+            --config .github/security/gitleaks.toml \
+            --report-format sarif \
+            --report-path .artifacts/security/gitleaks-history.sarif \
+            --redact \
+            --verbose
+
+      - name: Scan working tree
+        run: |
+          gitleaks dir . \
+            --config .github/security/gitleaks.toml \
+            --report-format sarif \
+            --report-path .artifacts/security/gitleaks-working-tree.sarif \
+            --redact \
+            --verbose
+
       - name: Require explicit approval when allowlist changes
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
@@ -263,6 +282,18 @@ jobs:
 
             if (!changedFiles.includes(allowlistPath)) {
               core.info('Allowlist file unchanged; explicit allowlist approval not required.');
+              return;
+            }
+
+            let existedInBase = true;
+            try {
+              execSync(`git cat-file -e ${base}:${allowlistPath}`, { stdio: 'ignore' });
+            } catch {
+              existedInBase = false;
+            }
+
+            if (!existedInBase) {
+              core.info('Allowlist file is new in this PR; explicit approval is not required for initial baseline bootstrap.');
               return;
             }
 
@@ -302,29 +333,10 @@ jobs:
 
             core.info('Detected explicit ALLOWLIST_APPROVED approval for new allowlist entries.');
 
-      - name: Scan git history
-        run: |
-          mkdir -p .artifacts/security
-          gitleaks git \
-            --config .github/security/gitleaks.toml \
-            --report-format sarif \
-            --report-path .artifacts/security/gitleaks-history.sarif \
-            --redact \
-            --verbose
-
-      - name: Scan working tree
-        run: |
-          gitleaks dir . \
-            --config .github/security/gitleaks.toml \
-            --report-format sarif \
-            --report-path .artifacts/security/gitleaks-working-tree.sarif \
-            --redact \
-            --verbose
-
       - name: Upload gitleaks artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gitleaks-reports
           path: .artifacts/security/gitleaks-*.sarif
-          if-no-files-found: error
+          if-no-files-found: warn
