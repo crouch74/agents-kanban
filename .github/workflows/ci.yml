@@ -5,10 +5,16 @@ on:
     branches:
       - main
     paths:
-      - '.github/workflows/ci.yml'
+      - '.github/dependabot.yml'
+      - '.github/workflows/**'
+      - '.github/security/**'
       - 'apps/web/**'
+      - 'apps/api/pyproject.toml'
+      - 'apps/api/requirements*.txt'
+      - 'packages/core/pyproject.toml'
+      - 'packages/mcp-server/pyproject.toml'
       - 'packages/sdk/**'
-      - 'scripts/capture_pr_screenshots.mjs'
+      - 'scripts/**'
       - 'package.json'
       - 'package-lock.json'
   push:
