@@ -94,6 +94,7 @@ Notes:
 ## Live Updates
 
 - WebSocket `/api/v1/ws`
+- AsyncAPI contract: `docs/api/asyncapi-ws-v1.yaml`
 
 The WebSocket surface is used to broadcast committed mutation events so the web
 client can invalidate stale query results.

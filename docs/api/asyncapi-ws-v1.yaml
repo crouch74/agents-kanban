@@ -1,0 +1,336 @@
+asyncapi: 2.6.0
+id: urn:acp:api:v1:ws
+info:
+  title: Agent Control Plane WebSocket API
+  version: 1.0.0
+  description: |
+    Contract for `/api/v1/ws` live updates. The server emits heartbeat/system
+    frames and committed mutation notifications.
+
+    Compatibility expectations:
+    - Top-level envelope keys are additive-only. Existing keys keep stable names and types.
+    - Unknown `type`, `event_type`, and `detail` keys must be ignored by clients.
+    - `detail` is event-specific and additive; clients should only rely on documented keys.
+    - Routing ids (`project_id`, `task_id`, `session_id`) may be `null` when not applicable.
+
+defaultContentType: application/json
+
+servers:
+  local:
+    url: localhost:8000
+    protocol: ws
+    description: Local development server.
+
+channels:
+  /api/v1/ws:
+    description: |
+      Subscribes to live mutation updates.
+      Optional query filters: `project_id`, `task_id`, and `session_id`.
+    bindings:
+      ws:
+        query:
+          type: object
+          additionalProperties: false
+          properties:
+            project_id:
+              type: string
+              description: Only receive frames matching this project id.
+            task_id:
+              type: string
+              description: Only receive frames matching this task id.
+            session_id:
+              type: string
+              description: Only receive frames matching this session id.
+    subscribe:
+      operationId: subscribeLiveMutations
+      summary: Receive server-emitted system and mutation events.
+      message:
+        oneOf:
+          - $ref: '#/components/messages/SystemConnected'
+          - $ref: '#/components/messages/SystemPing'
+          - $ref: '#/components/messages/MutationCommitted'
+
+components:
+  messages:
+    SystemConnected:
+      name: system.connected
+      title: Connected ack
+      summary: Initial frame sent immediately after connection acceptance.
+      payload:
+        $ref: '#/components/schemas/SystemConnectedPayload'
+      examples:
+        - name: connected-all
+          payload:
+            type: system.connected
+            message: "📡 Live mutation streaming connected."
+            project_id: null
+            task_id: null
+            session_id: null
+        - name: connected-filtered
+          payload:
+            type: system.connected
+            message: "📡 Live mutation streaming connected."
+            project_id: proj_123
+            task_id: task_456
+            session_id: sess_789
+
+    SystemPing:
+      name: system.ping
+      title: Keepalive ping
+      summary: Sent when no event is queued for 20s, to keep sockets warm.
+      payload:
+        $ref: '#/components/schemas/SystemPingPayload'
+      examples:
+        - name: ping
+          payload:
+            type: system.ping
+
+    MutationCommitted:
+      name: mutation.committed
+      title: Mutation notification
+      summary: Envelope emitted after REST write handlers commit a mutation.
+      payload:
+        $ref: '#/components/schemas/MutationCommittedPayload'
+      examples:
+        - name: task-created
+          payload:
+            type: mutation.committed
+            event_type: task.created
+            entity_type: task
+            entity_id: task_01H...
+            project_id: proj_01H...
+            task_id: task_01H...
+            session_id: null
+            detail:
+              title: "Implement websocket docs"
+              workflow_state: todo
+        - name: waiting-question-answered
+          payload:
+            type: mutation.committed
+            event_type: waiting_question.answered
+            entity_type: waiting_question
+            entity_id: waitq_01H...
+            project_id: proj_01H...
+            task_id: task_01H...
+            session_id: sess_01H...
+            detail:
+              status: answered
+              reply_count: 1
+
+  schemas:
+    NullableId:
+      anyOf:
+        - type: string
+        - type: 'null'
+
+    SystemConnectedPayload:
+      type: object
+      additionalProperties: false
+      required: [type, message, project_id, task_id, session_id]
+      properties:
+        type:
+          type: string
+          const: system.connected
+        message:
+          type: string
+        project_id:
+          $ref: '#/components/schemas/NullableId'
+        task_id:
+          $ref: '#/components/schemas/NullableId'
+        session_id:
+          $ref: '#/components/schemas/NullableId'
+
+    SystemPingPayload:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: system.ping
+
+    MutationCommittedPayload:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          type,
+          event_type,
+          entity_type,
+          entity_id,
+          project_id,
+          task_id,
+          session_id,
+          detail,
+        ]
+      properties:
+        type:
+          type: string
+          const: mutation.committed
+        event_type:
+          type: string
+          enum:
+            - project.created
+            - project.bootstrapped
+            - repository.created
+            - worktree.created
+            - worktree.updated
+            - task.created
+            - task.updated
+            - task.comment_added
+            - task.check_added
+            - task.artifact_added
+            - task.dependency_added
+            - session.spawned
+            - session.follow_up_spawned
+            - session.cancelled
+            - waiting_question.opened
+            - waiting_question.answered
+          description: |
+            Domain write event emitted by REST route broadcasters.
+            Treat this enum as open for forward compatibility.
+        entity_type:
+          type: string
+          enum:
+            - project
+            - repository
+            - worktree
+            - task
+            - task_comment
+            - task_check
+            - task_artifact
+            - task_dependency
+            - session
+            - waiting_question
+        entity_id:
+          type: string
+        project_id:
+          $ref: '#/components/schemas/NullableId'
+        task_id:
+          $ref: '#/components/schemas/NullableId'
+        session_id:
+          $ref: '#/components/schemas/NullableId'
+        detail:
+          type: object
+          additionalProperties: true
+          description: Event-specific additive metadata.
+
+    EventDetailExamples:
+      type: object
+      description: Documented detail keys by `event_type`.
+      additionalProperties: false
+      properties:
+        project.created:
+          type: object
+          additionalProperties: false
+          properties:
+            name:
+              type: string
+        project.bootstrapped:
+          type: object
+          additionalProperties: false
+          properties:
+            name:
+              type: string
+            use_worktree:
+              type: boolean
+        repository.created:
+          type: object
+          additionalProperties: false
+          properties:
+            name:
+              type: string
+        worktree.created:
+          type: object
+          additionalProperties: false
+          properties:
+            branch_name:
+              type: string
+        worktree.updated:
+          type: object
+          additionalProperties: false
+          properties:
+            status:
+              type: string
+        task.created:
+          type: object
+          additionalProperties: false
+          properties:
+            title:
+              type: string
+            workflow_state:
+              type: string
+        task.updated:
+          type: object
+          additionalProperties: false
+          properties:
+            workflow_state:
+              type: string
+            waiting_for_human:
+              type: boolean
+        task.comment_added:
+          type: object
+          additionalProperties: false
+          properties:
+            author_name:
+              type: string
+        task.check_added:
+          type: object
+          additionalProperties: false
+          properties:
+            status:
+              type: string
+            check_type:
+              type: string
+        task.artifact_added:
+          type: object
+          additionalProperties: false
+          properties:
+            artifact_type:
+              type: string
+            name:
+              type: string
+        task.dependency_added:
+          type: object
+          additionalProperties: false
+          properties:
+            depends_on_task_id:
+              type: string
+        session.spawned:
+          type: object
+          additionalProperties: false
+          properties:
+            profile:
+              type: string
+            status:
+              type: string
+        session.follow_up_spawned:
+          type: object
+          additionalProperties: false
+          properties:
+            profile:
+              type: string
+            status:
+              type: string
+        session.cancelled:
+          type: object
+          additionalProperties: false
+          properties:
+            status:
+              type: string
+        waiting_question.opened:
+          type: object
+          additionalProperties: false
+          properties:
+            urgency:
+              type: string
+            status:
+              type: string
+        waiting_question.answered:
+          type: object
+          additionalProperties: false
+          properties:
+            status:
+              type: string
+            reply_count:
+              type: integer
