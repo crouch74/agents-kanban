@@ -30,7 +30,9 @@ test("waiting-question pause and resume flow", async ({ page }, testInfo) => {
 
   await page.getByPlaceholder("Reply to unblock the agent").fill("Approved. Continue with the current plan.");
   await page.getByRole("button", { name: "Send + mark answered" }).click();
-  await expect(page.getByText("answered")).toBeVisible();
+  await expect(
+    page.getByText("This question is answered. Switch the queue filter to Open to continue triage."),
+  ).toBeVisible();
 
   await page.screenshot({ path: testInfo.outputPath("waiting-question-pause-resume-flow.png"), fullPage: true });
 });
