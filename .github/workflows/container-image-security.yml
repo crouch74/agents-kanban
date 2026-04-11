@@ -1,0 +1,163 @@
+name: Container Image Security
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      fail_on_high:
+        description: Fail builds on high vulnerabilities (critical always fails).
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  scan-images:
+    name: Build + Scan API/Web container images
+    runs-on: ubuntu-latest
+
+    env:
+      FAIL_ON_HIGH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.fail_on_high || 'false' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image
+        run: |
+          docker build \
+            -f apps/api/Dockerfile \
+            -t local/acp-api:${{ github.sha }} \
+            .
+
+      - name: Build Web image
+        run: |
+          docker build \
+            -f apps/web/Dockerfile \
+            -t local/acp-web:${{ github.sha }} \
+            .
+
+      - name: Install Trivy
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
+      - name: Install Grype
+        run: |
+          set -euo pipefail
+          GRYPE_VERSION="v0.78.0"
+          curl -sSfL "https://raw.githubusercontent.com/anchore/grype/main/install.sh" | sh -s -- -b /usr/local/bin "${GRYPE_VERSION}"
+          grype version
+          grype db update || echo "⚠️ grype db update failed; continuing with available db"
+
+      - name: Scan container images with Trivy and Grype
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/security/container
+
+          IMAGES=(
+            "local/acp-api:${{ github.sha }}"
+            "local/acp-web:${{ github.sha }}"
+          )
+
+          for image in "${IMAGES[@]}"; do
+            safe_name="${image//[:\/]/-}"
+            trivy image --scanners vuln --format json --output ".artifacts/security/container/trivy-${safe_name}.json" "$image"
+            GRYPE_DB_VALIDATE_AGE=false grype "$image" -o json > ".artifacts/security/container/grype-${safe_name}.json"
+          done
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          artifacts = Path('.artifacts/security/container')
+          fail_on_high = str(os.getenv('FAIL_ON_HIGH', 'false')).strip().lower() == 'true'
+
+          summary = {
+            'trivy': {},
+            'grype': {},
+            'critical_total': 0,
+            'high_total': 0,
+            'critical_unique': 0,
+            'high_unique': 0,
+            'fail_on_high': fail_on_high,
+          }
+          unique_findings = {'critical': set(), 'high': set()}
+
+          def bump(target: dict, severity: str):
+            key = severity.lower()
+            target[key] = target.get(key, 0) + 1
+
+          for path in sorted(artifacts.glob('trivy-*.json')):
+            payload = json.loads(path.read_text())
+            counts = {'critical': 0, 'high': 0}
+            image_key = path.name.removeprefix('trivy-').removesuffix('.json')
+            for result in payload.get('Results', []):
+              for vuln in result.get('Vulnerabilities') or []:
+                sev = str(vuln.get('Severity', '')).lower()
+                if sev in ('critical', 'high'):
+                  bump(counts, sev)
+                  vuln_id = vuln.get('VulnerabilityID') or 'unknown-trivy-id'
+                  unique_findings[sev].add((image_key, vuln_id))
+            summary['trivy'][path.name] = counts
+            summary['critical_total'] += counts.get('critical', 0)
+            summary['high_total'] += counts.get('high', 0)
+
+          for path in sorted(artifacts.glob('grype-*.json')):
+            payload = json.loads(path.read_text())
+            counts = {'critical': 0, 'high': 0}
+            image_key = path.name.removeprefix('grype-').removesuffix('.json')
+            for match in payload.get('matches', []):
+              vuln = match.get('vulnerability') or {}
+              sev = str(vuln.get('severity', '')).lower()
+              if sev in ('critical', 'high'):
+                bump(counts, sev)
+                vuln_id = vuln.get('id') or 'unknown-grype-id'
+                unique_findings[sev].add((image_key, vuln_id))
+            summary['grype'][path.name] = counts
+            summary['critical_total'] += counts.get('critical', 0)
+            summary['high_total'] += counts.get('high', 0)
+
+          summary['critical_unique'] = len(unique_findings['critical'])
+          summary['high_unique'] = len(unique_findings['high'])
+
+          summary_path = artifacts / 'summary.json'
+          summary_path.write_text(json.dumps(summary, indent=2))
+
+          print(json.dumps(summary, indent=2))
+
+          if summary['critical_unique'] > 0:
+            raise SystemExit(
+              f"Blocking: found {summary['critical_unique']} unique critical vulnerabilities across scanned images."
+            )
+
+          if summary['high_unique'] > 0 and fail_on_high:
+            raise SystemExit(
+              f"Blocking: found {summary['high_unique']} unique high vulnerabilities and fail_on_high is enabled."
+            )
+
+          if summary['high_unique'] > 0 and not fail_on_high:
+            print(
+              f"Warning: found {summary['high_unique']} unique high vulnerabilities (non-blocking rollout mode)."
+            )
+          PY
+
+      - name: Upload container scan artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-security-reports
+          path: .artifacts/security/container/
+          if-no-files-found: error
