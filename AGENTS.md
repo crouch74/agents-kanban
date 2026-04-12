@@ -258,7 +258,55 @@ If related issues are discovered during assigned work:
 2. Complete only assigned task.
 3. Do not bundle unrelated fixes in same PR.
 
-## 11. Known Issues & Deferred Debt
+
+## 11. Monolith & Legacy Drift Guardrails
+Purpose: prevent re-creating oversized files, parallel implementations, and compatibility drag.
+
+### Definition: Monolithic File (repo-specific)
+Treat a file as monolithic when 3+ conditions hold:
+- Exceeds ~400 lines (soft) or ~550 lines (hard review trigger).
+- Mixes unrelated concerns (e.g., data fetching + domain transforms + rendering + action wiring).
+- Acts as an edit hotspot touched for unrelated features.
+- Has low testability (logic only reachable through broad integration paths).
+- Owns multiple workflow slices that could be cohesive modules.
+
+### Required decomposition patterns
+- UI screens: separate container/orchestration from pure selectors/formatters and presentational sections.
+- Services: keep orchestration in service classes; extract reusable validators/transformers into focused modules.
+- Avoid catch-all `utils` growth; place helpers in feature-local modules (`feature/.../selectors|formatters|mappers`).
+- Prefer extending existing cohesive modules over adding parallel “_new”, “_v2”, or “_helper2” files.
+
+### Reuse-first requirements
+Before adding code:
+1. Search existing modules for equivalent behavior (`rg` by nouns + verbs of the feature).
+2. If equivalent logic exists, reuse or extract it; do not duplicate with minor naming changes.
+3. If duplication is intentionally kept, document why in the PR notes and `FINDINGS.md`.
+
+### Size and complexity guardrails
+- Soft limits: file 400 LOC, function/hook 60 LOC, cyclomatic complexity ~10.
+- If a touched file is already above soft limits, each non-trivial change should reduce or isolate complexity (extract at least one cohesive unit) unless explicitly deferred.
+- New files expected to exceed limits require a short “why not split” note in `FINDINGS.md`.
+
+### Legacy/compatibility rules
+- Compatibility layers (e.g., `services_legacy.py`) are transitional only: do not add new behavior there unless required for backward compatibility.
+- New behavior must land in canonical modules (`packages/core/src/acp_core/services/*` for backend, feature modules for web).
+- When touching legacy adapters, add a migration note (what should be moved next and blockers).
+
+### Required checks when restructuring
+- Run targeted tests for touched domain(s) plus relevant lint/type checks.
+- Update or add tests for extracted selectors/formatters/services.
+- Update docs/contracts when module boundaries or ownership expectations change.
+- Preserve public API/MCP behavior unless explicitly part of task scope.
+
+### Architectural notes expectation
+When tradeoffs are made (defer, temporary shim, partial extraction), record:
+- decision,
+- reason,
+- follow-up trigger,
+- owner placeholder (e.g., `maintainer`).
+Store in `FINDINGS.md` or an ADR when cross-cutting.
+
+## 12. Known Issues & Deferred Debt
 Known deferred items (do not fix unless explicitly tasked):
 - README badge placeholder still references `OWNER/REPO` — `README.md` — deferred until repository slug is finalized.
 - `apps/web/src/App.tsx` remains too large — frontend architecture debt tracked in docs; extract components without behavior drift when explicitly tasked.
@@ -269,7 +317,7 @@ Known deferred items (do not fix unless explicitly tasked):
 TODO/FIXME/HACK scan results:
 - `TODO(maintainer): replace OWNER/REPO in CI and coverage badges once repository slug is confirmed.` (`README.md`)
 
-## 12. Changelog
+## 13. Changelog
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-04-12 | Antigravity | Resolved MCP transport failures by silencing SDK stdout pollution and enabling autonomous write approval for bootstrap agents. |

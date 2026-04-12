@@ -52,7 +52,6 @@ import {
   useSessionTimelineQuery,
   useTaskDetailQuery,
 } from "@/features/control-plane/hooks";
-import type { EventRecord, SearchHit } from "@/lib/api";
 import { useAppUrlState } from "@/app-shell/useAppUrlState";
 import { useControlPlaneMutations } from "@/app-shell/useControlPlaneMutations";
 import { sectionTitleByKey, type DetailSelection, type NavSection } from "@/app-shell/types";
@@ -65,44 +64,16 @@ import { WaitingSectionContainer } from "@/features/project/containers/WaitingSe
 import { WorktreesSectionContainer } from "@/features/project/containers/WorktreesSectionContainer";
 import { createControlPlaneInvalidation } from "@/features/control-plane/invalidation";
 import { ProjectBootstrapWizard } from "@/components/project-bootstrap-wizard";
+import { formatEvent, formatSearchSnippet, summarizeEvent } from "@/app-shell/eventFormatting";
+import {
+  buildActivitySessionOptions,
+  buildActivityTaskOptions,
+  buildGroupedTasks,
+  buildSubtasksByParent,
+  filterProjects,
+} from "@/app-shell/selectors";
 import { toDisplay } from "@/utils/display";
 
-function formatEvent(eventType: string) {
-  return toDisplay(eventType.replaceAll(".", "_"));
-}
-
-function summarizeEvent(event: EventRecord) {
-  const payload = event.payload_json;
-  const summaryFields = [
-    payload.title,
-    payload.name,
-    payload.prompt,
-    payload.summary,
-    payload.local_path,
-    payload.branch_name,
-    payload.status,
-  ];
-  const summary = summaryFields.find(
-    (value): value is string => typeof value === "string" && value.trim().length > 0,
-  );
-  if (summary) {
-    return summary;
-  }
-
-  const addedColumnKeys = payload.added_column_keys;
-  if (Array.isArray(addedColumnKeys) && addedColumnKeys.length > 0) {
-    return `Added columns: ${addedColumnKeys.join(", ")}`;
-  }
-
-  return `${event.actor_name || "system"} updated ${event.entity_type}.`;
-}
-
-function formatSearchSnippet(hit: SearchHit) {
-  if (hit.entity_type === "event") {
-    return `Audit event matched the query. ${formatEvent(hit.title)} · ${hit.secondary ?? "system"}`;
-  }
-  return hit.snippet;
-}
 
 
 export function App() {
@@ -276,41 +247,18 @@ export function App() {
   }, [bootstrapProjectMutation.data, selectedProjectId]);
 
 
-  const filteredProjects = useMemo(() => {
-    const projects = projectsQuery.data ?? [];
-    const needle = deferredSearch.trim().toLowerCase();
-    if (!needle) {
-      return projects;
-    }
+  const filteredProjects = useMemo(
+    () => filterProjects(projectsQuery.data ?? [], deferredSearch),
+    [deferredSearch, projectsQuery.data],
+  );
 
-    return projects.filter((project) => {
-      return (
-        project.name.toLowerCase().includes(needle) ||
-        project.slug.toLowerCase().includes(needle) ||
-        (project.description ?? "").toLowerCase().includes(needle)
-      );
-    });
-  }, [deferredSearch, projectsQuery.data]);
-
-  const groupedTasks = useMemo(() => {
-    const board = projectDetailQuery.data?.board;
-    if (!board) {
-      return new Map<string, TaskSummary[]>();
-    }
-
-    const map = new Map<string, TaskSummary[]>();
-    board.columns.forEach((column) => map.set(column.id, []));
-    board.tasks.forEach((task) => {
-      if (task.parent_task_id) {
-        return;
-      }
-      const entry = map.get(task.board_column_id);
-      if (entry) {
-        entry.push(task);
-      }
-    });
-    return map;
-  }, [projectDetailQuery.data]);
+  const groupedTasks = useMemo(
+    () =>
+      projectDetailQuery.data
+        ? buildGroupedTasks(projectDetailQuery.data.board.columns, projectDetailQuery.data.board.tasks)
+        : new Map<string, TaskSummary[]>(),
+    [projectDetailQuery.data],
+  );
 
   const topLevelTasks = useMemo(() => {
     return (projectDetailQuery.data?.board.tasks ?? []).filter(
@@ -318,18 +266,10 @@ export function App() {
     );
   }, [projectDetailQuery.data]);
 
-  const subtasksByParent = useMemo(() => {
-    const map = new Map<string, TaskSummary[]>();
-    for (const task of projectDetailQuery.data?.board.tasks ?? []) {
-      if (!task.parent_task_id) {
-        continue;
-      }
-      const entry = map.get(task.parent_task_id) ?? [];
-      entry.push(task);
-      map.set(task.parent_task_id, entry);
-    }
-    return map;
-  }, [projectDetailQuery.data]);
+  const subtasksByParent = useMemo(
+    () => buildSubtasksByParent(projectDetailQuery.data?.board.tasks ?? []),
+    [projectDetailQuery.data?.board.tasks],
+  );
 
   const taskCardMetadata = useMemo(() => {
     const sessionsByTask = new Map<string, number>();
@@ -364,55 +304,23 @@ export function App() {
     [projectsQuery.data],
   );
 
-  const activityTaskOptions = useMemo(() => {
-    const options = new Map<string, string>();
-    for (const task of projectDetailQuery.data?.board.tasks ?? []) {
-      options.set(task.id, task.title);
-    }
-    for (const event of activityEventsQuery.data ?? []) {
-      const taskId =
-        typeof event.payload_json.task_id === "string"
-          ? event.payload_json.task_id
-          : event.entity_type === "task"
-            ? event.entity_id
-            : null;
-      if (taskId && !options.has(taskId)) {
-        const payloadTitle = event.payload_json.title;
-        options.set(
-          taskId,
-          typeof payloadTitle === "string" && payloadTitle.trim().length > 0
-            ? payloadTitle
-            : `Task ${taskId.slice(0, 8)}`,
-        );
-      }
-    }
-    return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
-  }, [activityEventsQuery.data, projectDetailQuery.data?.board.tasks]);
+  const activityTaskOptions = useMemo(
+    () =>
+      buildActivityTaskOptions(
+        projectDetailQuery.data?.board.tasks ?? [],
+        activityEventsQuery.data ?? [],
+      ),
+    [activityEventsQuery.data, projectDetailQuery.data?.board.tasks],
+  );
 
-  const activitySessionOptions = useMemo(() => {
-    const options = new Map<string, string>();
-    for (const session of projectDetailQuery.data?.sessions ?? []) {
-      options.set(session.id, session.session_name);
-    }
-    for (const event of activityEventsQuery.data ?? []) {
-      const sessionId =
-        typeof event.payload_json.session_id === "string"
-          ? event.payload_json.session_id
-          : event.entity_type === "session"
-            ? event.entity_id
-            : null;
-      if (sessionId && !options.has(sessionId)) {
-        const payloadSessionName = event.payload_json.session_name;
-        options.set(
-          sessionId,
-          typeof payloadSessionName === "string" && payloadSessionName.trim().length > 0
-            ? payloadSessionName
-            : `Session ${sessionId.slice(0, 8)}`,
-        );
-      }
-    }
-    return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
-  }, [activityEventsQuery.data, projectDetailQuery.data?.sessions]);
+  const activitySessionOptions = useMemo(
+    () =>
+      buildActivitySessionOptions(
+        projectDetailQuery.data?.sessions ?? [],
+        activityEventsQuery.data ?? [],
+      ),
+    [activityEventsQuery.data, projectDetailQuery.data?.sessions],
+  );
 
   const sessionTailQuery = useSessionTailQuery(selectedSessionId);
   const sessionTimelineQuery = useSessionTimelineQuery(selectedSessionId);
