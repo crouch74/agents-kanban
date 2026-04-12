@@ -32,6 +32,28 @@ class AgentLaunchPlan:
 
 
 @dataclass(frozen=True)
+class SessionLaunchInputs:
+    """Normalized launch configuration shared by session spawn and follow-up flows."""
+
+    task_kind: str
+    agent_name: str | None
+    prompt: str | None
+    working_directory: Path
+    model: str | None = None
+    permission_mode: str | None = None
+    output_mode: str | None = None
+    max_turns: int | None = None
+    resume_token: str | None = None
+    allowed_tools: list[str] = field(default_factory=list)
+    disallowed_tools: list[str] = field(default_factory=list)
+    extra_env: dict[str, str] = field(default_factory=dict)
+    repository_id: str | None = None
+    worktree_id: str | None = None
+    session_family_id: str | None = None
+    follow_up_of_session_id: str | None = None
+
+
+@dataclass(frozen=True)
 class AgentCapabilities:
     """Capabilities exposed by a concrete coding-agent adapter."""
 

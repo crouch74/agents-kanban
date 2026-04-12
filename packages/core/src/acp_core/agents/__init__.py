@@ -8,6 +8,7 @@ from acp_core.agents.types import (
     AgentCapabilities,
     AgentLaunchPlan,
     AgentRequest,
+    SessionLaunchInputs,
     CodingAgentAdapterProtocol,
     render_launch_plan_command,
 )
@@ -17,6 +18,7 @@ __all__ = [
     "AgentCapabilities",
     "AgentLaunchPlan",
     "AgentRequest",
+    "SessionLaunchInputs",
     "ClaudeCodeAgentAdapter",
     "CodingAgentAdapterProtocol",
     "CodexAgentAdapter",
