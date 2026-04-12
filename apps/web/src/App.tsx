@@ -27,7 +27,6 @@ import {
   StatusDot,
 } from "@/components/ui";
 import { useUIStore } from "@/store/ui";
-import { AppShell } from "@/layout/AppShell";
 import { SidebarNavigation } from "@/layout/SidebarNavigation";
 import { AppHeader } from "@/layout/AppHeader";
 import {
@@ -52,10 +51,18 @@ import {
   useSessionTimelineQuery,
   useTaskDetailQuery,
 } from "@/features/control-plane/hooks";
-import type { EventRecord, SearchHit } from "@/lib/api";
 import { useAppUrlState } from "@/app-shell/useAppUrlState";
 import { useControlPlaneMutations } from "@/app-shell/useControlPlaneMutations";
-import { sectionTitleByKey, type DetailSelection, type NavSection } from "@/app-shell/types";
+import { AppContent } from "@/app-shell/AppContent";
+import { useAppSelectionState } from "@/app-shell/useAppSelectionState";
+import { useDraftFormsState } from "@/app-shell/useDraftFormsState";
+import { useProjectScopedEffects } from "@/app-shell/useProjectScopedEffects";
+import {
+  formatEvent,
+  formatSearchSnippet,
+  summarizeEvent,
+} from "@/features/activity/eventPresentation";
+import { sectionTitleByKey, type NavSection } from "@/app-shell/types";
 import { HomeSectionContainer } from "@/features/navigation/containers/HomeSectionContainer";
 import { SearchSectionContainer } from "@/features/navigation/containers/SearchSectionContainer";
 import { ActivitySectionContainer } from "@/features/activity/containers/ActivitySectionContainer";
@@ -67,86 +74,73 @@ import { createControlPlaneInvalidation } from "@/features/control-plane/invalid
 import { ProjectBootstrapWizard } from "@/components/project-bootstrap-wizard";
 import { toDisplay } from "@/utils/display";
 
-function formatEvent(eventType: string) {
-  return toDisplay(eventType.replaceAll(".", "_"));
-}
-
-function summarizeEvent(event: EventRecord) {
-  const payload = event.payload_json;
-  const summaryFields = [
-    payload.title,
-    payload.name,
-    payload.prompt,
-    payload.summary,
-    payload.local_path,
-    payload.branch_name,
-    payload.status,
-  ];
-  const summary = summaryFields.find(
-    (value): value is string => typeof value === "string" && value.trim().length > 0,
-  );
-  if (summary) {
-    return summary;
-  }
-
-  const addedColumnKeys = payload.added_column_keys;
-  if (Array.isArray(addedColumnKeys) && addedColumnKeys.length > 0) {
-    return `Added columns: ${addedColumnKeys.join(", ")}`;
-  }
-
-  return `${event.actor_name || "system"} updated ${event.entity_type}.`;
-}
-
-function formatSearchSnippet(hit: SearchHit) {
-  if (hit.entity_type === "event") {
-    return `Audit event matched the query. ${formatEvent(hit.title)} · ${hit.secondary ?? "system"}`;
-  }
-  return hit.snippet;
-}
-
 
 export function App() {
   const queryClient = useQueryClient();
   const { selectedProjectId, setSelectedProjectId } = useUIStore();
   const [search, setSearch] = useState("");
-  const [draftTaskTitle, setDraftTaskTitle] = useState("");
-  const [draftRepoPath, setDraftRepoPath] = useState("");
-  const [draftRepoName, setDraftRepoName] = useState("");
-  const [draftWorktreeLabel, setDraftWorktreeLabel] = useState("");
-  const [selectedRepositoryId, setSelectedRepositoryId] = useState<
-    string | null
-  >(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<string>("");
-  const [selectedSessionTaskId, setSelectedSessionTaskId] =
-    useState<string>("");
-  const [selectedSessionWorktreeId, setSelectedSessionWorktreeId] =
-    useState<string>("");
-  const [sessionProfile, setSessionProfile] = useState("executor");
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
-    null,
-  );
-  const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(
-    null,
-  );
-  const [inspectedTaskId, setInspectedTaskId] = useState<string | null>(null);
-  const [draftQuestionPrompt, setDraftQuestionPrompt] = useState("");
-  const [draftQuestionReason, setDraftQuestionReason] = useState("");
-  const [draftQuestionUrgency, setDraftQuestionUrgency] = useState("medium");
-  const [draftReplyBody, setDraftReplyBody] = useState("");
-  const [draftCommentBody, setDraftCommentBody] = useState("");
-  const [draftCheckSummary, setDraftCheckSummary] = useState("");
-  const [draftCheckType] = useState("verification");
-  const [draftCheckStatus, setDraftCheckStatus] = useState("pending");
-  const [draftArtifactName, setDraftArtifactName] = useState("");
-  const [draftArtifactType] = useState("log");
-  const [draftArtifactUri, setDraftArtifactUri] = useState("");
-  const [selectedDependencyTaskId, setSelectedDependencyTaskId] = useState("");
-  const [draftSubtaskTitle, setDraftSubtaskTitle] = useState("");
-  const [activeSection, setActiveSection] = useState<NavSection>("home");
-  const [drawerSelection, setDrawerSelection] = useState<DetailSelection | null>(null);
-  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
-  const [mobileTaskPanelOpen, setMobileTaskPanelOpen] = useState(false);
-  const [openTaskSections, setOpenTaskSections] = useState<Record<string, boolean>>({});
+  const {
+    selectedRepositoryId,
+    setSelectedRepositoryId,
+    selectedTaskId,
+    setSelectedTaskId,
+    selectedSessionTaskId,
+    setSelectedSessionTaskId,
+    selectedSessionWorktreeId,
+    setSelectedSessionWorktreeId,
+    sessionProfile,
+    setSessionProfile,
+    selectedSessionId,
+    setSelectedSessionId,
+    selectedQuestionId,
+    setSelectedQuestionId,
+    inspectedTaskId,
+    setInspectedTaskId,
+    selectedDependencyTaskId,
+    setSelectedDependencyTaskId,
+    activeSection,
+    setActiveSection,
+    drawerSelection,
+    setDrawerSelection,
+    projectDialogOpen,
+    setProjectDialogOpen,
+    mobileTaskPanelOpen,
+    setMobileTaskPanelOpen,
+    openTaskSections,
+    setOpenTaskSections,
+  } = useAppSelectionState();
+  const {
+    draftTaskTitle,
+    setDraftTaskTitle,
+    draftRepoPath,
+    setDraftRepoPath,
+    draftRepoName,
+    setDraftRepoName,
+    draftWorktreeLabel,
+    setDraftWorktreeLabel,
+    draftQuestionPrompt,
+    setDraftQuestionPrompt,
+    draftQuestionReason,
+    setDraftQuestionReason,
+    draftQuestionUrgency,
+    setDraftQuestionUrgency,
+    draftReplyBody,
+    setDraftReplyBody,
+    draftCommentBody,
+    setDraftCommentBody,
+    draftCheckSummary,
+    setDraftCheckSummary,
+    draftCheckType,
+    draftCheckStatus,
+    setDraftCheckStatus,
+    draftArtifactName,
+    setDraftArtifactName,
+    draftArtifactType,
+    draftArtifactUri,
+    setDraftArtifactUri,
+    draftSubtaskTitle,
+    setDraftSubtaskTitle,
+  } = useDraftFormsState();
   const [commentFocused, setCommentFocused] = useState(false);
   const deferredSearch = useDeferredValue(search);
   const sensors = useSensors(
@@ -176,42 +170,27 @@ export function App() {
   const searchQuery = useSearchQuery(deferredSearch);
   const invalidation = createControlPlaneInvalidation({ queryClient });
 
-  useEffect(() => {
-    if (!selectedProjectId && projectsQuery.data?.[0]) {
-      setSelectedProjectId(projectsQuery.data[0].id);
-    }
-  }, [projectsQuery.data, selectedProjectId, setSelectedProjectId]);
-
   useLiveInvalidationSocket(invalidation.invalidateLiveUpdate);
 
   const projectDetailQuery = useProjectDetailQuery(selectedProjectId);
   const questionsQuery = useQuestionsQuery(selectedProjectId);
-
-  useEffect(() => {
-    setSelectedRepositoryId(null);
-    setSelectedTaskId("");
-    setSelectedSessionTaskId("");
-    setSelectedSessionWorktreeId("");
-    setSelectedSessionId(null);
-    setSelectedQuestionId(null);
-    setInspectedTaskId(null);
-    setDrawerSelection(null);
-  }, [selectedProjectId]);
-
-  useEffect(() => {
-    const repositories = projectDetailQuery.data?.repositories ?? [];
-    if (!selectedRepositoryId && repositories[0]) {
-      setSelectedRepositoryId(repositories[0].id);
-    }
-  }, [projectDetailQuery.data?.repositories, selectedRepositoryId]);
-
-  useEffect(() => {
-    const questions = questionsQuery.data ?? [];
-    const isCurrentStillAvailable = questions.some(q => q.id === selectedQuestionId);
-    if (!isCurrentStillAvailable && questions[0]) {
-      setSelectedQuestionId(questions[0].id);
-    }
-  }, [questionsQuery.data, selectedQuestionId]);
+  useProjectScopedEffects({
+    projects: projectsQuery.data,
+    selectedProjectId,
+    setSelectedProjectId,
+    repositories: projectDetailQuery.data?.repositories,
+    selectedRepositoryId,
+    setSelectedRepositoryId,
+    questions: questionsQuery.data,
+    selectedQuestionId,
+    setSelectedQuestionId,
+    setSelectedTaskId,
+    setSelectedSessionTaskId,
+    setSelectedSessionWorktreeId,
+    setSelectedSessionId,
+    setInspectedTaskId,
+    setDrawerSelection,
+  });
 
   const {
     bootstrapPreviewMutation,
@@ -548,7 +527,7 @@ export function App() {
   ];
 
   return (
-    <AppShell
+    <AppContent
       sidebar={
         <SidebarNavigation
           activeSection={activeSection}
