@@ -14,17 +14,31 @@ class FakeRuntime:
     def __init__(self) -> None:
         self.sessions: dict[str, dict[str, str]] = {}
 
-    def spawn_session(self, *, session_name: str, working_directory: Path, profile: str, launch_spec=None, command: str | None = None):
+    def spawn_session(
+        self,
+        *,
+        session_name: str,
+        working_directory: Path,
+        profile: str,
+        launch_spec=None,
+        command: str | None = None,
+    ):
         self.sessions[session_name] = {
             "working_directory": str(working_directory),
-            "command": launch_spec.display_command if launch_spec else (command or profile),
+            "command": launch_spec.display_command
+            if launch_spec
+            else (command or profile),
         }
         return RuntimeSessionInfo(
             session_name=session_name,
             pane_id="%1",
             window_name="main",
-            working_directory=str(launch_spec.working_directory) if launch_spec else str(working_directory),
-            command=launch_spec.display_command if launch_spec else (command or profile),
+            working_directory=str(launch_spec.working_directory)
+            if launch_spec
+            else str(working_directory),
+            command=launch_spec.display_command
+            if launch_spec
+            else (command or profile),
         )
 
     def session_exists(self, session_name: str) -> bool:
@@ -47,13 +61,25 @@ class FakeRuntime:
         if prefix is not None:
             names = [name for name in names if name.startswith(prefix)]
         return [
-            type("RuntimeSessionSummary", (), {"session_name": name, "window_name": "main"})()
+            type(
+                "RuntimeSessionSummary",
+                (),
+                {"session_name": name, "window_name": "main"},
+            )()
             for name in names
         ]
 
 
 class FailingRuntime(FakeRuntime):
-    def spawn_session(self, *, session_name: str, working_directory: Path, profile: str, launch_spec=None, command: str | None = None):
+    def spawn_session(
+        self,
+        *,
+        session_name: str,
+        working_directory: Path,
+        profile: str,
+        launch_spec=None,
+        command: str | None = None,
+    ):
         raise RuntimeError("runtime down")
 
 
@@ -68,7 +94,9 @@ def create_git_repo(path: Path) -> Path:
     return path
 
 
-def test_session_write_routes_reject_malformed_payloads_and_missing_foreign_keys() -> None:
+def test_session_write_routes_reject_malformed_payloads_and_missing_foreign_keys() -> (
+    None
+):
     with TestClient(app) as client:
         malformed_spawn = client.post("/api/v1/sessions", json={"profile": "executor"})
         assert malformed_spawn.status_code == 422
@@ -97,14 +125,20 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
 
     try:
         with TestClient(app) as client:
-            project_id = client.post("/api/v1/projects", json={"name": "Runtime Ops"}).json()["id"]
+            project_id = client.post(
+                "/api/v1/projects", json={"name": "Runtime Ops"}
+            ).json()["id"]
             repository_id = client.post(
                 "/api/v1/repositories",
                 json={"project_id": project_id, "local_path": str(repo_path)},
             ).json()["id"]
             task_id = client.post(
                 "/api/v1/tasks",
-                json={"project_id": project_id, "title": "Run executor", "board_column_key": "ready"},
+                json={
+                    "project_id": project_id,
+                    "title": "Run executor",
+                    "board_column_key": "ready",
+                },
             ).json()["id"]
             worktree_id = client.post(
                 "/api/v1/worktrees",
@@ -134,7 +168,9 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
             session = session_response.json()
             assert session["status"] == "running"
             assert session["worktree_id"] == worktree_id
-            assert session["runtime_metadata"]["launch_inputs"]["task_kind"] == "execute"
+            assert (
+                session["runtime_metadata"]["launch_inputs"]["task_kind"] == "execute"
+            )
             assert session["runtime_metadata"]["launch_inputs"]["agent_name"] == "codex"
             assert session["runtime_metadata"]["launch_inputs"]["max_turns"] == 3
 
@@ -154,7 +190,9 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
             assert timeline["session"]["id"] == session["id"]
             assert timeline["runs"][0]["status"] == "running"
             assert timeline["messages"]
-            assert any(event["event_type"] == "session.spawned" for event in timeline["events"])
+            assert any(
+                event["event_type"] == "session.spawned" for event in timeline["events"]
+            )
             assert len(timeline["related_sessions"]) == 1
 
             follow_up_response = client.post(
@@ -165,15 +203,26 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
             follow_up = follow_up_response.json()
             assert follow_up["task_id"] == task_id
             assert follow_up["worktree_id"] == worktree_id
-            assert follow_up["runtime_metadata"]["follow_up_of_session_id"] == session["id"]
+            assert (
+                follow_up["runtime_metadata"]["follow_up_of_session_id"]
+                == session["id"]
+            )
             assert follow_up["runtime_metadata"]["follow_up_type"] == "verify"
 
-            follow_up_timeline_response = client.get(f"/api/v1/sessions/{follow_up['id']}/timeline")
+            follow_up_timeline_response = client.get(
+                f"/api/v1/sessions/{follow_up['id']}/timeline"
+            )
             assert follow_up_timeline_response.status_code == 200
             follow_up_timeline = follow_up_timeline_response.json()
             assert len(follow_up_timeline["related_sessions"]) == 2
-            assert any(item["id"] == session["id"] for item in follow_up_timeline["related_sessions"])
-            assert any(event["event_type"] == "session.follow_up_spawned" for event in follow_up_timeline["events"])
+            assert any(
+                item["id"] == session["id"]
+                for item in follow_up_timeline["related_sessions"]
+            )
+            assert any(
+                event["event_type"] == "session.follow_up_spawned"
+                for event in follow_up_timeline["events"]
+            )
 
             cancel_response = client.post(f"/api/v1/sessions/{session['id']}/cancel")
             assert cancel_response.status_code == 200
@@ -184,7 +233,9 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
             assert refreshed_response.status_code == 200
             assert refreshed_response.json()["status"] == "cancelled"
 
-            follow_up_cancel_response = client.post(f"/api/v1/sessions/{follow_up['id']}/cancel")
+            follow_up_cancel_response = client.post(
+                f"/api/v1/sessions/{follow_up['id']}/cancel"
+            )
             assert follow_up_cancel_response.status_code == 200
             assert follow_up_cancel_response.json()["status"] == "cancelled"
 
@@ -193,20 +244,25 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
             diagnostics = diagnostics_response.json()
             assert diagnostics["stale_worktree_count"] >= 1
             assert any(
-                issue["worktree_id"] == worktree_id and issue["recommendation"] == "archive"
+                issue["worktree_id"] == worktree_id
+                and issue["recommendation"] == "archive"
                 for issue in diagnostics["stale_worktrees"]
             )
     finally:
         app.dependency_overrides.clear()
 
 
-def test_session_spawn_and_follow_up_surface_runtime_adapter_failure(tmp_path: Path) -> None:
+def test_session_spawn_and_follow_up_surface_runtime_adapter_failure(
+    tmp_path: Path,
+) -> None:
     app.dependency_overrides[get_runtime_adapter] = lambda: FailingRuntime()
     repo_path = create_git_repo(tmp_path / "session-runtime-failure-repo")
 
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
-            project_id = client.post("/api/v1/projects", json={"name": "Session Runtime Failure"}).json()["id"]
+            project_id = client.post(
+                "/api/v1/projects", json={"name": "Session Runtime Failure"}
+            ).json()["id"]
             repository_id = client.post(
                 "/api/v1/repositories",
                 json={"project_id": project_id, "local_path": str(repo_path)},
@@ -218,7 +274,11 @@ def test_session_spawn_and_follow_up_surface_runtime_adapter_failure(tmp_path: P
 
             spawn_response = client.post(
                 "/api/v1/sessions",
-                json={"task_id": task_id, "profile": "executor", "repository_id": repository_id},
+                json={
+                    "task_id": task_id,
+                    "profile": "executor",
+                    "repository_id": repository_id,
+                },
             )
             assert spawn_response.status_code == 502
             payload = spawn_response.json()
@@ -235,8 +295,12 @@ def test_session_spawn_rejects_cross_project_repository(tmp_path: Path) -> None:
 
     try:
         with TestClient(app) as client:
-            project_a = client.post("/api/v1/projects", json={"name": "Project A"}).json()["id"]
-            project_b = client.post("/api/v1/projects", json={"name": "Project B"}).json()["id"]
+            project_a = client.post(
+                "/api/v1/projects", json={"name": "Project A"}
+            ).json()["id"]
+            project_b = client.post(
+                "/api/v1/projects", json={"name": "Project B"}
+            ).json()["id"]
             repository_id = client.post(
                 "/api/v1/repositories",
                 json={"project_id": project_a, "local_path": str(repo_path)},
@@ -248,10 +312,17 @@ def test_session_spawn_rejects_cross_project_repository(tmp_path: Path) -> None:
 
             response = client.post(
                 "/api/v1/sessions",
-                json={"task_id": task_id, "profile": "executor", "repository_id": repository_id},
+                json={
+                    "task_id": task_id,
+                    "profile": "executor",
+                    "repository_id": repository_id,
+                },
             )
             assert response.status_code == 400
-            assert response.json()["detail"] == "Session repository must belong to the same project as the task"
+            assert (
+                response.json()["detail"]
+                == "Session repository must belong to the same project as the task"
+            )
     finally:
         app.dependency_overrides.clear()
 
@@ -263,7 +334,9 @@ def test_session_spawn_validates_agent_capabilities(tmp_path: Path) -> None:
 
     try:
         with TestClient(app) as client:
-            project_id = client.post("/api/v1/projects", json={"name": "Capability Project"}).json()["id"]
+            project_id = client.post(
+                "/api/v1/projects", json={"name": "Capability Project"}
+            ).json()["id"]
             repository_id = client.post(
                 "/api/v1/repositories",
                 json={"project_id": project_id, "local_path": str(repo_path)},
@@ -288,6 +361,9 @@ def test_session_spawn_validates_agent_capabilities(tmp_path: Path) -> None:
                 },
             )
             assert response.status_code == 400
-            assert response.json()["detail"] == "Agent 'claude-code' does not support permission_mode"
+            assert (
+                response.json()["detail"]
+                == "Agent 'claude-code' does not support permission_mode='danger-full-access'. Supported values: none"
+            )
     finally:
         app.dependency_overrides.clear()

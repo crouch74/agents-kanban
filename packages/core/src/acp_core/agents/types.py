@@ -3,7 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from shlex import quote
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
+
+PermissionMode = Literal["danger-full-access"]
+OutputMode = Literal["json", "stream-json"]
+SpecializedMode = Literal["review", "verify"]
 
 
 @dataclass(frozen=True)
@@ -17,6 +21,10 @@ class AgentRequest:
     model: str | None = None
     permissions: str | None = None
     output: str | None = None
+    max_turns: int | None = None
+    resume_token: str | None = None
+    allowed_tools: list[str] = field(default_factory=list)
+    disallowed_tools: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -58,9 +66,14 @@ class AgentCapabilities:
     """Capabilities exposed by a concrete coding-agent adapter."""
 
     supports_model: bool
-    supports_permissions: bool
-    supports_output: bool
-    supports_resume_hint: bool = False
+    native_resume: bool
+    permission_modes: frozenset[PermissionMode] = field(default_factory=frozenset)
+    output_modes: frozenset[OutputMode] = field(default_factory=frozenset)
+    supports_streaming_json: bool = False
+    supports_allowed_tools: bool = False
+    supports_disallowed_tools: bool = False
+    supports_max_turns: bool = False
+    specialized_modes: frozenset[SpecializedMode] = field(default_factory=frozenset)
 
 
 class CodingAgentAdapterProtocol(Protocol):
@@ -74,7 +87,9 @@ class CodingAgentAdapterProtocol(Protocol):
 def render_launch_plan_command(plan: AgentLaunchPlan) -> str:
     """Render a shell command string from launch-plan primitives."""
 
-    env_prefix = " ".join(f"{key}={_shell_join([value])}" for key, value in plan.env.items())
+    env_prefix = " ".join(
+        f"{key}={_shell_join([value])}" for key, value in plan.env.items()
+    )
     command = _shell_join(plan.argv)
     stdin_file = plan.metadata.get("stdin_file")
     if isinstance(stdin_file, str) and stdin_file:
