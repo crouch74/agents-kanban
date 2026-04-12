@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from acp_mcp_server import handlers
+from acp_mcp_server.tool_handlers import projects as project_handlers
+from acp_mcp_server.tool_handlers import sessions as session_handlers
 from acp_core.runtime import RuntimeSessionInfo
 from git import Repo
 
@@ -11,7 +13,14 @@ class FakeRuntime:
     def __init__(self) -> None:
         self.sessions: dict[str, dict[str, str]] = {}
 
-    def spawn_session(self, *, session_name: str, working_directory: Path, profile: str, command: str | None = None):
+    def spawn_session(
+        self,
+        *,
+        session_name: str,
+        working_directory: Path,
+        profile: str,
+        command: str | None = None,
+    ):
         self.sessions[session_name] = {
             "working_directory": str(working_directory),
             "command": command or profile,
@@ -38,33 +47,45 @@ class FakeRuntime:
         if prefix is not None:
             names = [name for name in names if name.startswith(prefix)]
         return [
-            type("RuntimeSessionSummary", (), {"session_name": name, "window_name": "main"})()
+            type(
+                "RuntimeSessionSummary",
+                (),
+                {"session_name": name, "window_name": "main"},
+            )()
             for name in names
         ]
 
 
-def _assert_snapshot_keys(payload: dict[str, object], expected_keys: tuple[str, ...]) -> None:
+def _assert_snapshot_keys(
+    payload: dict[str, object], expected_keys: tuple[str, ...]
+) -> None:
     assert tuple(payload.keys()) == expected_keys
 
 
-def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path: Path) -> None:
+def test_mcp_handlers_expose_core_control_plane_workflows(
+    monkeypatch, tmp_path: Path
+) -> None:
     fake_runtime = FakeRuntime()
-    original_session_service = handlers.SessionService
-    original_bootstrap_service = handlers.BootstrapService
+    original_session_service = session_handlers.SessionService
+    original_bootstrap_service = project_handlers.BootstrapService
     monkeypatch.setattr(
-        handlers,
+        session_handlers,
         "SessionService",
         lambda context: original_session_service(context, runtime=fake_runtime),
     )
     monkeypatch.setattr(
-        handlers,
+        project_handlers,
         "BootstrapService",
         lambda context: original_bootstrap_service(context, runtime=fake_runtime),
     )
 
-    project = handlers.project_create("MCP Ops", "Agent-facing surface", client_request_id="project-1")
+    project = handlers.project_create(
+        "MCP Ops", "Agent-facing surface", client_request_id="project-1"
+    )
     project_id = project["id"]
-    project_replayed = handlers.project_create("MCP Ops", "Agent-facing surface", client_request_id="project-1")
+    project_replayed = handlers.project_create(
+        "MCP Ops", "Agent-facing surface", client_request_id="project-1"
+    )
     assert project_replayed["id"] == project_id
 
     repo_path = tmp_path / "mcp-bootstrap"
@@ -84,6 +105,23 @@ def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path:
         client_request_id="bootstrap-1",
     )
     assert bootstrap["kickoff_session"]["status"] == "running"
+    _assert_snapshot_keys(
+        bootstrap,
+        (
+            "project",
+            "repository",
+            "kickoff_task",
+            "kickoff_session",
+            "kickoff_worktree",
+            "execution_path",
+            "execution_branch",
+            "stack_preset",
+            "stack_notes",
+            "use_worktree",
+            "repo_initialized",
+            "scaffold_applied",
+        ),
+    )
     bootstrap_replayed = handlers.project_bootstrap(
         name="Bootstrap MCP Ops",
         repo_path=str(repo_path.resolve()),
@@ -92,12 +130,14 @@ def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path:
         confirm_existing_repo=True,
         client_request_id="bootstrap-1",
     )
-    assert bootstrap_replayed["project"]["id"] == bootstrap["project"]["id"]
+    assert bootstrap_replayed == bootstrap
 
     board = handlers.board_get(project_id)
     assert board["project_id"] == project_id
 
-    task = handlers.task_create(project_id=project_id, title="Ship MCP tools", client_request_id="task-1")
+    task = handlers.task_create(
+        project_id=project_id, title="Ship MCP tools", client_request_id="task-1"
+    )
     task_id = task["id"]
     _assert_snapshot_keys(
         task,
@@ -117,7 +157,9 @@ def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path:
             "updated_at",
         ),
     )
-    task_replayed = handlers.task_create(project_id=project_id, title="Ship MCP tools", client_request_id="task-1")
+    task_replayed = handlers.task_create(
+        project_id=project_id, title="Ship MCP tools", client_request_id="task-1"
+    )
     assert task_replayed == task
 
     task_updated = handlers.task_update(
@@ -143,7 +185,15 @@ def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path:
     )
     _assert_snapshot_keys(
         comment,
-        ("id", "task_id", "author_type", "author_name", "body", "metadata_json", "created_at"),
+        (
+            "id",
+            "task_id",
+            "author_type",
+            "author_name",
+            "body",
+            "metadata_json",
+            "created_at",
+        ),
     )
     assert comment["task_id"] == task_id
     comment_replayed = handlers.task_comment_add(
@@ -188,7 +238,9 @@ def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path:
     )
     assert artifact_replayed["id"] == artifact["id"]
 
-    blocker = handlers.task_create(project_id=project_id, title="Unblock dependency", client_request_id="task-2")
+    blocker = handlers.task_create(
+        project_id=project_id, title="Unblock dependency", client_request_id="task-2"
+    )
     dependency = handlers.task_dependency_add(
         task_id=task_id,
         depends_on_task_id=blocker["id"],
@@ -230,7 +282,9 @@ def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path:
     assert completion["artifact_count"] >= 1
     assert completion["open_waiting_question_count"] == 1
 
-    session = handlers.session_spawn(task_id=task_id, profile="executor", client_request_id="session-1")
+    session = handlers.session_spawn(
+        task_id=task_id, profile="executor", client_request_id="session-1"
+    )
     _assert_snapshot_keys(
         session,
         (
@@ -248,8 +302,12 @@ def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path:
         ),
     )
     assert session["task_id"] == task_id
-    session_replayed = handlers.session_spawn(task_id=task_id, profile="executor", client_request_id="session-1")
+    session_replayed = handlers.session_spawn(
+        task_id=task_id, profile="executor", client_request_id="session-1"
+    )
     assert session_replayed == session
+
+    session_shape = tuple(session.keys())
 
     worktree = handlers.worktree_create(
         repository_id=bootstrap["repository"]["id"],
@@ -294,7 +352,8 @@ def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path:
         follow_up_type="verify",
         client_request_id="follow-up-1",
     )
-    assert follow_up_replayed["id"] == follow_up["id"]
+    _assert_snapshot_keys(follow_up, session_shape)
+    assert follow_up_replayed == follow_up
 
     diagnostics = handlers.diagnostics_get()
     assert "stale_worktree_count" in diagnostics
