@@ -8,7 +8,8 @@ from git import Repo
 from acp_core.db import SessionLocal
 from acp_core.models import AgentSession
 from acp_core.runtime import RuntimeSessionInfo
-from acp_core.services import RecoveryService, ServiceContext
+from acp_core.services.base_service import ServiceContext
+from acp_core.services.system_service import RecoveryService
 from app.bootstrap.dependencies import get_runtime_adapter
 from app.main import app
 
