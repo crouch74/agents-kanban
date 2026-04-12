@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     runtime_home: Path = Field(default_factory=lambda: Path.cwd() / ".acp")
     database_name: str = "acp.sqlite3"
     bootstrap_agent_skill_path: str = "skills/agent-control-plane-api/SKILL.md"
+    default_agent: str = "codex"
+    kickoff_agent: str | None = None
+    execution_agent: str | None = None
+    review_agent: str | None = None
+    verify_agent: str | None = None
+    research_agent: str | None = None
+    docs_agent: str | None = None
     bootstrap_agent_name: str = "codex"
     bootstrap_agent_model: str | None = None
     bootstrap_agent_permissions: str = "danger-full-access"

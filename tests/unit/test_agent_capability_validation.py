@@ -39,7 +39,7 @@ def test_validate_request_rejects_unknown_agent_with_clear_message() -> None:
 
     assert (
         str(exc.value)
-        == "Unknown agent 'ghost'. Supported agents: aider, claude, claude-code, codex"
+        == "Unknown agent 'ghost'. Supported agents: aider, claude_code, codex"
     )
 
 

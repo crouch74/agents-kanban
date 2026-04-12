@@ -1,5 +1,6 @@
 from acp_core.agents.adapters import (
     AiderAgentAdapter,
+    AgentRegistry,
     ClaudeCodeAgentAdapter,
     CodexAgentAdapter,
     resolve_coding_agent_adapter,
@@ -20,6 +21,7 @@ from acp_core.agents.validation import (
 
 __all__ = [
     "AiderAgentAdapter",
+    "AgentRegistry",
     "AgentCapabilities",
     "AgentLaunchPlan",
     "AgentRequest",

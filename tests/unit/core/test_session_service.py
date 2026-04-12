@@ -8,6 +8,7 @@ from acp_core.models import AgentSession, Task
 from acp_core.schemas import AgentSessionFollowUpCreate
 from acp_core.services.base_service import ServiceContext
 from acp_core.services.session_service import SessionService
+from acp_core.settings import settings
 
 
 @pytest.fixture
@@ -64,7 +65,9 @@ def test_spawn_follow_up_session_keeps_session_lineage_and_sets_default_follow_u
         runtime_metadata={},
     )
 
-    service_context.db.get.side_effect = lambda model, key: {(Task, task.id): task}.get((model, key))
+    service_context.db.get.side_effect = lambda model, key: {(Task, task.id): task}.get(
+        (model, key)
+    )
 
     service = SessionService(service_context, runtime=MagicMock())
     service.get_session = MagicMock(return_value=source)
@@ -81,6 +84,7 @@ def test_spawn_follow_up_session_keeps_session_lineage_and_sets_default_follow_u
     assert kwargs["runtime_metadata_extra"]["session_family_id"] == "family-1"
     assert kwargs["runtime_metadata_extra"]["follow_up_of_session_id"] == source.id
     assert kwargs["runtime_metadata_extra"]["follow_up_type"] == "review"
+    assert kwargs["launch_inputs"].agent_name == "codex"
     service_context.db.commit.assert_called_once()
 
 
@@ -121,7 +125,9 @@ def test_spawn_follow_up_session_respects_reuse_policy_flags(
         runtime_metadata={},
     )
 
-    service_context.db.get.side_effect = lambda model, key: {(Task, task.id): task}.get((model, key))
+    service_context.db.get.side_effect = lambda model, key: {(Task, task.id): task}.get(
+        (model, key)
+    )
 
     service = SessionService(service_context, runtime=MagicMock())
     service.get_session = MagicMock(return_value=source)
@@ -140,3 +146,71 @@ def test_spawn_follow_up_session_respects_reuse_policy_flags(
     kwargs = service._spawn_session_record.call_args.kwargs
     assert kwargs["repository_id"] == ("repo-1" if reuse_repository else None)
     assert kwargs["worktree_id"] == ("wt-1" if reuse_worktree else None)
+
+
+def test_spawn_follow_up_session_uses_flow_specific_agent_defaults(
+    service_context: ServiceContext,
+) -> None:
+    task = Task(
+        id="task-1",
+        project_id="proj-1",
+        board_column_id="col-1",
+        title="Review me",
+        workflow_state="review",
+        priority="medium",
+        waiting_for_human=False,
+        metadata_json={},
+    )
+    source = AgentSession(
+        id="sess-source",
+        project_id=task.project_id,
+        task_id=task.id,
+        repository_id="repo-1",
+        worktree_id="wt-1",
+        profile="executor",
+        status="running",
+        session_name="sess-source-name",
+        runtime_metadata={"session_family_id": "family-1"},
+    )
+    spawned = AgentSession(
+        id="sess-follow-up",
+        project_id=task.project_id,
+        task_id=task.id,
+        profile="verifier",
+        status="running",
+        session_name="sess-verify",
+        runtime_metadata={},
+    )
+
+    service_context.db.get.side_effect = lambda model, key: {(Task, task.id): task}.get(
+        (model, key)
+    )
+
+    original_default_agent = settings.default_agent
+    original_review_agent = settings.review_agent
+    original_verify_agent = settings.verify_agent
+    settings.default_agent = "aider"
+    settings.review_agent = "claude-code"
+    settings.verify_agent = "codex"
+    try:
+        service = SessionService(service_context, runtime=MagicMock())
+        service.get_session = MagicMock(return_value=source)
+        service._spawn_session_record = MagicMock(return_value=spawned)
+
+        service.spawn_follow_up_session(
+            source.id,
+            AgentSessionFollowUpCreate(profile="reviewer", follow_up_type="review"),
+        )
+        review_kwargs = service._spawn_session_record.call_args.kwargs
+        assert review_kwargs["launch_inputs"].agent_name == "claude_code"
+
+        service.spawn_follow_up_session(
+            source.id,
+            AgentSessionFollowUpCreate(profile="verifier", follow_up_type="verify"),
+        )
+        verify_kwargs = service._spawn_session_record.call_args.kwargs
+        assert verify_kwargs["launch_inputs"].agent_name == "codex"
+    finally:
+        settings.default_agent = original_default_agent
+        settings.review_agent = original_review_agent
+        settings.verify_agent = original_verify_agent

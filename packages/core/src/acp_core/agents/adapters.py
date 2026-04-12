@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from shlex import quote
 
-from acp_core.agents.types import AgentCapabilities, AgentLaunchPlan, AgentRequest
+from acp_core.agents.types import (
+    AgentCapabilities,
+    AgentLaunchPlan,
+    AgentRequest,
+    CodingAgentAdapterProtocol,
+)
 from acp_core.settings import settings
 
 _DEPRECATED_DEFAULT_TEMPLATE = (
@@ -113,20 +119,53 @@ class AiderAgentAdapter:
         )
 
 
-def resolve_coding_agent_adapter(agent_name: str | None):
-    normalized = (agent_name or settings.bootstrap_agent_name).strip().lower()
-    registry = {
-        "codex": CodexAgentAdapter(),
-        "claude": ClaudeCodeAgentAdapter(),
-        "claude-code": ClaudeCodeAgentAdapter(),
-        "aider": AiderAgentAdapter(),
-    }
-    adapter = registry.get(normalized)
-    if adapter is None:
-        raise ValueError(
-            f"Unsupported bootstrap agent '{agent_name}'. Supported agents: {', '.join(sorted(registry))}"
+@dataclass(frozen=True)
+class AgentRegistry:
+    adapters: dict[str, CodingAgentAdapterProtocol]
+    aliases: dict[str, str]
+
+    @classmethod
+    def default(cls) -> AgentRegistry:
+        return cls(
+            adapters={
+                "codex": CodexAgentAdapter(),
+                "claude_code": ClaudeCodeAgentAdapter(),
+                "aider": AiderAgentAdapter(),
+            },
+            aliases={
+                "codex": "codex",
+                "claude": "claude_code",
+                "claude-code": "claude_code",
+                "claude_code": "claude_code",
+                "aider": "aider",
+            },
         )
-    return adapter
+
+    def canonical_key(self, agent_name: str) -> str:
+        normalized = agent_name.strip().lower()
+        return self.aliases.get(normalized, normalized)
+
+    def resolve(self, agent_name: str) -> CodingAgentAdapterProtocol:
+        canonical = self.canonical_key(agent_name)
+        adapter = self.adapters.get(canonical)
+        if adapter is None:
+            raise ValueError(
+                f"Unsupported bootstrap agent '{agent_name}'. Supported agents: {', '.join(sorted(self.adapters))}"
+            )
+        return adapter
+
+
+def resolve_coding_agent_adapter(
+    agent_name: str | None,
+    *,
+    registry: AgentRegistry | None = None,
+    default_agent: str | None = None,
+):
+    resolved_registry = registry or AgentRegistry.default()
+    resolved_agent = (
+        (agent_name or default_agent or settings.default_agent).strip().lower()
+    )
+    return resolved_registry.resolve(resolved_agent)
 
 
 def _shell_join(parts: list[str]) -> str:

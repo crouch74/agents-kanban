@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from acp_core.agents.adapters import resolve_coding_agent_adapter
+from acp_core.agents.adapters import AgentRegistry, resolve_coding_agent_adapter
 from acp_core.agents.types import AgentCapabilities, AgentLaunchPlan, AgentRequest
 
 
@@ -72,9 +72,19 @@ def validate_launch_plan_shape(*, agent_name: str, plan: AgentLaunchPlan) -> Non
         )
 
 
-def resolve_adapter_and_validate_request(agent_name: str | None, request: AgentRequest):
+def resolve_adapter_and_validate_request(
+    agent_name: str | None,
+    request: AgentRequest,
+    *,
+    registry: AgentRegistry | None = None,
+    default_agent: str | None = None,
+):
     try:
-        adapter = resolve_coding_agent_adapter(agent_name)
+        adapter = resolve_coding_agent_adapter(
+            agent_name,
+            registry=registry,
+            default_agent=default_agent,
+        )
     except ValueError as exc:
         message = str(exc)
         if message.startswith("Unsupported bootstrap agent"):
