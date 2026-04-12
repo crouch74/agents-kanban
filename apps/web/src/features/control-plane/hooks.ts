@@ -108,8 +108,28 @@ export const useBootstrapProjectMutation = (options?: MutationHookOptions<Awaite
   useMutation({ mutationFn: bootstrapProject, ...options });
 export const useCreateTaskMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof createTask>>, Parameters<typeof createTask>[0]>) =>
   useMutation({ mutationFn: createTask, ...options });
-export const usePatchTaskMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof patchTask>>, { taskId: string; boardColumnId: string }>) =>
-  useMutation({ mutationFn: ({ taskId, boardColumnId }) => patchTask(taskId, { board_column_id: boardColumnId }), ...options });
+export const usePatchTaskMutation = (
+  options?: MutationHookOptions<
+    Awaited<ReturnType<typeof patchTask>>,
+    {
+      taskId: string;
+      boardColumnId?: string;
+      title?: string;
+      description?: string;
+      workflowState?: string;
+    }
+  >,
+) =>
+  useMutation({
+    mutationFn: ({ taskId, boardColumnId, title, description, workflowState }) =>
+      patchTask(taskId, {
+        board_column_id: boardColumnId,
+        title,
+        description,
+        workflow_state: workflowState,
+      }),
+    ...options,
+  });
 export const useCreateRepositoryMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof createRepository>>, Parameters<typeof createRepository>[0]>) =>
   useMutation({ mutationFn: createRepository, ...options });
 export const useCreateWorktreeMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof createWorktree>>, Parameters<typeof createWorktree>[0]>) =>

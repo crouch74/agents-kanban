@@ -2,7 +2,6 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -13,15 +12,26 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { GitFork, Play, Terminal } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import * as Drawer from "vaul";
+import { GitFork, MoreHorizontal, Play, Terminal, X } from "lucide-react";
 import type { TaskSummary } from "@acp/sdk";
-import { DetailDrawer, type DetailDrawerSection } from "@/components/DetailDrawer";
-import { ColumnShell, Pill, SectionFrame, SectionTitle } from "@/components/ui";
+import { Button } from "@/components/primitives";
+import {
+  CollapsibleSection,
+  ColumnShell,
+  DialogFrame,
+  Pill,
+  SectionFrame,
+  SectionTitle,
+  StatusDot,
+} from "@/components/ui";
 import { useUIStore } from "@/store/ui";
 import { AppShell } from "@/layout/AppShell";
 import { SidebarNavigation } from "@/layout/SidebarNavigation";
 import { AppHeader } from "@/layout/AppHeader";
 import {
+  BoardColumnHeader,
   DraggableTaskCard,
   DroppableBoardColumn,
 } from "@/screens/ProjectBoardScreen";
@@ -53,9 +63,11 @@ import { ProjectsSectionContainer } from "@/features/project/containers/Projects
 import { WaitingSectionContainer } from "@/features/project/containers/WaitingSectionContainer";
 import { WorktreesSectionContainer } from "@/features/project/containers/WorktreesSectionContainer";
 import { createControlPlaneInvalidation } from "@/features/control-plane/invalidation";
+import { ProjectBootstrapWizard } from "@/components/project-bootstrap-wizard";
+import { toDisplay } from "@/utils/display";
 
 function formatEvent(eventType: string) {
-  return eventType.replaceAll(".", " ").replaceAll("_", " ");
+  return toDisplay(eventType.replaceAll(".", "_"));
 }
 
 function summarizeEvent(event: EventRecord) {
@@ -95,8 +107,6 @@ function formatSearchSnippet(hit: SearchHit) {
 export function App() {
   const queryClient = useQueryClient();
   const { selectedProjectId, setSelectedProjectId } = useUIStore();
-  const taskTitleInputRef = useRef<HTMLInputElement | null>(null);
-  const bootstrapWizardRef = useRef<HTMLDivElement | null>(null);
   const [search, setSearch] = useState("");
   const [draftTaskTitle, setDraftTaskTitle] = useState("");
   const [draftRepoPath, setDraftRepoPath] = useState("");
@@ -124,17 +134,19 @@ export function App() {
   const [draftReplyBody, setDraftReplyBody] = useState("");
   const [draftCommentBody, setDraftCommentBody] = useState("");
   const [draftCheckSummary, setDraftCheckSummary] = useState("");
-  const [draftCheckType, setDraftCheckType] = useState("verification");
-  const [draftCheckStatus, setDraftCheckStatus] = useState("passed");
+  const [draftCheckType] = useState("verification");
+  const [draftCheckStatus] = useState("passed");
   const [draftArtifactName, setDraftArtifactName] = useState("");
-  const [draftArtifactType, setDraftArtifactType] = useState("log");
+  const [draftArtifactType] = useState("log");
   const [draftArtifactUri, setDraftArtifactUri] = useState("");
   const [selectedDependencyTaskId, setSelectedDependencyTaskId] = useState("");
   const [draftSubtaskTitle, setDraftSubtaskTitle] = useState("");
   const [activeSection, setActiveSection] = useState<NavSection>("home");
   const [drawerSelection, setDrawerSelection] = useState<DetailSelection | null>(null);
-  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
-  const [pendingQuickCreateAction, setPendingQuickCreateAction] = useState<"task" | "bootstrap" | null>(null);
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+  const [mobileTaskPanelOpen, setMobileTaskPanelOpen] = useState(false);
+  const [openTaskSections, setOpenTaskSections] = useState<Record<string, boolean>>({});
+  const [commentFocused, setCommentFocused] = useState(false);
   const deferredSearch = useDeferredValue(search);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -190,23 +202,6 @@ export function App() {
       setSelectedRepositoryId(repositories[0].id);
     }
   }, [projectDetailQuery.data?.repositories, selectedRepositoryId]);
-
-  useEffect(() => {
-    if (!pendingQuickCreateAction || activeSection !== "projects") {
-      return;
-    }
-
-    const frame = window.requestAnimationFrame(() => {
-      if (pendingQuickCreateAction === "task") {
-        taskTitleInputRef.current?.focus();
-      } else {
-        bootstrapWizardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }
-      setPendingQuickCreateAction(null);
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [activeSection, pendingQuickCreateAction]);
 
   useEffect(() => {
     const questions = projectDetailQuery.data?.waiting_questions ?? [];
@@ -455,6 +450,7 @@ export function App() {
   const selectTask = (taskId: string) => {
     setInspectedTaskId(taskId);
     setDrawerSelection({ type: "task", id: taskId });
+    setMobileTaskPanelOpen(true);
   };
 
   const selectSession = (sessionId: string) => {
@@ -497,198 +493,20 @@ export function App() {
     patchTaskMutation.mutate({ taskId, boardColumnId: column.id });
   };
 
-  const selectedWorktree = useMemo(
-    () =>
-      projectDetailQuery.data?.worktrees.find(
-        (worktree) => worktree.id === drawerSelection?.id,
-      ) ?? null,
-    [projectDetailQuery.data?.worktrees, drawerSelection?.id],
-  );
+  const taskSessionCount = taskDetailQuery.data
+    ? projectDetailQuery.data?.sessions.filter((session) => session.task_id === taskDetailQuery.data?.id).length ?? 0
+    : 0;
 
-  const openFullDetail = () => {
-    if (!drawerSelection) {
-      return;
-    }
-    if (drawerSelection.type === "task") {
-      setActiveSection("projects");
-      setInspectedTaskId(drawerSelection.id);
-      return;
-    }
-    if (drawerSelection.type === "session") {
-      setActiveSection("sessions");
-      setSelectedSessionId(drawerSelection.id);
-      return;
-    }
-    if (drawerSelection.type === "worktree") {
-      setActiveSection("worktrees");
-      return;
-    }
-    setActiveSection("waiting");
-    setSelectedQuestionId(drawerSelection.id);
+  const taskPanelSections = {
+    subtasks: subtasksByParent.get(taskDetailQuery.data?.id ?? "") ?? [],
+    dependencies: taskDetailQuery.data?.dependencies ?? [],
+    checks: taskDetailQuery.data?.checks ?? [],
+    artifacts: taskDetailQuery.data?.artifacts ?? [],
   };
 
-  const drawerContent = useMemo(() => {
-    if (!drawerSelection) {
-      return (
-        <SectionFrame className="px-4 py-4">
-          <SectionTitle>Detail Drawer</SectionTitle>
-          <p className="mt-2 text-sm text-slate-500">
-            Single-click a task, session, worktree, or waiting question to
-            inspect it here.
-          </p>
-        </SectionFrame>
-      );
-    }
-
-    if (drawerSelection.type === "task" && taskDetailQuery.data) {
-      const sections: DetailDrawerSection[] = [
-        {
-          id: "context",
-          label: "Context",
-          content: (
-            <div className="space-y-1">
-              <div>State: {taskDetailQuery.data.workflow_state}</div>
-              <div>Priority: {taskDetailQuery.data.priority ?? "unset"}</div>
-              <div>Dependencies: {taskDetailQuery.data.dependencies.length}</div>
-            </div>
-          ),
-        },
-        {
-          id: "activity",
-          label: "Recent activity",
-          content: (
-            <div className="space-y-1">
-              <div>Comments: {taskDetailQuery.data.comments.length}</div>
-              <div>Checks: {taskDetailQuery.data.checks.length}</div>
-              <div>Artifacts: {taskDetailQuery.data.artifacts.length}</div>
-            </div>
-          ),
-        },
-      ];
-      return (
-        <DetailDrawer
-          title={taskDetailQuery.data.title}
-          subtitle={taskDetailQuery.data.description ?? "No description yet."}
-          sections={sections}
-          onOpenFullDetail={openFullDetail}
-          onClose={() => setDrawerSelection(null)}
-        />
-      );
-    }
-
-    if (drawerSelection.type === "session" && selectedSession) {
-      const sections: DetailDrawerSection[] = [
-        {
-          id: "runtime",
-          label: "Runtime",
-          content: (
-            <div className="space-y-1">
-              <div>Status: {selectedSession.status}</div>
-              <div>Profile: {selectedSession.profile}</div>
-              <div>Task: {selectedSession.task_id.slice(0, 8)}</div>
-            </div>
-          ),
-        },
-        {
-          id: "output",
-          label: "Recent output",
-          content: sessionTailQuery.data?.lines.length ? (
-            <pre className="max-h-40 overflow-auto rounded-xl bg-black/25 p-2 text-xs text-slate-300">
-              {sessionTailQuery.data.lines.slice(-8).join("\n")}
-            </pre>
-          ) : (
-            "No tail output available."
-          ),
-        },
-      ];
-      return (
-        <DetailDrawer
-          title={selectedSession.session_name}
-          subtitle={`${selectedSession.profile} · ${selectedSession.status}`}
-          sections={sections}
-          onOpenFullDetail={openFullDetail}
-          onClose={() => setDrawerSelection(null)}
-        />
-      );
-    }
-
-    if (drawerSelection.type === "worktree" && selectedWorktree) {
-      const sections: DetailDrawerSection[] = [
-        {
-          id: "ownership",
-          label: "Ownership",
-          content: (
-            <div className="space-y-1">
-              <div>Branch: {selectedWorktree.branch_name}</div>
-              <div>Status: {selectedWorktree.status}</div>
-              <div>Task: {selectedWorktree.task_id ?? "unlinked"}</div>
-            </div>
-          ),
-        },
-        {
-          id: "location",
-          label: "Filesystem",
-          content: <div className="break-all">{selectedWorktree.path}</div>,
-        },
-      ];
-      return (
-        <DetailDrawer
-          title={selectedWorktree.branch_name}
-          subtitle={selectedWorktree.status}
-          sections={sections}
-          onOpenFullDetail={openFullDetail}
-          onClose={() => setDrawerSelection(null)}
-        />
-      );
-    }
-
-    if (drawerSelection.type === "question" && questionDetailQuery.data) {
-      const sections: DetailDrawerSection[] = [
-        {
-          id: "prompt",
-          label: "Prompt",
-          content: questionDetailQuery.data.prompt,
-        },
-        {
-          id: "status",
-          label: "Status",
-          content: (
-            <div className="space-y-1">
-              <div>Status: {questionDetailQuery.data.status}</div>
-              <div>Urgency: {questionDetailQuery.data.urgency ?? "low"}</div>
-              <div>Replies: {questionDetailQuery.data.replies.length}</div>
-            </div>
-          ),
-        },
-      ];
-      return (
-        <DetailDrawer
-          title="Waiting question"
-          subtitle={questionDetailQuery.data.blocked_reason ?? "No blocked reason"}
-          sections={sections}
-          onOpenFullDetail={openFullDetail}
-          onClose={() => setDrawerSelection(null)}
-        />
-      );
-    }
-
-    return (
-      <SectionFrame className="px-4 py-4">
-        <SectionTitle>Detail Drawer</SectionTitle>
-        <p className="mt-2 text-sm text-slate-500">
-          The selected entity is unavailable in this project context.
-        </p>
-      </SectionFrame>
-    );
-  }, [
-    drawerSelection,
-    openFullDetail,
-    questionDetailQuery.data,
-    selectedSession,
-    selectedWorktree,
-    sessionTailQuery.data?.lines,
-    taskDetailQuery.data,
-  ]);
+  const toggleTaskSection = (key: string) => {
+    setOpenTaskSections((current) => ({ ...current, [key]: !current[key] }));
+  };
 
   return (
     <AppShell
@@ -696,750 +514,197 @@ export function App() {
         <SidebarNavigation
           activeSection={activeSection}
           setActiveSection={setActiveSection}
-          filteredProjects={filteredProjects}
-          selectedProjectId={selectedProjectId}
-          setSelectedProjectId={(projectId) => setSelectedProjectId(projectId)}
-          setProjectsSection={() => setActiveSection("projects")}
-          bootstrapWizardRef={bootstrapWizardRef}
-          bootstrapProjectMutation={bootstrapProjectMutation}
         />
       }
       header={
-        <>
-          <AppHeader
-            breadcrumbs={breadcrumbs}
-            sectionTitle={sectionTitle}
-            search={search}
-            setSearch={setSearch}
-            onSearchActivate={() => setActiveSection("search")}
-            quickCreateOpen={quickCreateOpen}
-            selectedProjectId={selectedProjectId}
-            onToggleQuickCreate={() => setQuickCreateOpen((open) => !open)}
-            onQuickCreateTask={() => {
-              setQuickCreateOpen(false);
-              setActiveSection("projects");
-              setPendingQuickCreateAction("task");
-            }}
-            onQuickCreateBootstrap={() => {
-              setQuickCreateOpen(false);
-              setActiveSection("projects");
-              setPendingQuickCreateAction("bootstrap");
-            }}
-          />
-          {activeSection === "home" ? (
-            <HomeSectionContainer
-              environment={diagnosticsQuery.data?.environment ?? "development"}
-              dashboard={dashboardQuery.data}
-              events={eventsQuery.data ?? []}
-              projectName={projectDetailQuery.data?.project.name ?? "the control plane"}
-              onOpenQuestion={(questionId, projectId) => {
-                setSelectedProjectId(projectId);
-                selectQuestion(questionId);
-              }}
-              onOpenTask={(taskId, projectId) => {
-                setSelectedProjectId(projectId);
-                selectTask(taskId);
-              }}
-              onOpenSession={(sessionId, projectId) => {
-                setSelectedProjectId(projectId);
-                selectSession(sessionId);
-              }}
-              formatEvent={formatEvent}
-              summarizeEvent={summarizeEvent}
-            />
-          ) : null}
-        </>
+        <AppHeader
+          breadcrumbs={breadcrumbs}
+          search={search}
+          setSearch={setSearch}
+          onSearchActivate={() => setActiveSection("search")}
+        />
       }
       main={
         <>
+          {activeSection === "home" ? (
+            <div className="page-frame p-4">
+              <HomeSectionContainer
+                environment={diagnosticsQuery.data?.environment ?? "development"}
+                dashboard={dashboardQuery.data}
+                events={eventsQuery.data ?? []}
+                projectName={projectDetailQuery.data?.project.name ?? "the control plane"}
+                onOpenQuestion={(questionId, projectId) => {
+                  setSelectedProjectId(projectId);
+                  selectQuestion(questionId);
+                }}
+                onOpenTask={(taskId, projectId) => {
+                  setSelectedProjectId(projectId);
+                  selectTask(taskId);
+                }}
+                onOpenSession={(sessionId, projectId) => {
+                  setSelectedProjectId(projectId);
+                  selectSession(sessionId);
+                }}
+                formatEvent={formatEvent}
+                summarizeEvent={summarizeEvent}
+              />
+            </div>
+          ) : null}
           {activeSection === "search" ? (
-            <SearchSectionContainer
-              deferredSearch={deferredSearch}
-              hits={searchQuery.data?.hits ?? []}
-              formatSearchSnippet={formatSearchSnippet}
-              projectNameById={projectNameById}
-              onSelectHit={(hit) => {
-                if (hit.entity_type === "project") {
-                  setSelectedProjectId(hit.entity_id);
-                  setActiveSection("projects");
-                } else if (hit.entity_type === "task") {
-                  selectTask(hit.entity_id);
-                  setActiveSection("projects");
-                } else if (hit.entity_type === "waiting_question") {
-                  selectQuestion(hit.entity_id);
-                  setActiveSection("waiting");
-                } else if (hit.entity_type === "session") {
-                  selectSession(hit.entity_id);
-                  setActiveSection("sessions");
-                } else if (hit.entity_type === "event") {
-                  setActiveSection("activity");
-                }
-                if (hit.project_id && hit.entity_type !== "project") {
-                  setSelectedProjectId(hit.project_id);
-                }
-              }}
-            />
+            <div className="page-frame p-4">
+              <SearchSectionContainer
+                deferredSearch={deferredSearch}
+                hits={searchQuery.data?.hits ?? []}
+                formatSearchSnippet={formatSearchSnippet}
+                projectNameById={projectNameById}
+                onSelectHit={(hit) => {
+                  if (hit.entity_type === "project") {
+                    setSelectedProjectId(hit.entity_id);
+                    setActiveSection("projects");
+                  } else if (hit.entity_type === "task") {
+                    selectTask(hit.entity_id);
+                    setActiveSection("projects");
+                  } else if (hit.entity_type === "waiting_question") {
+                    selectQuestion(hit.entity_id);
+                    setActiveSection("waiting");
+                  } else if (hit.entity_type === "session") {
+                    selectSession(hit.entity_id);
+                    setActiveSection("sessions");
+                  } else if (hit.entity_type === "event") {
+                    setActiveSection("activity");
+                  }
+                  if (hit.project_id && hit.entity_type !== "project") {
+                    setSelectedProjectId(hit.project_id);
+                  }
+                }}
+              />
+            </div>
           ) : null}
           {activeSection === "activity" ? (
-            <ActivitySectionContainer
-              events={activityEventsQuery.data ?? []}
-              loading={activityEventsQuery.isLoading}
-              error={activityEventsQuery.error instanceof Error ? activityEventsQuery.error.message : null}
-              projectOptions={activityProjectOptions}
-              taskOptions={activityTaskOptions}
-              sessionOptions={activitySessionOptions}
-            />
+            <div className="page-frame p-4">
+              <ActivitySectionContainer
+                events={activityEventsQuery.data ?? []}
+                loading={activityEventsQuery.isLoading}
+                error={activityEventsQuery.error instanceof Error ? activityEventsQuery.error.message : null}
+                projectOptions={activityProjectOptions}
+                taskOptions={activityTaskOptions}
+                sessionOptions={activitySessionOptions}
+              />
+            </div>
           ) : null}
           {activeSection !== "home" && activeSection !== "search" && activeSection !== "activity" ? (
             <ProjectOverviewScreen>
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
                 <ProjectsSectionContainer active={activeSection === "projects"}>
                   {activeSection === "projects" ? (
-                    <SectionFrame className="px-5 py-5">
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <SectionTitle>Project Board</SectionTitle>
-                          <h3 className="mt-2 text-2xl font-semibold">
-                            {projectDetailQuery.data?.project.name ??
-                              "Select or create a project"}
-                          </h3>
-                        </div>
-                        {selectedProjectId ? (
-                          <div className="flex items-center gap-3">
-                            <input
-                              ref={taskTitleInputRef}
-                              value={draftTaskTitle}
-                              onChange={(event) =>
-                                setDraftTaskTitle(event.target.value)
-                              }
-                              placeholder="Add a task"
-                              className="rounded-full border border-white/8 bg-black/15 px-4 py-2 text-sm outline-none"
-                            />
-                            <button
-                              onClick={() =>
-                                createTaskMutation.mutate({
-                                  project_id: selectedProjectId,
-                                  title: draftTaskTitle,
-                                })
-                              }
-                              disabled={
-                                !draftTaskTitle.trim() ||
-                                createTaskMutation.isPending
-                              }
-                              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              New task
-                            </button>
+                    <div className="project-workspace">
+                      <aside className="project-switcher">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-sm font-medium text-[color:var(--text)]">
+                            Projects
                           </div>
-                        ) : null}
-                      </div>
-
-                      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-                        <div className="mt-6 flex gap-6 overflow-x-auto pb-2 scrollbar-thin">
-                          {projectDetailQuery.data?.board.columns.map(
-                            (column) => (
+                          <button
+                            type="button"
+                            className="btn-ghost btn-dashed"
+                            onClick={() => setProjectDialogOpen(true)}
+                          >
+                            + New Project
+                          </button>
+                        </div>
+                        <div className="mt-3 space-y-1">
+                          {filteredProjects.map((project) => (
+                            <button
+                              key={project.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedProjectId(project.id);
+                                setActiveSection("projects");
+                              }}
+                              className={[
+                                "flex h-9 w-full items-center gap-2 rounded px-3 text-left text-sm",
+                                selectedProjectId === project.id
+                                  ? "bg-[rgba(37,99,235,0.08)] text-[color:var(--accent)]"
+                                  : "text-[color:var(--text)] hover:bg-black/4",
+                              ].join(" ")}
+                            >
+                              <StatusDot status={selectedProjectId === project.id ? "ready" : "backlog"} />
+                              <span className="truncate">{project.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </aside>
+                      <div className="board-region">
+                        <div className="flex items-center justify-between gap-3">
+                          <SectionTitle>
+                            {projectDetailQuery.data?.project.name ?? "Projects"}
+                          </SectionTitle>
+                        </div>
+                        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+                          <div className="board-scroll mt-4 scrollbar-thin">
+                            {projectDetailQuery.data?.board.columns.map((column) => (
                               <DroppableBoardColumn
                                 key={column.id}
                                 columnId={column.id}
                               >
-                                <ColumnShell className="flex flex-col gap-4">
-                                  <div className="flex items-center justify-between gap-4">
-                                    <div>
-                                      <div className="text-sm font-semibold">
-                                        {column.name}
-                                      </div>
-                                      <div className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">
-                                        {column.key}
-                                      </div>
-                                    </div>
-                                    <Pill className="border-white/8 text-slate-300">
-                                      {groupedTasks.get(column.id)?.length ?? 0}
-                                      {column.wip_limit
-                                        ? ` / ${column.wip_limit}`
-                                        : ""}
-                                    </Pill>
-                                  </div>
-
-                                  <div className="space-y-3">
-                                    {(groupedTasks.get(column.id) ?? []).map(
-                                      (task) => (
-                                        <DraggableTaskCard
-                                          key={task.id}
-                                          task={task}
-                                          subtasks={
-                                            subtasksByParent.get(task.id) ?? []
-                                          }
-                                          selected={inspectedTaskId === task.id}
-                                          metadata={{
-                                            sessions:
-                                              taskCardMetadata.sessionsByTask.get(
-                                                task.id,
-                                              ) ?? 0,
-                                            worktree:
-                                              taskCardMetadata.worktreeByTask.has(
-                                                task.id,
-                                              ),
-                                            checks:
-                                              inspectedTaskId === task.id
-                                                ? (taskDetailQuery.data?.checks
-                                                    .length ?? 0)
-                                                : 0,
-                                            artifacts:
-                                              inspectedTaskId === task.id
-                                                ? (taskDetailQuery.data
-                                                    ?.artifacts.length ?? 0)
-                                                : 0,
-                                          }}
-                                          onInspect={() =>
-                                            selectTask(task.id)
-                                          }
-                                        />
-                                      ),
-                                    )}
-                                    {!groupedTasks.get(column.id)?.length ? (
-                                      <div className="rounded-2xl border border-dashed border-white/8 px-4 py-6 text-sm text-slate-500">
-                                        No tasks in this column yet.
-                                      </div>
-                                    ) : null}
+                                <ColumnShell className="flex flex-col gap-3">
+                                  <BoardColumnHeader
+                                    title={column.name}
+                                    status={column.key}
+                                    count={groupedTasks.get(column.id)?.length ?? 0}
+                                    wipLimit={column.wip_limit}
+                                  />
+                                  <div className="space-y-2">
+                                    <input
+                                      value={draftTaskTitle}
+                                      onChange={(event) => setDraftTaskTitle(event.target.value)}
+                                      placeholder={column.key === "backlog" ? "Add task" : "Add task title"}
+                                      className="hidden"
+                                    />
+                                    <button
+                                      type="button"
+                                      className="btn-ghost btn-dashed w-full justify-start"
+                                      onClick={() =>
+                                        selectedProjectId
+                                          ? createTaskMutation.mutate({
+                                              project_id: selectedProjectId,
+                                              title: draftTaskTitle || "New task",
+                                              board_column_key: column.key,
+                                            })
+                                          : null
+                                      }
+                                    >
+                                      + Add task
+                                    </button>
+                                    {(groupedTasks.get(column.id) ?? []).map((task) => (
+                                      <DraggableTaskCard
+                                        key={task.id}
+                                        task={task}
+                                        subtasks={subtasksByParent.get(task.id) ?? []}
+                                        selected={inspectedTaskId === task.id}
+                                        metadata={{
+                                          sessions: taskCardMetadata.sessionsByTask.get(task.id) ?? 0,
+                                          worktree: taskCardMetadata.worktreeByTask.has(task.id),
+                                          checks: 0,
+                                          artifacts: 0,
+                                          assignees: (projectDetailQuery.data?.sessions ?? [])
+                                            .filter((session) => session.task_id === task.id)
+                                            .map((session) => session.profile),
+                                        }}
+                                        onInspect={() => selectTask(task.id)}
+                                      />
+                                    ))}
                                   </div>
                                 </ColumnShell>
                               </DroppableBoardColumn>
-                            ),
-                          )}
-                        </div>
-                      </DndContext>
-                    </SectionFrame>
+                            ))}
+                          </div>
+                        </DndContext>
+                      </div>
+                    </div>
                   ) : null}
                 </ProjectsSectionContainer>
 
                 <div className="flex flex-col gap-6">
-                  {activeSection === "projects" ? (
-                    taskDetailQuery.data ? (
-                      <TaskDetailScreen
-                        quickInspect
-                        title={taskDetailQuery.data.title}
-                        state={taskDetailQuery.data.workflow_state}
-                        priority={taskDetailQuery.data.priority}
-                        description={
-                          taskDetailQuery.data.description ??
-                          "No task description yet."
-                        }
-                        contextPanel={
-                          <div className="grid gap-3 sm:grid-cols-2 text-sm">
-                            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                              <div className="text-xs text-slate-500">
-                                Owner
-                              </div>
-                              <div className="mt-1 text-slate-200">
-                                Operator-managed
-                              </div>
-                            </div>
-                            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                              <div className="text-xs text-slate-500">
-                                Session
-                              </div>
-                              <div className="mt-1 text-slate-200">
-                                {projectDetailQuery.data?.sessions.find(
-                                  (session) =>
-                                    session.task_id === taskDetailQuery.data.id,
-                                )?.session_name ?? "Unlinked"}
-                              </div>
-                            </div>
-                            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                              <div className="text-xs text-slate-500">
-                                Worktree
-                              </div>
-                              <div className="mt-1 text-slate-200">
-                                {projectDetailQuery.data?.worktrees.find(
-                                  (worktree) =>
-                                    worktree.task_id ===
-                                    taskDetailQuery.data.id,
-                                )?.branch_name ?? "Unlinked"}
-                              </div>
-                            </div>
-                            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                              <div className="text-xs text-slate-500">
-                                Dependencies
-                              </div>
-                              <div className="mt-1 text-slate-200">
-                                {taskDetailQuery.data.dependencies.length}
-                              </div>
-                            </div>
-                          </div>
-                        }
-                        sections={[
-                          {
-                            id: "subtasks",
-                            label: "Subtasks",
-                            content: (
-                              <>
-                                <div className="flex flex-col gap-2">
-                                  {(
-                                    subtasksByParent.get(
-                                      taskDetailQuery.data.id,
-                                    ) ?? []
-                                  ).map((subtask) => (
-                                    <button
-                                      key={subtask.id}
-                                      onClick={() =>
-                                        selectTask(subtask.id)
-                                      }
-                                      className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3 text-left"
-                                    >
-                                      <div className="flex items-center justify-between gap-3">
-                                        <div className="text-sm font-medium text-slate-100">
-                                          {subtask.title}
-                                        </div>
-                                        <Pill className="border-white/8 text-slate-300">
-                                          {subtask.workflow_state}
-                                        </Pill>
-                                      </div>
-                                    </button>
-                                  ))}
-                                  {!(
-                                    subtasksByParent.get(
-                                      taskDetailQuery.data.id,
-                                    ) ?? []
-                                  ).length ? (
-                                    <div className="text-sm text-slate-500">
-                                      No subtasks yet.
-                                    </div>
-                                  ) : null}
-                                </div>
-                                <input
-                                  value={draftSubtaskTitle}
-                                  onChange={(event) =>
-                                    setDraftSubtaskTitle(event.target.value)
-                                  }
-                                  placeholder="Add a subtask under this task"
-                                  className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
-                                />
-                                <button
-                                  onClick={() =>
-                                    createSubtaskMutation.mutate({
-                                      project_id:
-                                        taskDetailQuery.data.project_id,
-                                      title: draftSubtaskTitle,
-                                      parent_task_id: taskDetailQuery.data.id,
-                                      board_column_key: "backlog",
-                                    })
-                                  }
-                                  disabled={
-                                    !draftSubtaskTitle.trim() ||
-                                    createSubtaskMutation.isPending
-                                  }
-                                  className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  Add subtask
-                                </button>
-                              </>
-                            ),
-                          },
-                          {
-                            id: "dependencies",
-                            label: "Dependencies",
-                            content: (
-                              <>
-                                <div className="flex flex-col gap-2">
-                                  {taskDetailQuery.data.dependencies.map(
-                                    (dependency) => {
-                                      const dependencyTask =
-                                        projectDetailQuery.data?.board.tasks.find(
-                                          (candidate) =>
-                                            candidate.id ===
-                                            dependency.depends_on_task_id,
-                                        );
-                                      return (
-                                        <div
-                                          key={dependency.id}
-                                          className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3"
-                                        >
-                                          <div className="flex items-center justify-between gap-3">
-                                            <div className="text-sm font-medium text-slate-100">
-                                              {dependencyTask?.title ??
-                                                dependency.depends_on_task_id}
-                                            </div>
-                                            <Pill className="border-white/8 text-slate-300">
-                                              {dependency.relationship_type}
-                                            </Pill>
-                                          </div>
-                                        </div>
-                                      );
-                                    },
-                                  )}
-                                  {!taskDetailQuery.data.dependencies.length ? (
-                                    <div className="text-sm text-slate-500">
-                                      No explicit dependencies yet.
-                                    </div>
-                                  ) : null}
-                                </div>
-                                <select
-                                  value={selectedDependencyTaskId}
-                                  onChange={(event) =>
-                                    setSelectedDependencyTaskId(
-                                      event.target.value,
-                                    )
-                                  }
-                                  className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
-                                >
-                                  <option value="">Select blocker task</option>
-                                  {(projectDetailQuery.data?.board.tasks ?? [])
-                                    .filter(
-                                      (candidate) =>
-                                        candidate.id !==
-                                        taskDetailQuery.data.id,
-                                    )
-                                    .map((candidate) => (
-                                      <option
-                                        key={candidate.id}
-                                        value={candidate.id}
-                                      >
-                                        {candidate.title}
-                                      </option>
-                                    ))}
-                                </select>
-                                <button
-                                  onClick={() =>
-                                    addTaskDependencyMutation.mutate({
-                                      taskId: taskDetailQuery.data!.id,
-                                      dependsOnTaskId: selectedDependencyTaskId,
-                                    })
-                                  }
-                                  disabled={
-                                    !selectedDependencyTaskId ||
-                                    addTaskDependencyMutation.isPending
-                                  }
-                                  className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  Add dependency
-                                </button>
-                              </>
-                            ),
-                          },
-                          {
-                            id: "comments",
-                            label: "Comments",
-                            content: (
-                              <>
-                                <div className="flex flex-col gap-2">
-                                  {taskDetailQuery.data.comments.map(
-                                    (comment) => (
-                                      <div
-                                        key={comment.id}
-                                        className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3"
-                                      >
-                                        <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                                          {comment.author_name}
-                                        </div>
-                                        <div className="mt-2 text-sm text-slate-200">
-                                          {comment.body}
-                                        </div>
-                                      </div>
-                                    ),
-                                  )}
-                                  {!taskDetailQuery.data.comments.length ? (
-                                    <div className="text-sm text-slate-500">
-                                      No comments yet.
-                                    </div>
-                                  ) : null}
-                                </div>
-                                <textarea
-                                  value={draftCommentBody}
-                                  onChange={(event) =>
-                                    setDraftCommentBody(event.target.value)
-                                  }
-                                  placeholder="Add operator note"
-                                  className="mt-3 min-h-24 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
-                                />
-                                <button
-                                  onClick={() =>
-                                    addTaskCommentMutation.mutate({
-                                      taskId: taskDetailQuery.data!.id,
-                                      body: draftCommentBody,
-                                    })
-                                  }
-                                  disabled={
-                                    !draftCommentBody.trim() ||
-                                    addTaskCommentMutation.isPending
-                                  }
-                                  className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  Add comment
-                                </button>
-                              </>
-                            ),
-                          },
-                          {
-                            id: "checks",
-                            label: "Checks",
-                            content: (
-                              <>
-                                <div className="flex flex-col gap-2">
-                                  {taskDetailQuery.data.checks.map((check) => (
-                                    <div
-                                      key={check.id}
-                                      className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3"
-                                    >
-                                      <div className="flex items-center justify-between gap-3">
-                                        <div className="text-sm font-medium text-slate-100">
-                                          {check.check_type}
-                                        </div>
-                                        <Pill className="border-white/8 text-slate-300">
-                                          {check.status}
-                                        </Pill>
-                                      </div>
-                                      <div className="mt-2 text-sm text-slate-200">
-                                        {check.summary}
-                                      </div>
-                                    </div>
-                                  ))}
-                                  {!taskDetailQuery.data.checks.length ? (
-                                    <div className="text-sm text-slate-500">
-                                      No checks yet.
-                                    </div>
-                                  ) : null}
-                                </div>
-                                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                                  <input
-                                    value={draftCheckType}
-                                    onChange={(event) =>
-                                      setDraftCheckType(event.target.value)
-                                    }
-                                    placeholder="Check type"
-                                    className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
-                                  />
-                                  <select
-                                    value={draftCheckStatus}
-                                    onChange={(event) =>
-                                      setDraftCheckStatus(event.target.value)
-                                    }
-                                    className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
-                                  >
-                                    {[
-                                      "pending",
-                                      "passed",
-                                      "failed",
-                                      "warning",
-                                    ].map((status) => (
-                                      <option key={status} value={status}>
-                                        {status}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <textarea
-                                  value={draftCheckSummary}
-                                  onChange={(event) =>
-                                    setDraftCheckSummary(event.target.value)
-                                  }
-                                  placeholder="What was checked?"
-                                  className="mt-3 min-h-24 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
-                                />
-                                <button
-                                  onClick={() =>
-                                    addTaskCheckMutation.mutate({
-                                      taskId: taskDetailQuery.data!.id,
-                                      checkType: draftCheckType,
-                                      status: draftCheckStatus,
-                                      summary: draftCheckSummary,
-                                    })
-                                  }
-                                  disabled={
-                                    !draftCheckSummary.trim() ||
-                                    addTaskCheckMutation.isPending
-                                  }
-                                  className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  Add check
-                                </button>
-                              </>
-                            ),
-                          },
-                          {
-                            id: "artifacts",
-                            label: "Artifacts",
-                            content: (
-                              <>
-                                <div className="flex flex-col gap-2">
-                                  {taskDetailQuery.data.artifacts.map(
-                                    (artifact) => (
-                                      <div
-                                        key={artifact.id}
-                                        className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3"
-                                      >
-                                        <div className="flex items-center justify-between gap-3">
-                                          <div className="text-sm font-medium text-slate-100">
-                                            {artifact.name}
-                                          </div>
-                                          <Pill className="border-white/8 text-slate-300">
-                                            {artifact.artifact_type}
-                                          </Pill>
-                                        </div>
-                                        <div className="mt-2 break-all text-sm text-slate-400">
-                                          {artifact.uri}
-                                        </div>
-                                      </div>
-                                    ),
-                                  )}
-                                  {!taskDetailQuery.data.artifacts.length ? (
-                                    <div className="text-sm text-slate-500">
-                                      No artifacts yet.
-                                    </div>
-                                  ) : null}
-                                </div>
-                                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                                  <input
-                                    value={draftArtifactType}
-                                    onChange={(event) =>
-                                      setDraftArtifactType(event.target.value)
-                                    }
-                                    placeholder="Artifact type"
-                                    className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
-                                  />
-                                  <input
-                                    value={draftArtifactName}
-                                    onChange={(event) =>
-                                      setDraftArtifactName(event.target.value)
-                                    }
-                                    placeholder="Artifact name"
-                                    className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
-                                  />
-                                </div>
-                                <input
-                                  value={draftArtifactUri}
-                                  onChange={(event) =>
-                                    setDraftArtifactUri(event.target.value)
-                                  }
-                                  placeholder="file path, branch, diff, or URL"
-                                  className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
-                                />
-                                <button
-                                  onClick={() =>
-                                    addTaskArtifactMutation.mutate({
-                                      taskId: taskDetailQuery.data!.id,
-                                      artifactType: draftArtifactType,
-                                      name: draftArtifactName,
-                                      uri: draftArtifactUri,
-                                    })
-                                  }
-                                  disabled={
-                                    !draftArtifactName.trim() ||
-                                    !draftArtifactUri.trim() ||
-                                    addTaskArtifactMutation.isPending
-                                  }
-                                  className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  Add artifact
-                                </button>
-                              </>
-                            ),
-                          },
-                          {
-                            id: "waiting",
-                            label: "Waiting",
-                            content: (
-                              <div className="flex flex-col gap-2">
-                                {taskDetailQuery.data.waiting_questions.map(
-                                  (question) => (
-                                    <div
-                                      key={question.id}
-                                      className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3"
-                                    >
-                                      <div className="text-sm font-medium text-slate-100">
-                                        {question.prompt}
-                                      </div>
-                                      <div className="mt-2 text-sm text-slate-400">
-                                        {question.blocked_reason ??
-                                          "Awaiting operator input."}
-                                      </div>
-                                    </div>
-                                  ),
-                                )}
-                                {!taskDetailQuery.data.waiting_questions
-                                  .length ? (
-                                  <div className="text-sm text-slate-500">
-                                    No waiting items for this task.
-                                  </div>
-                                ) : null}
-                              </div>
-                            ),
-                          },
-                          {
-                            id: "timeline",
-                            label: "Timeline",
-                            content: (
-                              <div className="flex flex-col gap-2">
-                                {[
-                                  ...taskDetailQuery.data.comments.map(
-                                    (comment) => ({
-                                      id: comment.id,
-                                      kind: "comment",
-                                      ts: comment.created_at,
-                                      text: comment.body,
-                                    }),
-                                  ),
-                                  ...taskDetailQuery.data.checks.map(
-                                    (check) => ({
-                                      id: check.id,
-                                      kind: "check",
-                                      ts: check.created_at,
-                                      text: check.summary,
-                                    }),
-                                  ),
-                                  ...taskDetailQuery.data.artifacts.map(
-                                    (artifact) => ({
-                                      id: artifact.id,
-                                      kind: "artifact",
-                                      ts: artifact.created_at,
-                                      text: artifact.name,
-                                    }),
-                                  ),
-                                ]
-                                  .sort(
-                                    (a, b) =>
-                                      new Date(b.ts).getTime() -
-                                      new Date(a.ts).getTime(),
-                                  )
-                                  .slice(0, 8)
-                                  .map((item) => (
-                                    <div
-                                      key={item.id}
-                                      className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3"
-                                    >
-                                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                                        {item.kind}
-                                      </div>
-                                      <div className="mt-2 text-sm text-slate-200">
-                                        {item.text}
-                                      </div>
-                                      <div className="mt-2 text-xs text-slate-500">
-                                        {new Date(item.ts).toLocaleString()}
-                                      </div>
-                                    </div>
-                                  ))}
-                                {!(
-                                  taskDetailQuery.data.comments.length +
-                                  taskDetailQuery.data.checks.length +
-                                  taskDetailQuery.data.artifacts.length
-                                ) ? (
-                                  <div className="text-sm text-slate-500">
-                                    No timeline activity yet.
-                                  </div>
-                                ) : null}
-                              </div>
-                            ),
-                          },
-                        ]}
-                      />
-                    ) : (
-                      <SectionFrame className="px-5 py-5">
-                        <div className="text-sm text-slate-500">
-                          Select a task card to inspect comments, checks, and
-                          artifacts.
-                        </div>
-                      </SectionFrame>
-                    )
-                  ) : null}
 
                   <WorktreesSectionContainer
                     active={activeSection === "worktrees"}
@@ -2021,9 +1286,305 @@ export function App() {
               </div>
             </ProjectOverviewScreen>
           ) : null}
+          <DialogFrame
+            open={projectDialogOpen}
+            onOpenChange={setProjectDialogOpen}
+            title="New Project"
+          >
+            <ProjectBootstrapWizard
+              isPending={bootstrapProjectMutation.isPending}
+              errorMessage={bootstrapProjectMutation.error instanceof Error ? bootstrapProjectMutation.error.message : undefined}
+              result={bootstrapProjectMutation.data as never}
+              onSubmit={(payload) => bootstrapProjectMutation.mutate(payload)}
+            />
+          </DialogFrame>
         </>
       }
-      drawer={drawerContent}
+      drawer={
+        activeSection === "projects" && taskDetailQuery.data ? (
+          <>
+            <div className="detail-panel max-lg:hidden">
+              <TaskDetailScreen
+                title={
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      className="btn-ghost !px-0"
+                      onClick={() => setDrawerSelection(null)}
+                    >
+                      <X className="h-4 w-4" />
+                      Back to board
+                    </button>
+                    <DropdownMenu.Root>
+                      <DropdownMenu.Trigger asChild>
+                        <button type="button" className="btn-ghost">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Content className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-1 shadow-[var(--shadow-panel)]">
+                        <DropdownMenu.Item className="rounded px-2 py-1.5 text-sm outline-none">
+                          Task actions
+                        </DropdownMenu.Item>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Root>
+                  </div>
+                }
+                actions={
+                  <div className="space-y-3">
+                    <input
+                      value={taskDetailQuery.data.title}
+                      readOnly
+                      className="w-full border-0 bg-transparent p-0 text-xl font-semibold outline-none"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <DropdownMenu.Root>
+                        <DropdownMenu.Trigger asChild>
+                          <button type="button" className="btn-secondary">
+                            <StatusDot status={taskDetailQuery.data.workflow_state} />
+                            {toDisplay(taskDetailQuery.data.workflow_state)}
+                          </button>
+                        </DropdownMenu.Trigger>
+                        <DropdownMenu.Content className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-1 shadow-[var(--shadow-panel)]">
+                          {(projectDetailQuery.data?.board.columns ?? []).map((column) => (
+                            <DropdownMenu.Item
+                              key={column.id}
+                              className="flex items-center gap-2 rounded px-2 py-1.5 text-sm outline-none"
+                              onSelect={() =>
+                                patchTaskMutation.mutate({
+                                  taskId: taskDetailQuery.data.id,
+                                  workflowState: column.key,
+                                  boardColumnId: column.id,
+                                })
+                              }
+                            >
+                              <StatusDot status={column.key} />
+                              {toDisplay(column.name)}
+                            </DropdownMenu.Item>
+                          ))}
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Root>
+                      <button type="button" className="btn-secondary">
+                        {taskDetailQuery.data.priority ? toDisplay(taskDetailQuery.data.priority) : "Priority"}
+                      </button>
+                      <button type="button" className="btn-secondary">
+                        Session {taskSessionCount > 0 ? `(${taskSessionCount})` : ""}
+                      </button>
+                    </div>
+                  </div>
+                }
+                contextPanel={
+                  <div className="space-y-4">
+                    <div>
+                      <div className="section-label">Description</div>
+                      <textarea
+                        value={taskDetailQuery.data.description ?? ""}
+                        onChange={(event) =>
+                          patchTaskMutation.mutate({
+                            taskId: taskDetailQuery.data.id,
+                            description: event.target.value,
+                          })
+                        }
+                        className="mt-2 min-h-28 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-2"
+                      />
+                    </div>
+                    <CollapsibleSection
+                      title="Subtasks"
+                      count={taskPanelSections.subtasks.length}
+                      open={Boolean(openTaskSections.subtasks)}
+                      onToggle={() => toggleTaskSection("subtasks")}
+                    >
+                      {taskPanelSections.subtasks.map((subtask) => (
+                        <button key={subtask.id} type="button" className="card-surface w-full p-2 text-left" onClick={() => selectTask(subtask.id)}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span>{subtask.title}</span>
+                            <Pill>{toDisplay(subtask.workflow_state)}</Pill>
+                          </div>
+                        </button>
+                      ))}
+                      <input
+                        value={draftSubtaskTitle}
+                        onChange={(event) => setDraftSubtaskTitle(event.target.value)}
+                        placeholder="+ Add item"
+                        className="w-full rounded-[4px] border border-[color:var(--border)] px-3 py-2"
+                      />
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          createSubtaskMutation.mutate({
+                            project_id: taskDetailQuery.data.project_id,
+                            title: draftSubtaskTitle,
+                            parent_task_id: taskDetailQuery.data.id,
+                            board_column_key: "backlog",
+                          })
+                        }
+                        disabled={!draftSubtaskTitle.trim()}
+                      >
+                        + Add item
+                      </Button>
+                    </CollapsibleSection>
+                    <CollapsibleSection
+                      title="Dependencies"
+                      count={taskPanelSections.dependencies.length}
+                      open={Boolean(openTaskSections.dependencies)}
+                      onToggle={() => toggleTaskSection("dependencies")}
+                    >
+                      {taskPanelSections.dependencies.map((dependency) => (
+                        <div key={dependency.id} className="card-surface p-2 text-sm">
+                          {projectDetailQuery.data?.board.tasks.find((candidate) => candidate.id === dependency.depends_on_task_id)?.title ??
+                            dependency.depends_on_task_id}
+                        </div>
+                      ))}
+                      <select
+                        value={selectedDependencyTaskId}
+                        onChange={(event) => setSelectedDependencyTaskId(event.target.value)}
+                        className="w-full rounded-[4px] border border-[color:var(--border)] px-3 py-2"
+                      >
+                        <option value="">Select blocker task</option>
+                        {(projectDetailQuery.data?.board.tasks ?? [])
+                          .filter((candidate) => candidate.id !== taskDetailQuery.data.id)
+                          .map((candidate) => (
+                            <option key={candidate.id} value={candidate.id}>
+                              {candidate.title}
+                            </option>
+                          ))}
+                      </select>
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          addTaskDependencyMutation.mutate({
+                            taskId: taskDetailQuery.data.id,
+                            dependsOnTaskId: selectedDependencyTaskId,
+                          })
+                        }
+                        disabled={!selectedDependencyTaskId}
+                      >
+                        + Add item
+                      </Button>
+                    </CollapsibleSection>
+                    <CollapsibleSection
+                      title="Checks"
+                      count={taskPanelSections.checks.length}
+                      open={Boolean(openTaskSections.checks)}
+                      onToggle={() => toggleTaskSection("checks")}
+                    >
+                      {taskPanelSections.checks.map((check) => (
+                        <div key={check.id} className="card-surface p-2 text-sm">
+                          <div className="font-medium">{toDisplay(check.check_type)}</div>
+                          <div className="text-[color:var(--text-muted)]">{check.summary}</div>
+                        </div>
+                      ))}
+                      <input
+                        value={draftCheckSummary}
+                        onChange={(event) => setDraftCheckSummary(event.target.value)}
+                        placeholder="+ Add item"
+                        className="w-full rounded-[4px] border border-[color:var(--border)] px-3 py-2"
+                      />
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          addTaskCheckMutation.mutate({
+                            taskId: taskDetailQuery.data.id,
+                            checkType: draftCheckType,
+                            status: draftCheckStatus,
+                            summary: draftCheckSummary,
+                          })
+                        }
+                        disabled={!draftCheckSummary.trim()}
+                      >
+                        + Add item
+                      </Button>
+                    </CollapsibleSection>
+                    <CollapsibleSection
+                      title="Artifacts"
+                      count={taskPanelSections.artifacts.length}
+                      open={Boolean(openTaskSections.artifacts)}
+                      onToggle={() => toggleTaskSection("artifacts")}
+                    >
+                      {taskPanelSections.artifacts.map((artifact) => (
+                        <div key={artifact.id} className="card-surface p-2 text-sm">
+                          <div className="font-medium">{artifact.name}</div>
+                          <div className="break-all text-[color:var(--text-muted)]">{artifact.uri}</div>
+                        </div>
+                      ))}
+                      <input
+                        value={draftArtifactName}
+                        onChange={(event) => setDraftArtifactName(event.target.value)}
+                        placeholder="Artifact name"
+                        className="w-full rounded-[4px] border border-[color:var(--border)] px-3 py-2"
+                      />
+                      <input
+                        value={draftArtifactUri}
+                        onChange={(event) => setDraftArtifactUri(event.target.value)}
+                        placeholder="+ Add item"
+                        className="w-full rounded-[4px] border border-[color:var(--border)] px-3 py-2"
+                      />
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          addTaskArtifactMutation.mutate({
+                            taskId: taskDetailQuery.data.id,
+                            artifactType: draftArtifactType,
+                            name: draftArtifactName,
+                            uri: draftArtifactUri,
+                          })
+                        }
+                        disabled={!draftArtifactName.trim() || !draftArtifactUri.trim()}
+                      >
+                        + Add item
+                      </Button>
+                    </CollapsibleSection>
+                    <div className="pt-2">
+                      <div className="section-label">Comments</div>
+                      <textarea
+                        value={draftCommentBody}
+                        onFocus={() => setCommentFocused(true)}
+                        onBlur={() => {
+                          if (!draftCommentBody.trim()) {
+                            setCommentFocused(false);
+                          }
+                        }}
+                        onChange={(event) => setDraftCommentBody(event.target.value)}
+                        placeholder="Leave a comment…"
+                        className="mt-2 min-h-9 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-2"
+                      />
+                      {commentFocused ? (
+                        <div className="mt-2 flex justify-end">
+                          <Button
+                            variant="primary"
+                            onClick={() =>
+                              addTaskCommentMutation.mutate({
+                                taskId: taskDetailQuery.data.id,
+                                body: draftCommentBody,
+                              })
+                            }
+                            disabled={!draftCommentBody.trim()}
+                          >
+                            Post
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                }
+                sections={[]}
+              />
+            </div>
+            <Drawer.Root open={mobileTaskPanelOpen} onOpenChange={setMobileTaskPanelOpen}>
+              <Drawer.Portal>
+                <Drawer.Overlay className="fixed inset-0 z-[70] bg-black/20 lg:hidden" />
+                <Drawer.Content className="fixed bottom-0 left-0 right-0 z-[80] h-[85vh] rounded-t-[8px] border border-[color:var(--border)] bg-[color:var(--surface)] lg:hidden">
+                  <div className="h-full overflow-auto p-4">
+                    <div className="mb-3 text-base font-semibold">{taskDetailQuery.data.title}</div>
+                    <div className="text-sm text-[color:var(--text-muted)]">
+                      {taskDetailQuery.data.description ?? "No task description yet."}
+                    </div>
+                  </div>
+                </Drawer.Content>
+              </Drawer.Portal>
+            </Drawer.Root>
+          </>
+        ) : null
+      }
     />
   );
 }

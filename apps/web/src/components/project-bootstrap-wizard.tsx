@@ -1,8 +1,7 @@
 import { useState, type FormEvent } from "react";
 import type { ProjectBootstrapResult, StackPreset } from "@acp/sdk";
 import { ArrowRight, CheckCircle2, GitBranch, TerminalSquare } from "lucide-react";
-import { Pill, SectionTitle } from "@/components/ui";
-import { Badge, Button, Card, Input, Select, Textarea } from "@/components/primitives";
+import { Badge, Button, Input, Select, Textarea } from "@/components/primitives";
 
 const STACK_OPTIONS: Array<{ value: StackPreset; label: string }> = [
   { value: "node-library", label: "Node library" },
@@ -58,39 +57,32 @@ export function ProjectBootstrapWizard({
   }
 
   return (
-    <form onSubmit={handleSubmit}><Card className="mt-8 rounded-3xl bg-white/2 p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <SectionTitle>New Project Bootstrap</SectionTitle>
-          <div className="mt-2 text-sm text-slate-500">
-            Create the project, prepare the repo, and launch the kickoff Codex session.
-          </div>
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div>
+        <div className="text-sm font-medium text-[color:var(--text)]">New project</div>
+        <div className="mt-1 text-sm text-[color:var(--text-muted)]">
+          Create the project, attach the repository, and launch the kickoff session.
         </div>
-        <Pill className="border-white/8 text-slate-300">{useWorktree ? "worktree" : "repo branch"}</Pill>
       </div>
 
       <Input
         value={name}
         onChange={(event) => setName(event.target.value)}
         placeholder="Acme migration program"
-        className="mt-4"
       />
       <Input
         value={description}
         onChange={(event) => setDescription(event.target.value)}
         placeholder="Optional project description"
-        className="mt-3"
       />
       <Input
         value={repoPath}
         onChange={(event) => setRepoPath(event.target.value)}
         placeholder="/absolute/path/to/repo"
-        className="mt-3"
       />
       <Select
         value={stackPreset}
         onChange={(event) => setStackPreset(event.target.value as StackPreset)}
-        className="mt-3"
       >
         {STACK_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
@@ -102,53 +94,54 @@ export function ProjectBootstrapWizard({
         value={stackNotes}
         onChange={(event) => setStackNotes(event.target.value)}
         placeholder="Optional stack notes or constraints"
-        className="mt-3 min-h-20"
+        className="min-h-20"
       />
       <Textarea
         value={initialPrompt}
         onChange={(event) => setInitialPrompt(event.target.value)}
         placeholder="Describe the work to kick off. ACP will ask the agent to clarify requirements and create tasks/subtasks."
-        className="mt-3 min-h-32"
+        className="min-h-28"
       />
 
-      <label className="mt-3 flex items-center gap-3 rounded-2xl border border-white/8 bg-black/10 px-3 py-3 text-sm text-slate-300">
+      <label className="flex items-center gap-2 rounded-[4px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-3 py-2 text-sm text-[color:var(--text-muted)]">
         <input
           type="checkbox"
           checked={initializeRepo}
           onChange={(event) => setInitializeRepo(event.target.checked)}
-          className="h-4 w-4 rounded border-white/8 bg-transparent"
+          className="h-4 w-4 rounded-[4px]"
         />
         Initialize repo with `git init` when the folder is empty
       </label>
-      <label className="mt-3 flex items-center gap-3 rounded-2xl border border-white/8 bg-black/10 px-3 py-3 text-sm text-slate-300">
+      <label className="flex items-center gap-2 rounded-[4px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-3 py-2 text-sm text-[color:var(--text-muted)]">
         <input
           type="checkbox"
           checked={useWorktree}
           onChange={(event) => setUseWorktree(event.target.checked)}
-          className="h-4 w-4 rounded border-white/8 bg-transparent"
+          className="h-4 w-4 rounded-[4px]"
         />
-        Use worktree for kickoff instead of the repo’s current branch
+        Use worktree for kickoff instead of the repo branch
       </label>
 
       {errorMessage ? (
-        <div className="mt-3 rounded-2xl border border-rose-300/20 bg-rose-300/10 px-3 py-3 text-sm text-rose-100">
+        <div className="rounded-[4px] border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {errorMessage}
         </div>
       ) : null}
 
-      <Button
-        type="submit"
-        variant="primary"
-        disabled={!name.trim() || !repoPath.trim() || !initialPrompt.trim() || isPending}
-        className="mt-4"
-      >
-        Launch bootstrap
-        <ArrowRight className="h-4 w-4" />
-      </Button>
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={!name.trim() || !repoPath.trim() || !initialPrompt.trim() || isPending}
+        >
+          Launch bootstrap
+          <ArrowRight className="h-4 w-4" />
+        </Button>
+      </div>
 
       {result ? (
-        <div className="mt-5 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-4 py-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-100">
+        <div className="rounded-[6px] border border-emerald-200 bg-emerald-50 px-4 py-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
             <CheckCircle2 className="h-4 w-4" />
             {result.project.name} is ready
           </div>
@@ -158,12 +151,12 @@ export function ProjectBootstrapWizard({
             {result.repo_initialized ? <Badge variant="success">git initialized</Badge> : null}
             {result.scaffold_applied ? <Badge variant="success">scaffolded</Badge> : null}
           </div>
-          <div className="mt-3 space-y-2 text-sm text-emerald-50">
+          <div className="mt-3 space-y-2 text-sm text-emerald-800">
             <div className="flex items-center gap-2">
               <GitBranch className="h-4 w-4" />
               {result.execution_branch}
             </div>
-            <div className="break-all text-emerald-100/90">{result.execution_path}</div>
+            <div className="break-all">{result.execution_path}</div>
             <div className="flex items-center gap-2">
               <TerminalSquare className="h-4 w-4" />
               {result.kickoff_session.session_name}
@@ -173,6 +166,6 @@ export function ProjectBootstrapWizard({
           </div>
         </div>
       ) : null}
-    </Card></form>
+    </form>
   );
 }

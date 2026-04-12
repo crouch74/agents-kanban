@@ -8,7 +8,9 @@ beforeEach(() => {
 });
 
 test('submits the project bootstrap wizard and shows kickoff summary details', async () => {
-  renderApp();
+  renderApp({ route: '/?section=projects&project=project-1' });
+
+  fireEvent.click(await screen.findByRole('button', { name: /\+ new project/i }));
 
   fireEvent.change(screen.getByPlaceholderText('Acme migration program'), {
     target: { value: 'Bootstrap Demo' },
@@ -35,12 +37,11 @@ test('submits the project bootstrap wizard and shows kickoff summary details', a
   expect(screen.getByText('acp-project-1')).toBeInTheDocument();
 });
 
-test('quick create keeps new task disabled until a project is selected', async () => {
-  renderApp();
+test('opens project bootstrap in a dialog from the project switcher', async () => {
+  renderApp({ route: '/?section=projects&project=project-1' });
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Quick create' }));
+  fireEvent.click(await screen.findByRole('button', { name: /\+ new project/i }));
 
-  expect(screen.getByRole('button', { name: 'New project bootstrap' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'New task' })).toBeDisabled();
-  expect(screen.getByText('Select a project first to create a task.')).toBeInTheDocument();
+  expect(await screen.findByText('New Project')).toBeInTheDocument();
+  expect(screen.getByPlaceholderText('Acme migration program')).toBeInTheDocument();
 });

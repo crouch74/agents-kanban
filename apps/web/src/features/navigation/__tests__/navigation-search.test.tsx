@@ -10,23 +10,23 @@ beforeEach(() => {
 test('renders operator workspace heading', async () => {
   renderApp();
 
-  expect(await screen.findByRole('heading', { name: 'Local operator workspace' })).toBeInTheDocument();
+  expect(await screen.findByText('Agent Control Plane')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Projects' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Inbox' })).toBeInTheDocument();
 });
 
 test('shows workspace search guidance when the operator types a query', async () => {
   renderApp();
 
-  const searchInput = screen.getByPlaceholderText('Search workspace');
+  fireEvent.click(screen.getByRole('button', { name: /search/i }));
+  const searchInput = await screen.findByPlaceholderText('Search workspace');
   fireEvent.change(searchInput, {
     target: { value: 'calc' },
   });
 
   await waitFor(() => {
-    expect(
-      screen.getByText('Workspace-wide results across projects, tasks, questions, sessions, and events.'),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Open search results for “calc”' })).toBeInTheDocument();
   });
 
   expect(searchInput).toHaveValue('calc');
-  expect(screen.getByRole('heading', { name: 'Search Results' })).toBeInTheDocument();
 });

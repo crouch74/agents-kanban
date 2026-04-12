@@ -1,21 +1,38 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { Menu } from "lucide-react";
 
 type AppShellProps = {
   sidebar: ReactNode;
   header: ReactNode;
   main: ReactNode;
-  drawer: ReactNode;
+  drawer?: ReactNode;
 };
 
 export function AppShell({ sidebar, header, main, drawer }: AppShellProps) {
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
   return (
-    <div className="grid-shell">
-      <aside className="border-r border-white/8 px-6 py-6">{sidebar}</aside>
-      <main className="px-6 py-6">
-        {header}
-        <div className="mt-6">{main}</div>
-      </main>
-      <aside className="border-l border-white/8 px-6 py-6">{drawer}</aside>
+    <div className="app-shell">
+      <div className="app-topbar">
+        <button
+          type="button"
+          className="btn-ghost md:hidden"
+          aria-label="Toggle sidebar"
+          onClick={() => setMobileSidebarOpen((value) => !value)}
+        >
+          <Menu className="h-4 w-4" />
+        </button>
+        <div className="min-w-0 flex-1">{header}</div>
+      </div>
+      <div className="app-body">
+        <aside className={mobileSidebarOpen ? "app-sidebar" : "app-sidebar max-md:hidden"}>
+          {sidebar}
+        </aside>
+        <main className="app-main">
+          {main}
+          {drawer}
+        </main>
+      </div>
     </div>
   );
 }

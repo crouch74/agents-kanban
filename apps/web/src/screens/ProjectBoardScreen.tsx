@@ -1,16 +1,16 @@
 import type { ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { Bot, FolderGit2, GitBranch, ShieldCheck } from "lucide-react";
 import type { TaskSummary } from "@acp/sdk";
-import { Badge, Card } from "@/components/primitives";
+import { AvatarStack, StatusDot } from "@/components/ui";
+import { toDisplay } from "@/utils/display";
 
 type ProjectBoardScreenProps = {
   children: ReactNode;
 };
 
 export function ProjectBoardScreen({ children }: ProjectBoardScreenProps) {
-  return children;
+  return <>{children}</>;
 }
 
 export function DroppableBoardColumn({
@@ -25,12 +25,7 @@ export function DroppableBoardColumn({
   return (
     <div
       ref={setNodeRef}
-      className={[
-        "rounded-[30px] transition",
-        isOver
-          ? "bg-[color:var(--color-accent-soft)]/70 p-1 ring-2 ring-[color:var(--color-accent-primary)]/75 shadow-lg shadow-[color:var(--color-accent-soft)]"
-          : "p-0",
-      ].join(" ")}
+      className={isOver ? "rounded-[8px] ring-2 ring-[color:var(--accent)]/30" : undefined}
     >
       {children}
     </div>
@@ -42,11 +37,11 @@ type TaskCardMeta = {
   worktree: boolean;
   checks: number;
   artifacts: number;
+  assignees?: string[];
 };
 
 export function DraggableTaskCard({
   task,
-  subtasks,
   selected,
   metadata,
   onInspect,
@@ -62,46 +57,7 @@ export function DraggableTaskCard({
     disabled: Boolean(task.parent_task_id),
   });
 
-  return (
-    <TaskCard
-      task={task}
-      selected={selected}
-      subtasks={subtasks}
-      metadata={metadata}
-      setNodeRef={setNodeRef}
-      onInspect={onInspect}
-      isDragging={isDragging}
-      dragTransform={transform ? CSS.Translate.toString(transform) : undefined}
-      dragHandleProps={{ ...listeners, ...attributes }}
-    />
-  );
-}
-
-type TaskCardProps = {
-  task: TaskSummary;
-  selected: boolean;
-  subtasks: TaskSummary[];
-  metadata: TaskCardMeta;
-  setNodeRef: (node: HTMLElement | null) => void;
-  onInspect: () => void;
-  isDragging: boolean;
-  dragTransform?: string;
-  dragHandleProps: Record<string, unknown>;
-};
-
-function TaskCard({
-  task,
-  selected,
-  subtasks,
-  metadata,
-  setNodeRef,
-  onInspect,
-  isDragging,
-  dragTransform,
-  dragHandleProps,
-}: TaskCardProps) {
-  const visibleSubtasks = subtasks.slice(0, 2);
-  const hiddenSubtaskCount = Math.max(0, subtasks.length - visibleSubtasks.length);
+  const priorityTone = priorityToneByValue(task.priority ?? "");
 
   return (
     <button
@@ -109,67 +65,70 @@ function TaskCard({
       type="button"
       onClick={onInspect}
       style={{
-        transform: dragTransform,
-        opacity: isDragging ? 0.62 : 1,
+        transform: transform ? CSS.Translate.toString(transform) : undefined,
+        opacity: isDragging ? 0.7 : 1,
       }}
       className={[
-        "group w-full rounded-[var(--radius-lg)] border px-5 py-4 text-left shadow-[var(--shadow-sm)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-focus-ring)]",
-        selected
-          ? "border-[color:var(--color-accent-primary)] bg-[color:var(--color-accent-soft)]/25"
-          : "border-white/8 hover:border-white/20 hover:bg-white/7",
+        "card-surface w-full p-3 text-left transition",
+        selected ? "border-[color:var(--accent)]" : "hover:border-zinc-300",
         task.parent_task_id ? "cursor-default" : "cursor-grab active:cursor-grabbing",
       ].join(" ")}
-      {...dragHandleProps}
+      {...listeners}
+      {...attributes}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="text-sm font-semibold text-slate-100">{task.title}</div>
-        <div className="flex items-center gap-2">
-          {(task.waiting_for_human || task.blocked_reason) ? (
-            <Badge variant={task.waiting_for_human ? "waiting" : "blocked"}>{task.waiting_for_human ? "Waiting" : "Blocked"}</Badge>
-          ) : null}
-          <Badge>{task.priority}</Badge>
+      {task.priority ? (
+        <div
+          className="inline-flex rounded-[4px] px-1.5 py-0.5 text-[11px] font-medium"
+          style={priorityTone}
+        >
+          {toDisplay(task.priority)}
         </div>
-      </div>
-
-      <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
-        <MetaBadge icon={Bot} label={`${metadata.sessions} sessions`} />
-        <MetaBadge icon={GitBranch} label={metadata.worktree ? "worktree linked" : "no worktree"} />
-        <div className="hidden items-center gap-2 opacity-0 transition group-hover:flex group-hover:opacity-100 group-focus-within:flex group-focus-within:opacity-100">
-          <MetaBadge icon={ShieldCheck} label={`${metadata.checks} checks`} />
-          <MetaBadge icon={FolderGit2} label={`${metadata.artifacts} artifacts`} />
-        </div>
-      </div>
-
-      {visibleSubtasks.length ? (
-        <Card className="mt-4 rounded-2xl bg-black/15 px-3 py-3">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Subtasks</div>
-          <div className="mt-2 flex flex-col gap-1.5">
-            {visibleSubtasks.map((subtask) => (
-              <div key={subtask.id} className="truncate rounded-xl border border-white/8 bg-white/3 px-3 py-2 text-sm text-slate-200">
-                {subtask.title}
-              </div>
-            ))}
-            {hiddenSubtaskCount > 0 ? (
-              <div className="text-xs text-slate-500">+{hiddenSubtaskCount} more…</div>
-            ) : null}
-          </div>
-        </Card>
       ) : null}
+      <div className="mt-1.5 text-sm font-medium text-[color:var(--text)]">
+        {task.title}
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-[11px] text-[color:var(--text-muted)]">
+          {metadata.sessions > 0 ? <span>🔁 {metadata.sessions}</span> : null}
+        </div>
+        <AvatarStack names={metadata.assignees ?? []} />
+      </div>
     </button>
   );
 }
 
-function MetaBadge({
-  icon: Icon,
-  label,
+export function BoardColumnHeader({
+  title,
+  status,
+  count,
+  wipLimit,
 }: {
-  icon: typeof Bot;
-  label: string;
+  title: string;
+  status: string;
+  count: number;
+  wipLimit?: number | null;
 }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] leading-none">
-      <Icon className="h-3 w-3" />
-      <span>{label}</span>
-    </span>
+    <div className="flex items-center gap-2 text-[13px] text-[color:var(--text-muted)]">
+      <StatusDot status={status} className="h-3 w-3" />
+      <span className="font-medium text-[color:var(--text)]">{toDisplay(title)}</span>
+      <span>
+        · {count}
+        {wipLimit ? ` / ${wipLimit}` : ""}
+      </span>
+    </div>
   );
+}
+
+function priorityToneByValue(priority: string) {
+  switch (priority.toLowerCase()) {
+    case "urgent":
+      return { background: "rgba(239,68,68,0.1)", color: "#b91c1c" };
+    case "high":
+      return { background: "rgba(245,158,11,0.1)", color: "#b45309" };
+    case "medium":
+      return { background: "rgba(59,130,246,0.1)", color: "#1d4ed8" };
+    default:
+      return { background: "rgba(161,161,170,0.16)", color: "#52525b" };
+  }
 }
