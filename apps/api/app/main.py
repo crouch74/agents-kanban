@@ -10,7 +10,8 @@ from acp_core.errors import AcpServiceError
 from acp_core.logging import configure_logging, logger
 from acp_core.runtime import TmuxRuntimeAdapter
 from acp_core.settings import settings
-from acp_core.services import RecoveryService, ServiceContext
+from acp_core.services.base_service import ServiceContext
+from acp_core.services.system_service import RecoveryService
 from app.api.errors import install_exception_handlers
 from app.api.v1.router import router as api_router
 from app.api.ws.hub import WebSocketHub

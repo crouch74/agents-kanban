@@ -31,19 +31,15 @@ from acp_core.schemas import (
     WorktreeCreate,
     WorktreeRead,
 )
-from acp_core.services import (
-    BootstrapService,
-    DiagnosticsService,
-    ProjectService,
-    RepositoryService,
-    SearchService,
-    ServiceContext,
-    SessionService,
-    TaskService,
-    WaitingService,
-    WorktreeHygieneService,
-    WorktreeService,
-)
+from acp_core.services.base_service import ServiceContext
+from acp_core.services.bootstrap_service import BootstrapService
+from acp_core.services.project_service import ProjectService
+from acp_core.services.repository_service import RepositoryService
+from acp_core.services.session_service import SessionService
+from acp_core.services.system_service import DiagnosticsService, SearchService
+from acp_core.services.task_service import TaskService
+from acp_core.services.waiting_service import WaitingService
+from acp_core.services.worktree_service import WorktreeHygieneService, WorktreeService
 
 
 _BOOTSTRAP_LOCK = Lock()
