@@ -32,6 +32,15 @@ class RuntimeSessionSummary:
     is_active: bool = True
 
 
+@dataclass(frozen=True)
+class RuntimeLaunchSpec:
+    argv: list[str]
+    env: dict[str, str]
+    display_command: str
+    working_directory: str
+    legacy_shell_command: str | None = None
+
+
 class TmuxRuntimeAdapter:
     def __init__(self) -> None:
         import shutil
@@ -56,17 +65,23 @@ class TmuxRuntimeAdapter:
         session_name: str,
         working_directory: Path,
         profile: str,
+        launch_spec: RuntimeLaunchSpec | None = None,
         command: str | None = None,
     ) -> RuntimeSessionInfo:
         session = self.server.find_where({"session_name": session_name})
-        resolved_command = command or DEFAULT_PROFILE_COMMANDS.get(profile, DEFAULT_PROFILE_COMMANDS["executor"])
+        resolved_working_directory = Path(launch_spec.working_directory) if launch_spec else working_directory
+        resolved_command = self._resolve_spawn_command(
+            profile=profile,
+            launch_spec=launch_spec,
+            command=command,
+        )
 
         if session is None:
             session = self.server.new_session(
                 session_name=session_name,
                 attach=False,
                 kill_session=False,
-                start_directory=str(working_directory),
+                start_directory=str(resolved_working_directory),
                 window_name="main",
             )
             pane = session.attached_window.attached_pane
@@ -78,9 +93,32 @@ class TmuxRuntimeAdapter:
             session_name=str(session.session_name),
             pane_id=str(pane.pane_id),
             window_name=str(session.attached_window.window_name),
-            working_directory=str(working_directory),
+            working_directory=str(resolved_working_directory),
             command=resolved_command,
         )
+
+    def _resolve_spawn_command(
+        self,
+        *,
+        profile: str,
+        launch_spec: RuntimeLaunchSpec | None,
+        command: str | None,
+    ) -> str:
+        if launch_spec is not None:
+            if launch_spec.legacy_shell_command:
+                return launch_spec.legacy_shell_command
+
+            command_tokens = [
+                "env",
+                *(f"{key}={value}" for key, value in launch_spec.env.items()),
+                *launch_spec.argv,
+            ]
+            return shell_join(command_tokens)
+
+        if command is not None:
+            return command
+
+        return DEFAULT_PROFILE_COMMANDS.get(profile, DEFAULT_PROFILE_COMMANDS["executor"])
 
     def session_exists(self, session_name: str) -> bool:
         return self.server.find_where({"session_name": session_name}) is not None

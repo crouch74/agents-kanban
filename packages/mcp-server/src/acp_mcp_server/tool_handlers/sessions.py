@@ -6,6 +6,7 @@ from acp_core.schemas import (
     AgentSessionCreate,
     AgentSessionFollowUpCreate,
     AgentSessionRead,
+    RuntimeLaunchSpecCreate,
 )
 from acp_core.services.session_service import SessionService
 
@@ -21,6 +22,7 @@ def session_spawn(
     profile: str = "executor",
     repository_id: str | None = None,
     worktree_id: str | None = None,
+    launch_spec: dict[str, Any] | None = None,
     command: str | None = None,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
@@ -33,6 +35,7 @@ def session_spawn(
                 profile=profile,
                 repository_id=repository_id,
                 worktree_id=worktree_id,
+                launch_spec=RuntimeLaunchSpecCreate.model_validate(launch_spec) if launch_spec else None,
                 command=command,
             )
         ),
@@ -48,6 +51,7 @@ def session_follow_up(
     follow_up_type: str | None = None,
     reuse_worktree: bool = True,
     reuse_repository: bool = True,
+    launch_spec: dict[str, Any] | None = None,
     command: str | None = None,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
@@ -61,6 +65,7 @@ def session_follow_up(
                 follow_up_type=follow_up_type,
                 reuse_worktree=reuse_worktree,
                 reuse_repository=reuse_repository,
+                launch_spec=RuntimeLaunchSpecCreate.model_validate(launch_spec) if launch_spec else None,
                 command=command,
             ),
         ),

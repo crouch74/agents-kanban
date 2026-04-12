@@ -27,6 +27,7 @@ from acp_core.schemas import (
     ProjectSummary,
     RepositoryCreate,
     RepositoryRead,
+    RuntimeLaunchSpecCreate,
     StackPreset,
     TaskCreate,
     TaskRead,
@@ -391,14 +392,19 @@ class BootstrapService:
         request = self._build_agent_request(state)
         adapter = resolve_coding_agent_adapter(request.agent_name)
         launch_plan = adapter.build_launch_plan(request)
-        runtime_command = render_launch_plan_command(launch_plan)
         state.session = SessionService(self.context, runtime=self.runtime).spawn_session(
             AgentSessionCreate(
                 task_id=state.kickoff_task.id,
                 profile="executor",
                 repository_id=state.repository.id if not state.payload.use_worktree else None,
                 worktree_id=state.kickoff_worktree.id if state.kickoff_worktree else None,
-                command=runtime_command,
+                launch_spec=RuntimeLaunchSpecCreate(
+                    argv=launch_plan.argv,
+                    env=launch_plan.env,
+                    display_command=launch_plan.display_command,
+                    working_directory=str(state.execution_path),
+                    legacy_shell_command=render_launch_plan_command(launch_plan),
+                ),
             )
         )
         state.session.runtime_metadata = {

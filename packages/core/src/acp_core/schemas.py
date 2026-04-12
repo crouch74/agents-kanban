@@ -65,11 +65,21 @@ class RepositoryRead(BaseModel):
     created_at: datetime
 
 
+class RuntimeLaunchSpecCreate(BaseModel):
+    argv: list[str]
+    env: dict[str, str] = Field(default_factory=dict)
+    display_command: str
+    working_directory: str = Field(min_length=1)
+    legacy_shell_command: str | None = None
+
+
 class AgentSessionCreate(BaseModel):
     task_id: str
     profile: Literal["executor", "reviewer", "verifier", "research", "docs"] = "executor"
     repository_id: str | None = None
     worktree_id: str | None = None
+    launch_spec: RuntimeLaunchSpecCreate | None = None
+    # Deprecated compatibility bridge.
     command: str | None = None
 
 
@@ -78,6 +88,8 @@ class AgentSessionFollowUpCreate(BaseModel):
     follow_up_type: Literal["retry", "review", "verify", "handoff"] | None = None
     reuse_worktree: bool = True
     reuse_repository: bool = True
+    launch_spec: RuntimeLaunchSpecCreate | None = None
+    # Deprecated compatibility bridge.
     command: str | None = None
 
 
