@@ -41,6 +41,10 @@ class ProjectBootstrapCreate(BaseModel):
     initial_prompt: str = Field(min_length=3)
     use_worktree: bool = False
     confirm_existing_repo: bool = False
+    agent_name: str | None = None
+    agent_model: str | None = None
+    agent_permissions: str | None = None
+    agent_output: str | None = None
 
 
 class RepositoryCreate(BaseModel):

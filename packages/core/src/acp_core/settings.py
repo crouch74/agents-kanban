@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     runtime_home: Path = Field(default_factory=lambda: Path.cwd() / ".acp")
     database_name: str = "acp.sqlite3"
     bootstrap_agent_skill_path: str = "skills/agent-control-plane-api/SKILL.md"
+    bootstrap_agent_name: str = "codex"
+    bootstrap_agent_model: str | None = None
+    bootstrap_agent_permissions: str = "danger-full-access"
+    bootstrap_agent_output: str | None = None
+    # Deprecated compatibility bridge for legacy bootstrap command customization.
+    # TODO(bootstrap-agents): remove ACP_BOOTSTRAP_AGENT_COMMAND_TEMPLATE after adapter migration.
     bootstrap_agent_command_template: str = (
         "export ACP_RUNTIME_HOME={acp_runtime_home}; "
         "codex --dangerously-bypass-approvals-and-sandbox exec - < {prompt_file}"
