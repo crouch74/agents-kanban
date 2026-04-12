@@ -1,30 +1,44 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from shutil import which
 import textwrap
 
+from git import InvalidGitRepositoryError, NoSuchPathError
+from acp_core.infrastructure.git_repository_adapter import (
+    GitRepositoryAdapter,
+    GitRepositoryAdapterProtocol,
+    GitRepositoryMetadata,
+)
 from acp_core.infrastructure.scaffold_writer import ScaffoldWriter, ScaffoldWriterProtocol
 from acp_core.infrastructure.runtime_adapter import DefaultRuntimeAdapter, RuntimeAdapterProtocol
 from acp_core.logging import logger
-from acp_core.models import Event
+from acp_core.models import AgentSession, Event, Project, Repository, Task, Worktree
 from acp_core.schemas import (
+    AgentSessionRead,
     AgentSessionCreate,
+    ProjectSummary,
     ProjectBootstrapPlannedChange,
     ProjectBootstrapCreate,
     ProjectBootstrapPreviewRead,
     ProjectBootstrapRead,
     ProjectCreate,
+    RepositoryCreate,
+    RepositoryRead,
     StackPreset,
     TaskCreate,
+    TaskRead,
     WorktreeCreate,
+    WorktreeRead,
 )
-from acp_core.services.base_service import ServiceContext
+from acp_core.services.base_service import ServiceContext, slugify, task_slug
 from acp_core.services.project_service import ProjectService
 from acp_core.services.repository_service import RepositoryService
 from acp_core.services.session_service import SessionService
 from acp_core.services.task_service import TaskService
 from acp_core.services.worktree_service import WorktreeService
+from acp_core.settings import settings
 
 
 class BootstrapService:
@@ -481,5 +495,4 @@ class BootstrapService:
             use_worktree=payload.use_worktree,
         )
         return self._build_bootstrap_read_model(state)
-
 

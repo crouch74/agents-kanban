@@ -34,3 +34,9 @@ test('shows workspace search guidance when the operator types a query', async ()
 
   expect(searchInput).toHaveValue('calc');
 });
+
+test('hydrates activity section from URL query params', async () => {
+  renderApp({ route: '/?section=activity' });
+
+  expect(await screen.findByText('Activity')).toBeInTheDocument();
+});
