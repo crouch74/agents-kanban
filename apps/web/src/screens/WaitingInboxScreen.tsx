@@ -314,7 +314,7 @@ export function WaitingInboxScreen({
                   <div className="mt-2">
                     <div className="text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">Next Actions</div>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <Button onClick={onOpenProjectBoard} className="px-3 py-1.5 text-xs">
+                      <Button onClick={onOpenProject} className="px-3 py-1.5 text-xs">
                         <LayoutGrid className="mr-1.5 h-3.5 w-3.5" />
                         Go to Project Board
                       </Button>
