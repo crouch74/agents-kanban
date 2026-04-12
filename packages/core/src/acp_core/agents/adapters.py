@@ -17,9 +17,14 @@ class CodexAgentAdapter:
     def capabilities(self) -> AgentCapabilities:
         return AgentCapabilities(
             supports_model=True,
-            supports_permissions=True,
-            supports_output=True,
-            supports_resume_hint=True,
+            native_resume=True,
+            permission_modes=frozenset({"danger-full-access"}),
+            output_modes=frozenset({"json", "stream-json"}),
+            supports_streaming_json=True,
+            supports_allowed_tools=True,
+            supports_disallowed_tools=True,
+            supports_max_turns=True,
+            specialized_modes=frozenset({"review", "verify"}),
         )
 
     def build_launch_plan(self, request: AgentRequest) -> AgentLaunchPlan:
@@ -66,9 +71,7 @@ class ClaudeCodeAgentAdapter:
     def capabilities(self) -> AgentCapabilities:
         return AgentCapabilities(
             supports_model=True,
-            supports_permissions=False,
-            supports_output=False,
-            supports_resume_hint=True,
+            native_resume=True,
         )
 
     def build_launch_plan(self, request: AgentRequest) -> AgentLaunchPlan:
@@ -94,9 +97,7 @@ class AiderAgentAdapter:
     def capabilities(self) -> AgentCapabilities:
         return AgentCapabilities(
             supports_model=True,
-            supports_permissions=False,
-            supports_output=False,
-            supports_resume_hint=True,
+            native_resume=True,
         )
 
     def build_launch_plan(self, request: AgentRequest) -> AgentLaunchPlan:
@@ -122,7 +123,9 @@ def resolve_coding_agent_adapter(agent_name: str | None):
     }
     adapter = registry.get(normalized)
     if adapter is None:
-        raise ValueError(f"Unsupported bootstrap agent '{agent_name}'. Supported agents: {', '.join(sorted(registry))}")
+        raise ValueError(
+            f"Unsupported bootstrap agent '{agent_name}'. Supported agents: {', '.join(sorted(registry))}"
+        )
     return adapter
 
 
