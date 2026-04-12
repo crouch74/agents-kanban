@@ -1,4 +1,4 @@
-import { FolderGit2, Home, Inbox, Settings, ShieldCheck, Terminal, GitBranch, type LucideIcon } from "lucide-react";
+import { FolderGit2, Home, Inbox, Settings, type LucideIcon } from "lucide-react";
 
 export type NavSection =
   | "home"
@@ -36,10 +36,7 @@ export const navItems: Array<{ key: NavSection; label: string; icon: LucideIcon 
   { key: "home", label: "Home", icon: Home },
   { key: "projects", label: "Projects", icon: FolderGit2 },
   { key: "waiting", label: "Inbox", icon: Inbox },
-  { key: "sessions", label: "Sessions", icon: Terminal },
-  { key: "worktrees", label: "Worktrees", icon: GitBranch },
   { key: "diagnostics", label: "Settings", icon: Settings },
-  { key: "diagnostics", label: "Diagnostics", icon: ShieldCheck },
 ];
 
 export const sectionTitleByKey: Record<NavSection, string> = {
@@ -50,5 +47,5 @@ export const sectionTitleByKey: Record<NavSection, string> = {
   worktrees: "Worktrees",
   search: "Search",
   activity: "Activity",
-  diagnostics: "Diagnostics",
+  diagnostics: "Settings",
 };

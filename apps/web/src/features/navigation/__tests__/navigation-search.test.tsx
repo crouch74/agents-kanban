@@ -13,6 +13,10 @@ test('renders operator workspace heading', async () => {
   expect(await screen.findByText('Agent Control Plane')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Projects' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Inbox' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Sessions' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Worktrees' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Diagnostics' })).not.toBeInTheDocument();
 });
 
 test('shows workspace search guidance when the operator types a query', async () => {

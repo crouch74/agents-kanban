@@ -9,8 +9,12 @@ export function SidebarNavigation({
   activeSection: NavSection;
   setActiveSection: (section: NavSection) => void;
 }) {
-  const workspaceItems = navItems.slice(0, 4);
-  const systemItems = navItems.slice(4);
+  const workspaceItems = navItems.slice(0, 3);
+  const systemItems = navItems.slice(3);
+  const effectiveActiveSection =
+    activeSection === "sessions" || activeSection === "worktrees"
+      ? "projects"
+      : activeSection;
 
   return (
     <div className="flex h-full flex-col">
@@ -18,11 +22,7 @@ export function SidebarNavigation({
         {workspaceItems.map((item, index) => (
           <ShellNavItem
             key={`${item.key}-${index}`}
-            active={
-              item.key === "diagnostics"
-                ? activeSection === "diagnostics"
-                : activeSection === item.key
-            }
+            active={effectiveActiveSection === item.key}
             icon={item.icon}
             label={item.label}
             onClick={() => setActiveSection(item.key)}
@@ -34,7 +34,7 @@ export function SidebarNavigation({
         {systemItems.map((item, index) => (
           <ShellNavItem
             key={`${item.label}-${index}`}
-            active={item.label === "Diagnostics" && activeSection === item.key}
+            active={effectiveActiveSection === item.key}
             icon={item.icon}
             label={item.label}
             onClick={() => setActiveSection(item.key)}

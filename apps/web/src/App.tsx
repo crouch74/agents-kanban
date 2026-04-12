@@ -508,6 +508,23 @@ export function App() {
     setOpenTaskSections((current) => ({ ...current, [key]: !current[key] }));
   };
 
+  const isProjectScopedSection =
+    activeSection === "projects" ||
+    activeSection === "sessions" ||
+    activeSection === "worktrees";
+
+  const projectWorkspaceTitle =
+    projectDetailQuery.data?.project.name ?? "Projects";
+
+  const projectWorkspaceTabs: Array<{
+    key: Extract<NavSection, "projects" | "sessions" | "worktrees">;
+    label: string;
+  }> = [
+    { key: "projects", label: "Board" },
+    { key: "sessions", label: "Sessions" },
+    { key: "worktrees", label: "Worktrees" },
+  ];
+
   return (
     <AppShell
       sidebar={
@@ -536,14 +553,17 @@ export function App() {
                 onOpenQuestion={(questionId, projectId) => {
                   setSelectedProjectId(projectId);
                   selectQuestion(questionId);
+                  setActiveSection("waiting");
                 }}
                 onOpenTask={(taskId, projectId) => {
                   setSelectedProjectId(projectId);
                   selectTask(taskId);
+                  setActiveSection("projects");
                 }}
                 onOpenSession={(sessionId, projectId) => {
                   setSelectedProjectId(projectId);
                   selectSession(sessionId);
+                  setActiveSection("sessions");
                 }}
                 formatEvent={formatEvent}
                 summarizeEvent={summarizeEvent}
@@ -592,60 +612,73 @@ export function App() {
               />
             </div>
           ) : null}
-          {activeSection !== "home" && activeSection !== "search" && activeSection !== "activity" ? (
+          {isProjectScopedSection ? (
             <ProjectOverviewScreen>
               <div className="min-w-0">
-                <ProjectsSectionContainer active={activeSection === "projects"}>
-                  {activeSection === "projects" ? (
-                    <div className="project-workspace">
-                      <aside className="project-switcher">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="text-sm font-medium text-[color:var(--text)]">
-                            Projects
-                          </div>
-                          <button
-                            type="button"
-                            className="btn-ghost btn-dashed"
-                            onClick={() => setProjectDialogOpen(true)}
-                          >
-                            + New Project
-                          </button>
+                <ProjectsSectionContainer active={isProjectScopedSection}>
+                  <div className="project-workspace">
+                    <aside className="project-switcher">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-medium text-[color:var(--text)]">
+                          Projects
                         </div>
-                        <div className="mt-3 space-y-1">
-                          {filteredProjects.map((project) => (
+                        <button
+                          type="button"
+                          className="btn-ghost btn-dashed"
+                          onClick={() => setProjectDialogOpen(true)}
+                        >
+                          + New Project
+                        </button>
+                      </div>
+                      <div className="mt-3 space-y-1">
+                        {filteredProjects.map((project) => (
+                          <button
+                            key={project.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedProjectId(project.id);
+                              setActiveSection("projects");
+                            }}
+                            className={[
+                              "flex h-9 w-full items-center gap-2 rounded px-3 text-left text-sm",
+                              selectedProjectId === project.id
+                                ? "bg-[rgba(37,99,235,0.08)] text-[color:var(--accent)]"
+                                : "text-[color:var(--text)] hover:bg-black/4",
+                            ].join(" ")}
+                          >
+                            <StatusDot status={selectedProjectId === project.id ? "ready" : "backlog"} />
+                            <span className="truncate">{project.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </aside>
+                    <div className="board-region">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <SectionTitle>{projectWorkspaceTitle}</SectionTitle>
+                        <div className="inline-flex flex-wrap items-center gap-1 rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-1">
+                          {projectWorkspaceTabs.map((tab) => (
                             <button
-                              key={project.id}
+                              key={tab.key}
                               type="button"
-                              onClick={() => {
-                                setSelectedProjectId(project.id);
-                                setActiveSection("projects");
-                              }}
                               className={[
-                                "flex h-9 w-full items-center gap-2 rounded px-3 text-left text-sm",
-                                selectedProjectId === project.id
+                                "rounded-[4px] px-3 py-1.5 text-sm",
+                                activeSection === tab.key
                                   ? "bg-[rgba(37,99,235,0.08)] text-[color:var(--accent)]"
-                                  : "text-[color:var(--text)] hover:bg-black/4",
+                                  : "text-[color:var(--text-muted)] hover:bg-black/4 hover:text-[color:var(--text)]",
                               ].join(" ")}
+                              onClick={() => setActiveSection(tab.key)}
                             >
-                              <StatusDot status={selectedProjectId === project.id ? "ready" : "backlog"} />
-                              <span className="truncate">{project.name}</span>
+                              {tab.label}
                             </button>
                           ))}
                         </div>
-                      </aside>
-                      <div className="board-region">
-                        <div className="flex items-center justify-between gap-3">
-                          <SectionTitle>
-                            {projectDetailQuery.data?.project.name ?? "Projects"}
-                          </SectionTitle>
-                        </div>
+                      </div>
+
+                      {activeSection === "projects" ? (
                         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
                           <div className="board-scroll mt-4 scrollbar-thin">
                             {projectDetailQuery.data?.board.columns.map((column) => (
-                              <DroppableBoardColumn
-                                key={column.id}
-                                columnId={column.id}
-                              >
+                              <DroppableBoardColumn key={column.id} columnId={column.id}>
                                 <ColumnShell className="flex flex-col gap-3">
                                   <BoardColumnHeader
                                     title={column.name}
@@ -699,586 +732,582 @@ export function App() {
                             ))}
                           </div>
                         </DndContext>
-                      </div>
-                    </div>
-                  ) : null}
-                </ProjectsSectionContainer>
-
-                <div className="flex min-w-0 flex-col gap-6">
-
-                  <WorktreesSectionContainer
-                    active={activeSection === "worktrees"}
-                    repositories={projectDetailQuery.data?.repositories ?? []}
-                    worktrees={projectDetailQuery.data?.worktrees ?? []}
-                    tasks={topLevelTasks}
-                    sessions={projectDetailQuery.data?.sessions ?? []}
-                    events={eventsQuery.data ?? []}
-                    selectedWorktreeId={drawerSelection?.type === "worktree" ? drawerSelection.id : null}
-                    onSelectWorktree={selectWorktree}
-                    loading={projectDetailQuery.isLoading || eventsQuery.isLoading}
-                    error={
-                      projectDetailQuery.error instanceof Error
-                        ? projectDetailQuery.error.message
-                        : eventsQuery.error instanceof Error
-                          ? eventsQuery.error.message
-                          : null
-                    }
-                    onLock={(worktreeId) =>
-                      patchWorktreeMutation.mutate({
-                        worktreeId,
-                        status: "locked",
-                      })
-                    }
-                    onArchive={(worktreeId) =>
-                      patchWorktreeMutation.mutate({
-                        worktreeId,
-                        status: "archived",
-                      })
-                    }
-                    onPrune={(worktreeId) =>
-                      patchWorktreeMutation.mutate({
-                        worktreeId,
-                        status: "pruned",
-                      })
-                    }
-                    controls={
-                      selectedProjectId ? (
-                        <div className="grid gap-4 lg:grid-cols-2">
-                          <div className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
-                            <div className="text-sm font-medium text-[color:var(--text)]">Attach repository</div>
-                            <input
-                              value={draftRepoPath}
-                              onChange={(event) => setDraftRepoPath(event.target.value)}
-                              placeholder="/absolute/path/to/repo"
-                              className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
-                            />
-                            <input
-                              value={draftRepoName}
-                              onChange={(event) => setDraftRepoName(event.target.value)}
-                              placeholder="Optional display name"
-                              className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
-                            />
-                            <button
-                              onClick={() =>
-                                createRepositoryMutation.mutate({
-                                  project_id: selectedProjectId,
-                                  local_path: draftRepoPath,
-                                  name: draftRepoName || undefined,
-                                })
-                              }
-                              disabled={!draftRepoPath.trim() || createRepositoryMutation.isPending}
-                              className="btn-primary mt-3"
-                            >
-                              Attach repo
-                            </button>
-                          </div>
-
-                          <div className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
-                            <div className="text-sm font-medium text-[color:var(--text)]">Allocate worktree</div>
-                            <select
-                              value={selectedRepositoryId ?? ""}
-                              onChange={(event) => setSelectedRepositoryId(event.target.value || null)}
-                              className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
-                            >
-                              <option value="">Choose repository</option>
-                              {(projectDetailQuery.data?.repositories ?? []).map((repository) => (
-                                <option key={repository.id} value={repository.id}>
-                                  {repository.name}
-                                </option>
-                              ))}
-                            </select>
-                            <select
-                              value={selectedTaskId}
-                              onChange={(event) => setSelectedTaskId(event.target.value)}
-                              className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
-                            >
-                              <option value="">No task linkage</option>
-                              {topLevelTasks.map((task) => (
-                                <option key={task.id} value={task.id}>
-                                  {task.title}
-                                </option>
-                              ))}
-                            </select>
-                            <input
-                              value={draftWorktreeLabel}
-                              onChange={(event) => setDraftWorktreeLabel(event.target.value)}
-                              placeholder="Optional label for an unlinked worktree"
-                              className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
-                            />
-                            <button
-                              onClick={() =>
-                                createWorktreeMutation.mutate({
-                                  repository_id: selectedRepositoryId!,
-                                  task_id: selectedTaskId || undefined,
-                                  label: selectedTaskId ? undefined : draftWorktreeLabel || undefined,
-                                })
-                              }
-                              disabled={!selectedRepositoryId || createWorktreeMutation.isPending}
-                              className="btn-secondary mt-3"
-                            >
-                              Allocate
-                            </button>
-                          </div>
-                        </div>
-                      ) : null
-                    }
-                  />
-
-                  {activeSection === "sessions" ? (
-                    <SectionFrame className="px-5 py-5">
-                      <SectionTitle>Session Runtime</SectionTitle>
-                      <div className="mt-4 flex flex-col gap-3">
-                        {projectDetailQuery.data?.sessions.map((session) => (
-                          <button
-                            key={session.id}
-                            onClick={() => selectSession(session.id)}
-                            className={[
-                              "rounded-[6px] border px-4 py-4 text-left",
-                              selectedSessionId === session.id
-                                ? "border-[color:var(--accent)] bg-[rgba(37,99,235,0.08)]"
-                                : "border-[color:var(--border)] bg-[color:var(--surface)]",
-                            ].join(" ")}
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-2 text-sm font-semibold text-[color:var(--text)]">
-                                <Terminal className="h-4 w-4 text-[color:var(--text-muted)]" />
-                                {toDisplay(session.profile)}
-                              </div>
-                              <Pill>{toDisplay(session.status)}</Pill>
-                            </div>
-                            <div className="mt-2 text-xs text-[color:var(--text-muted)]">
-                              {session.session_name}
-                            </div>
-                          </button>
-                        ))}
-                        {!projectDetailQuery.data?.sessions.length ? (
-                          <div className="text-sm text-[color:var(--text-muted)]">
-                            No agent sessions yet.
-                          </div>
-                        ) : null}
-                      </div>
-
-                      {selectedProjectId ? (
-                        <div className="mt-5 rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
-                          <div className="text-sm font-medium text-[color:var(--text)]">
-                            Spawn session
-                          </div>
-                          <select
-                            value={selectedSessionTaskId}
-                            onChange={(event) =>
-                              setSelectedSessionTaskId(event.target.value)
-                            }
-                            className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
-                          >
-                            <option value="">Choose task</option>
-                            {topLevelTasks.map((task) => (
-                              <option key={task.id} value={task.id}>
-                                {task.title}
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            value={selectedSessionWorktreeId}
-                            onChange={(event) =>
-                              setSelectedSessionWorktreeId(event.target.value)
-                            }
-                            className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
-                          >
-                            <option value="">No worktree</option>
-                            {(projectDetailQuery.data?.worktrees ?? [])
-                              .filter(
-                                (worktree) => worktree.status !== "pruned",
-                              )
-                              .map((worktree) => (
-                                <option key={worktree.id} value={worktree.id}>
-                                  {worktree.branch_name}
-                                </option>
-                              ))}
-                          </select>
-                          <select
-                            value={sessionProfile}
-                            onChange={(event) =>
-                              setSessionProfile(event.target.value)
-                            }
-                            className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
-                          >
-                            {[
-                              "executor",
-                              "reviewer",
-                              "verifier",
-                              "research",
-                              "docs",
-                            ].map((profile) => (
-                              <option key={profile} value={profile}>
-                                {toDisplay(profile)}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() =>
-                              createSessionMutation.mutate({
-                                task_id: selectedSessionTaskId,
-                                profile: sessionProfile,
-                                worktree_id:
-                                  selectedSessionWorktreeId || undefined,
-                              })
-                            }
-                            disabled={
-                              !selectedSessionTaskId ||
-                              createSessionMutation.isPending
-                            }
-                            className="btn-primary mt-3 inline-flex items-center gap-2"
-                          >
-                            <Play className="h-4 w-4" />
-                            Spawn
-                          </button>
-                        </div>
                       ) : null}
 
-                      {selectedSession ? (
-                        <div className="mt-5">
-                          <SessionDetailScreen
-                            profile={selectedSession.profile}
-                            status={selectedSession.status}
-                            summary={
-                              <div className="grid gap-1 text-xs sm:grid-cols-2">
-                                <span>Task: {selectedSession.task_id}</span>
-                                <span>
-                                  Project: {selectedSession.project_id}
-                                </span>
-                                <span>
-                                  Worktree:{" "}
-                                  {selectedSession.worktree_id ?? "none"}
-                                </span>
-                                <span>
-                                  Branch:{" "}
-                                  {projectDetailQuery.data?.worktrees.find(
-                                    (worktree) =>
-                                      worktree.id ===
-                                      selectedSession.worktree_id,
-                                  )?.branch_name ?? "detached"}
-                                </span>
-                              </div>
+                      {activeSection === "worktrees" ? (
+                        <div className="mt-4">
+                          <WorktreesSectionContainer
+                            active={activeSection === "worktrees"}
+                            repositories={projectDetailQuery.data?.repositories ?? []}
+                            worktrees={projectDetailQuery.data?.worktrees ?? []}
+                            tasks={topLevelTasks}
+                            sessions={projectDetailQuery.data?.sessions ?? []}
+                            events={eventsQuery.data ?? []}
+                            selectedWorktreeId={drawerSelection?.type === "worktree" ? drawerSelection.id : null}
+                            onSelectWorktree={selectWorktree}
+                            loading={projectDetailQuery.isLoading || eventsQuery.isLoading}
+                            error={
+                              projectDetailQuery.error instanceof Error
+                                ? projectDetailQuery.error.message
+                                : eventsQuery.error instanceof Error
+                                  ? eventsQuery.error.message
+                                  : null
                             }
-                            actions={
-                              <>
-                                {selectedSessionId &&
-                                sessionTailQuery.data?.session.status ===
-                                  "running" ? (
-                                  <button
-                                    onClick={() =>
-                                      cancelSessionMutation.mutate(
-                                        selectedSessionId,
-                                      )
-                                    }
-                                    disabled={cancelSessionMutation.isPending}
-                                    className="btn-secondary border-rose-200 text-rose-600"
-                                  >
-                                    Cancel session
-                                  </button>
-                                ) : null}
-                                {sessionTimelineQuery.data ? (
-                                  <button
-                                    onClick={() =>
-                                      createFollowUpSessionMutation.mutate({
-                                        sessionId:
-                                          sessionTimelineQuery.data.session.id,
-                                        profile:
-                                          sessionTimelineQuery.data.session
-                                            .profile,
-                                        followUpType: "retry",
-                                      })
-                                    }
-                                    disabled={
-                                      createFollowUpSessionMutation.isPending
-                                    }
-                                    className="btn-secondary inline-flex items-center gap-2 !h-8 text-xs"
-                                  >
-                                    <GitFork className="h-3.5 w-3.5" />
-                                    Retry
-                                  </button>
-                                ) : null}
-                              </>
+                            onLock={(worktreeId) =>
+                              patchWorktreeMutation.mutate({
+                                worktreeId,
+                                status: "locked",
+                              })
                             }
-                            outputPanel={
-                              sessionTailQuery.data ? (
-                                <pre className="max-h-72 overflow-auto rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] p-3 text-xs leading-5 text-[color:var(--text)]">
-                                  {sessionTailQuery.data.lines.join("\n")}
-                                </pre>
-                              ) : (
-                                <div className="text-sm text-[color:var(--text-muted)]">
-                                  Select a session to inspect recent runtime
-                                  output.
+                            onArchive={(worktreeId) =>
+                              patchWorktreeMutation.mutate({
+                                worktreeId,
+                                status: "archived",
+                              })
+                            }
+                            onPrune={(worktreeId) =>
+                              patchWorktreeMutation.mutate({
+                                worktreeId,
+                                status: "pruned",
+                              })
+                            }
+                            controls={
+                              selectedProjectId ? (
+                                <div className="grid gap-4 lg:grid-cols-2">
+                                  <div className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
+                                    <div className="text-sm font-medium text-[color:var(--text)]">Attach repository</div>
+                                    <input
+                                      value={draftRepoPath}
+                                      onChange={(event) => setDraftRepoPath(event.target.value)}
+                                      placeholder="/absolute/path/to/repo"
+                                      className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
+                                    />
+                                    <input
+                                      value={draftRepoName}
+                                      onChange={(event) => setDraftRepoName(event.target.value)}
+                                      placeholder="Optional display name"
+                                      className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
+                                    />
+                                    <button
+                                      onClick={() =>
+                                        createRepositoryMutation.mutate({
+                                          project_id: selectedProjectId,
+                                          local_path: draftRepoPath,
+                                          name: draftRepoName || undefined,
+                                        })
+                                      }
+                                      disabled={!draftRepoPath.trim() || createRepositoryMutation.isPending}
+                                      className="btn-primary mt-3"
+                                    >
+                                      Attach repo
+                                    </button>
+                                  </div>
+
+                                  <div className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
+                                    <div className="text-sm font-medium text-[color:var(--text)]">Allocate worktree</div>
+                                    <select
+                                      value={selectedRepositoryId ?? ""}
+                                      onChange={(event) => setSelectedRepositoryId(event.target.value || null)}
+                                      className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
+                                    >
+                                      <option value="">Choose repository</option>
+                                      {(projectDetailQuery.data?.repositories ?? []).map((repository) => (
+                                        <option key={repository.id} value={repository.id}>
+                                          {repository.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <select
+                                      value={selectedTaskId}
+                                      onChange={(event) => setSelectedTaskId(event.target.value)}
+                                      className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
+                                    >
+                                      <option value="">No task linkage</option>
+                                      {topLevelTasks.map((task) => (
+                                        <option key={task.id} value={task.id}>
+                                          {task.title}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <input
+                                      value={draftWorktreeLabel}
+                                      onChange={(event) => setDraftWorktreeLabel(event.target.value)}
+                                      placeholder="Optional label for an unlinked worktree"
+                                      className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
+                                    />
+                                    <button
+                                      onClick={() =>
+                                        createWorktreeMutation.mutate({
+                                          repository_id: selectedRepositoryId!,
+                                          task_id: selectedTaskId || undefined,
+                                          label: selectedTaskId ? undefined : draftWorktreeLabel || undefined,
+                                        })
+                                      }
+                                      disabled={!selectedRepositoryId || createWorktreeMutation.isPending}
+                                      className="btn-secondary mt-3"
+                                    >
+                                      Allocate
+                                    </button>
+                                  </div>
                                 </div>
-                              )
+                              ) : null
                             }
-                            structuredPanels={[
-                              {
-                                id: "messages",
-                                label: "Emitted comments",
-                                content: sessionTimelineQuery.data ? (
-                                  <div className="flex flex-col gap-2">
-                                    {sessionTimelineQuery.data.messages
-                                      .slice(0, 4)
-                                      .map((message) => (
-                                        <div
-                                          key={message.id}
-                                          className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-3 py-3"
-                                        >
-                                          <div className="text-xs text-[color:var(--text-muted)]">
-                                            {toDisplay(message.source)}
-                                          </div>
-                                          <div className="mt-2 text-sm text-[color:var(--text)]">
-                                            {message.body}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    {!sessionTimelineQuery.data.messages
-                                      .length ? (
-                                      <div className="text-sm text-[color:var(--text-muted)]">
-                                        No structured session messages yet.
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                ) : (
-                                  <div className="text-sm text-[color:var(--text-muted)]">
-                                    No selected session.
-                                  </div>
-                                ),
-                              },
-                              {
-                                id: "checks",
-                                label: "Emitted checks",
-                                content: selectedSessionTaskDetailQuery.data ? (
-                                  <div className="flex flex-col gap-2">
-                                    {selectedSessionTaskDetailQuery.data.checks
-                                      .slice(0, 4)
-                                      .map((check) => (
-                                        <div
-                                          key={check.id}
-                                          className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-3 py-3"
-                                        >
-                                          <div className="flex items-center justify-between gap-2">
-                                            <div className="text-sm text-[color:var(--text)]">
-                                              {toDisplay(check.check_type)}
-                                            </div>
-                                            <Pill>{toDisplay(check.status)}</Pill>
-                                          </div>
-                                          <div className="mt-2 text-sm text-[color:var(--text-muted)]">
-                                            {check.summary}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    {!selectedSessionTaskDetailQuery.data.checks
-                                      .length ? (
-                                      <div className="text-sm text-[color:var(--text-muted)]">
-                                        No task checks emitted yet.
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                ) : (
-                                  <div className="text-sm text-[color:var(--text-muted)]">
-                                    No linked task selected.
-                                  </div>
-                                ),
-                              },
-                              {
-                                id: "waiting",
-                                label: "Waiting items",
-                                content: sessionTimelineQuery.data ? (
-                                  <div className="flex flex-col gap-2">
-                                    {sessionTimelineQuery.data.waiting_questions
-                                      .slice(0, 4)
-                                      .map((question) => (
-                                        <div
-                                          key={question.id}
-                                          className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-3 py-3"
-                                        >
-                                          <div className="text-sm font-medium text-[color:var(--text)]">
-                                            {question.prompt}
-                                          </div>
-                                          <div className="mt-2 text-sm text-[color:var(--text-muted)]">
-                                            {question.blocked_reason ??
-                                              "Waiting on operator input."}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    {!sessionTimelineQuery.data
-                                      .waiting_questions.length ? (
-                                      <div className="text-sm text-[color:var(--text-muted)]">
-                                        No waiting items linked to this session.
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                ) : (
-                                  <div className="text-sm text-[color:var(--text-muted)]">
-                                    No selected session.
-                                  </div>
-                                ),
-                              },
-                              {
-                                id: "events",
-                                label: "Timeline/events",
-                                content: sessionTimelineQuery.data ? (
-                                  <div className="flex flex-col gap-2">
-                                    {sessionTimelineQuery.data.events
-                                      .slice(0, 4)
-                                      .map((event) => (
-                                        <div
-                                          key={event.id}
-                                          className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-3 py-3"
-                                        >
-                                          <div className="text-sm font-medium text-[color:var(--text)]">
-                                            {formatEvent(event.event_type)}
-                                          </div>
-                                          <div className="mt-2 text-xs text-[color:var(--text-muted)]">
-                                            {new Date(
-                                              event.created_at,
-                                            ).toLocaleString()}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    {!sessionTimelineQuery.data.events
-                                      .length ? (
-                                      <div className="text-sm text-[color:var(--text-muted)]">
-                                        No session events recorded yet.
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                ) : (
-                                  <div className="text-sm text-[color:var(--text-muted)]">
-                                    No selected session.
-                                  </div>
-                                ),
-                              },
-                            ]}
                           />
                         </div>
                       ) : null}
 
-                      <div className="mt-5 rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
-                        <div className="text-sm font-medium text-[color:var(--text)]">
-                          Open waiting question
+                      {activeSection === "sessions" ? (
+                        <div className="mt-4">
+                          <SectionFrame className="px-5 py-5">
+                            <SectionTitle>Session Runtime</SectionTitle>
+                            <div className="mt-4 flex flex-col gap-3">
+                              {projectDetailQuery.data?.sessions.map((session) => (
+                                <button
+                                  key={session.id}
+                                  onClick={() => selectSession(session.id)}
+                                  className={[
+                                    "rounded-[6px] border px-4 py-4 text-left",
+                                    selectedSessionId === session.id
+                                      ? "border-[color:var(--accent)] bg-[rgba(37,99,235,0.08)]"
+                                      : "border-[color:var(--border)] bg-[color:var(--surface)]",
+                                  ].join(" ")}
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2 text-sm font-semibold text-[color:var(--text)]">
+                                      <Terminal className="h-4 w-4 text-[color:var(--text-muted)]" />
+                                      {toDisplay(session.profile)}
+                                    </div>
+                                    <Pill>{toDisplay(session.status)}</Pill>
+                                  </div>
+                                  <div className="mt-2 text-xs text-[color:var(--text-muted)]">
+                                    {session.session_name}
+                                  </div>
+                                </button>
+                              ))}
+                              {!projectDetailQuery.data?.sessions.length ? (
+                                <div className="text-sm text-[color:var(--text-muted)]">
+                                  No agent sessions yet.
+                                </div>
+                              ) : null}
+                            </div>
+
+                            {selectedProjectId ? (
+                              <div className="mt-5 rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
+                                <div className="text-sm font-medium text-[color:var(--text)]">
+                                  Spawn session
+                                </div>
+                                <select
+                                  value={selectedSessionTaskId}
+                                  onChange={(event) =>
+                                    setSelectedSessionTaskId(event.target.value)
+                                  }
+                                  className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
+                                >
+                                  <option value="">Choose task</option>
+                                  {topLevelTasks.map((task) => (
+                                    <option key={task.id} value={task.id}>
+                                      {task.title}
+                                    </option>
+                                  ))}
+                                </select>
+                                <select
+                                  value={selectedSessionWorktreeId}
+                                  onChange={(event) =>
+                                    setSelectedSessionWorktreeId(event.target.value)
+                                  }
+                                  className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
+                                >
+                                  <option value="">No worktree</option>
+                                  {(projectDetailQuery.data?.worktrees ?? [])
+                                    .filter((worktree) => worktree.status !== "pruned")
+                                    .map((worktree) => (
+                                      <option key={worktree.id} value={worktree.id}>
+                                        {worktree.branch_name}
+                                      </option>
+                                    ))}
+                                </select>
+                                <select
+                                  value={sessionProfile}
+                                  onChange={(event) =>
+                                    setSessionProfile(event.target.value)
+                                  }
+                                  className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
+                                >
+                                  {["executor", "reviewer", "verifier", "research", "docs"].map((profile) => (
+                                    <option key={profile} value={profile}>
+                                      {toDisplay(profile)}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  onClick={() =>
+                                    createSessionMutation.mutate({
+                                      task_id: selectedSessionTaskId,
+                                      profile: sessionProfile,
+                                      worktree_id:
+                                        selectedSessionWorktreeId || undefined,
+                                    })
+                                  }
+                                  disabled={
+                                    !selectedSessionTaskId ||
+                                    createSessionMutation.isPending
+                                  }
+                                  className="btn-primary mt-3 inline-flex items-center gap-2"
+                                >
+                                  <Play className="h-4 w-4" />
+                                  Spawn
+                                </button>
+                              </div>
+                            ) : null}
+
+                            {selectedSession ? (
+                              <div className="mt-5">
+                                <SessionDetailScreen
+                                  profile={selectedSession.profile}
+                                  status={selectedSession.status}
+                                  summary={
+                                    <div className="grid gap-1 text-xs sm:grid-cols-2">
+                                      <span>Task: {selectedSession.task_id}</span>
+                                      <span>
+                                        Project: {selectedSession.project_id}
+                                      </span>
+                                      <span>
+                                        Worktree:{" "}
+                                        {selectedSession.worktree_id ?? "none"}
+                                      </span>
+                                      <span>
+                                        Branch:{" "}
+                                        {projectDetailQuery.data?.worktrees.find(
+                                          (worktree) =>
+                                            worktree.id ===
+                                            selectedSession.worktree_id,
+                                        )?.branch_name ?? "detached"}
+                                      </span>
+                                    </div>
+                                  }
+                                  actions={
+                                    <>
+                                      {selectedSessionId &&
+                                      sessionTailQuery.data?.session.status ===
+                                        "running" ? (
+                                        <button
+                                          onClick={() =>
+                                            cancelSessionMutation.mutate(
+                                              selectedSessionId,
+                                            )
+                                          }
+                                          disabled={cancelSessionMutation.isPending}
+                                          className="btn-secondary border-rose-200 text-rose-600"
+                                        >
+                                          Cancel session
+                                        </button>
+                                      ) : null}
+                                      {sessionTimelineQuery.data ? (
+                                        <button
+                                          onClick={() =>
+                                            createFollowUpSessionMutation.mutate({
+                                              sessionId:
+                                                sessionTimelineQuery.data.session.id,
+                                              profile:
+                                                sessionTimelineQuery.data.session
+                                                  .profile,
+                                              followUpType: "retry",
+                                            })
+                                          }
+                                          disabled={
+                                            createFollowUpSessionMutation.isPending
+                                          }
+                                          className="btn-secondary inline-flex items-center gap-2 !h-8 text-xs"
+                                        >
+                                          <GitFork className="h-3.5 w-3.5" />
+                                          Retry
+                                        </button>
+                                      ) : null}
+                                    </>
+                                  }
+                                  outputPanel={
+                                    sessionTailQuery.data ? (
+                                      <pre className="max-h-72 overflow-auto rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] p-3 text-xs leading-5 text-[color:var(--text)]">
+                                        {sessionTailQuery.data.lines.join("\n")}
+                                      </pre>
+                                    ) : (
+                                      <div className="text-sm text-[color:var(--text-muted)]">
+                                        Select a session to inspect recent runtime
+                                        output.
+                                      </div>
+                                    )
+                                  }
+                                  structuredPanels={[
+                                    {
+                                      id: "messages",
+                                      label: "Emitted comments",
+                                      content: sessionTimelineQuery.data ? (
+                                        <div className="flex flex-col gap-2">
+                                          {sessionTimelineQuery.data.messages
+                                            .slice(0, 4)
+                                            .map((message) => (
+                                              <div
+                                                key={message.id}
+                                                className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-3 py-3"
+                                              >
+                                                <div className="text-xs text-[color:var(--text-muted)]">
+                                                  {toDisplay(message.source)}
+                                                </div>
+                                                <div className="mt-2 text-sm text-[color:var(--text)]">
+                                                  {message.body}
+                                                </div>
+                                              </div>
+                                            ))}
+                                          {!sessionTimelineQuery.data.messages.length ? (
+                                            <div className="text-sm text-[color:var(--text-muted)]">
+                                              No structured session messages yet.
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      ) : (
+                                        <div className="text-sm text-[color:var(--text-muted)]">
+                                          No selected session.
+                                        </div>
+                                      ),
+                                    },
+                                    {
+                                      id: "checks",
+                                      label: "Emitted checks",
+                                      content: selectedSessionTaskDetailQuery.data ? (
+                                        <div className="flex flex-col gap-2">
+                                          {selectedSessionTaskDetailQuery.data.checks
+                                            .slice(0, 4)
+                                            .map((check) => (
+                                              <div
+                                                key={check.id}
+                                                className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-3 py-3"
+                                              >
+                                                <div className="flex items-center justify-between gap-2">
+                                                  <div className="text-sm text-[color:var(--text)]">
+                                                    {toDisplay(check.check_type)}
+                                                  </div>
+                                                  <Pill>{toDisplay(check.status)}</Pill>
+                                                </div>
+                                                <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                                                  {check.summary}
+                                                </div>
+                                              </div>
+                                            ))}
+                                          {!selectedSessionTaskDetailQuery.data.checks.length ? (
+                                            <div className="text-sm text-[color:var(--text-muted)]">
+                                              No task checks emitted yet.
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      ) : (
+                                        <div className="text-sm text-[color:var(--text-muted)]">
+                                          No linked task selected.
+                                        </div>
+                                      ),
+                                    },
+                                    {
+                                      id: "waiting",
+                                      label: "Waiting items",
+                                      content: sessionTimelineQuery.data ? (
+                                        <div className="flex flex-col gap-2">
+                                          {sessionTimelineQuery.data.waiting_questions
+                                            .slice(0, 4)
+                                            .map((question) => (
+                                              <div
+                                                key={question.id}
+                                                className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-3 py-3"
+                                              >
+                                                <div className="text-sm font-medium text-[color:var(--text)]">
+                                                  {question.prompt}
+                                                </div>
+                                                <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                                                  {question.blocked_reason ??
+                                                    "Waiting on operator input."}
+                                                </div>
+                                              </div>
+                                            ))}
+                                          {!sessionTimelineQuery.data.waiting_questions.length ? (
+                                            <div className="text-sm text-[color:var(--text-muted)]">
+                                              No waiting items linked to this session.
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      ) : (
+                                        <div className="text-sm text-[color:var(--text-muted)]">
+                                          No selected session.
+                                        </div>
+                                      ),
+                                    },
+                                    {
+                                      id: "events",
+                                      label: "Timeline/events",
+                                      content: sessionTimelineQuery.data ? (
+                                        <div className="flex flex-col gap-2">
+                                          {sessionTimelineQuery.data.events
+                                            .slice(0, 4)
+                                            .map((event) => (
+                                              <div
+                                                key={event.id}
+                                                className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-3 py-3"
+                                              >
+                                                <div className="text-sm font-medium text-[color:var(--text)]">
+                                                  {formatEvent(event.event_type)}
+                                                </div>
+                                                <div className="mt-2 text-xs text-[color:var(--text-muted)]">
+                                                  {new Date(
+                                                    event.created_at,
+                                                  ).toLocaleString()}
+                                                </div>
+                                              </div>
+                                            ))}
+                                          {!sessionTimelineQuery.data.events.length ? (
+                                            <div className="text-sm text-[color:var(--text-muted)]">
+                                              No session events recorded yet.
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      ) : (
+                                        <div className="text-sm text-[color:var(--text-muted)]">
+                                          No selected session.
+                                        </div>
+                                      ),
+                                    },
+                                  ]}
+                                />
+                              </div>
+                            ) : null}
+
+                            <div className="mt-5 rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
+                              <div className="text-sm font-medium text-[color:var(--text)]">
+                                Open waiting question
+                              </div>
+                              <select
+                                value={selectedSessionTaskId}
+                                onChange={(event) =>
+                                  setSelectedSessionTaskId(event.target.value)
+                                }
+                                className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
+                              >
+                                <option value="">Choose task</option>
+                                {topLevelTasks.map((task) => (
+                                  <option key={task.id} value={task.id}>
+                                    {task.title}
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                value={selectedSessionId ?? ""}
+                                onChange={(event) =>
+                                  setSelectedSessionId(event.target.value || null)
+                                }
+                                className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
+                              >
+                                <option value="">Optional linked session</option>
+                                {(projectDetailQuery.data?.sessions ?? []).map(
+                                  (session) => (
+                                    <option key={session.id} value={session.id}>
+                                      {toDisplay(session.profile)} · {session.session_name}
+                                    </option>
+                                  ),
+                                )}
+                              </select>
+                              <textarea
+                                value={draftQuestionPrompt}
+                                onChange={(event) =>
+                                  setDraftQuestionPrompt(event.target.value)
+                                }
+                                placeholder="What decision or clarification does the agent need?"
+                                className="mt-3 min-h-24 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
+                              />
+                              <input
+                                value={draftQuestionReason}
+                                onChange={(event) =>
+                                  setDraftQuestionReason(event.target.value)
+                                }
+                                placeholder="Why is work blocked?"
+                                className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
+                              />
+                              <select
+                                value={draftQuestionUrgency}
+                                onChange={(event) =>
+                                  setDraftQuestionUrgency(event.target.value)
+                                }
+                                className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
+                              >
+                                {["low", "medium", "high", "urgent"].map((urgency) => (
+                                  <option key={urgency} value={urgency}>
+                                    {toDisplay(urgency)}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                onClick={() =>
+                                  createQuestionMutation.mutate({
+                                    task_id: selectedSessionTaskId,
+                                    session_id: selectedSessionId || undefined,
+                                    prompt: draftQuestionPrompt,
+                                    blocked_reason: draftQuestionReason || undefined,
+                                    urgency: draftQuestionUrgency,
+                                  })
+                                }
+                                disabled={
+                                  !selectedSessionTaskId ||
+                                  !draftQuestionPrompt.trim() ||
+                                  createQuestionMutation.isPending
+                                }
+                                className="btn-primary mt-3"
+                              >
+                                Open question
+                              </button>
+                            </div>
+                          </SectionFrame>
                         </div>
-                        <select
-                          value={selectedSessionTaskId}
-                          onChange={(event) =>
-                            setSelectedSessionTaskId(event.target.value)
-                          }
-                          className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
-                        >
-                          <option value="">Choose task</option>
-                          {topLevelTasks.map((task) => (
-                            <option key={task.id} value={task.id}>
-                              {task.title}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          value={selectedSessionId ?? ""}
-                          onChange={(event) =>
-                            setSelectedSessionId(event.target.value || null)
-                          }
-                          className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
-                        >
-                          <option value="">Optional linked session</option>
-                          {(projectDetailQuery.data?.sessions ?? []).map(
-                            (session) => (
-                              <option key={session.id} value={session.id}>
-                                {toDisplay(session.profile)} · {session.session_name}
-                              </option>
-                            ),
-                          )}
-                        </select>
-                        <textarea
-                          value={draftQuestionPrompt}
-                          onChange={(event) =>
-                            setDraftQuestionPrompt(event.target.value)
-                          }
-                          placeholder="What decision or clarification does the agent need?"
-                          className="mt-3 min-h-24 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
-                        />
-                        <input
-                          value={draftQuestionReason}
-                          onChange={(event) =>
-                            setDraftQuestionReason(event.target.value)
-                          }
-                          placeholder="Why is work blocked?"
-                          className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
-                        />
-                        <select
-                          value={draftQuestionUrgency}
-                          onChange={(event) =>
-                            setDraftQuestionUrgency(event.target.value)
-                          }
-                          className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
-                        >
-                          {["low", "medium", "high", "urgent"].map(
-                            (urgency) => (
-                              <option key={urgency} value={urgency}>
-                                {toDisplay(urgency)}
-                              </option>
-                            ),
-                          )}
-                        </select>
-                        <button
-                          onClick={() =>
-                            createQuestionMutation.mutate({
-                              task_id: selectedSessionTaskId,
-                              session_id: selectedSessionId || undefined,
-                              prompt: draftQuestionPrompt,
-                              blocked_reason: draftQuestionReason || undefined,
-                              urgency: draftQuestionUrgency,
-                            })
-                          }
-                          disabled={
-                            !selectedSessionTaskId ||
-                            !draftQuestionPrompt.trim() ||
-                            createQuestionMutation.isPending
-                          }
-                          className="btn-primary mt-3"
-                        >
-                          Open question
-                        </button>
-                      </div>
-                    </SectionFrame>
-                  ) : null}
+                      ) : null}
+                    </div>
+                  </div>
+                </ProjectsSectionContainer>
+              </div>
+            </ProjectOverviewScreen>
+          ) : null}
+          {activeSection !== "home" &&
+          activeSection !== "search" &&
+          activeSection !== "activity" &&
+          !isProjectScopedSection ? (
+            <ProjectOverviewScreen>
+              <div className="min-w-0 flex flex-col gap-6">
+                <WaitingSectionContainer
+                  active={activeSection === "waiting"}
+                  questions={projectDetailQuery.data?.waiting_questions ?? []}
+                  selectedQuestionId={selectedQuestionId}
+                  questionDetail={questionDetailQuery.data}
+                  sessions={projectDetailQuery.data?.sessions ?? []}
+                  tasks={projectDetailQuery.data?.board.tasks ?? []}
+                  projectLabel={
+                    projectDetailQuery.data?.project.name ??
+                    selectedProjectId?.slice(0, 8) ??
+                    "Project"
+                  }
+                  draftReplyBody={draftReplyBody}
+                  onDraftReplyBodyChange={setDraftReplyBody}
+                  onSelectQuestion={selectQuestion}
+                  onSendReply={(questionId, body) =>
+                    answerQuestionMutation.mutate({ questionId, body })
+                  }
+                  isSendingReply={answerQuestionMutation.isPending}
+                  onOpenProject={() => setActiveSection("projects")}
+                  onOpenSession={(sessionId) => {
+                    selectSession(sessionId);
+                    setActiveSection("sessions");
+                  }}
+                  onOpenTask={(taskId) => {
+                    selectTask(taskId);
+                    setActiveSection("projects");
+                  }}
+                />
 
-                  <WaitingSectionContainer
-                    active={activeSection === "waiting"}
-                    questions={projectDetailQuery.data?.waiting_questions ?? []}
-                    selectedQuestionId={selectedQuestionId}
-                    questionDetail={questionDetailQuery.data}
-                    sessions={projectDetailQuery.data?.sessions ?? []}
-                    tasks={projectDetailQuery.data?.board.tasks ?? []}
-                    projectLabel={
-                      projectDetailQuery.data?.project.name ??
-                      selectedProjectId?.slice(0, 8) ??
-                      "Project"
-                    }
-                    draftReplyBody={draftReplyBody}
-                    onDraftReplyBodyChange={setDraftReplyBody}
-                    onSelectQuestion={selectQuestion}
-                    onSendReply={(questionId, body) =>
-                      answerQuestionMutation.mutate({ questionId, body })
-                    }
-                    isSendingReply={answerQuestionMutation.isPending}
-                    onOpenProject={() => setActiveSection("projects")}
-                    onOpenSession={(sessionId) => {
-                      selectSession(sessionId);
-                      setActiveSection("sessions");
-                    }}
-                    onOpenTask={(taskId) => {
-                      selectTask(taskId);
-                      setActiveSection("projects");
-                    }}
-                  />
-
-                  {activeSection === "diagnostics" ? (
-                    <DiagnosticsSectionContainer diagnostics={diagnosticsQuery.data} />
-                  ) : null}
-
-                </div>
+                {activeSection === "diagnostics" ? (
+                  <DiagnosticsSectionContainer diagnostics={diagnosticsQuery.data} />
+                ) : null}
               </div>
             </ProjectOverviewScreen>
           ) : null}
