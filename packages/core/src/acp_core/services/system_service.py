@@ -5,7 +5,6 @@ from pathlib import Path
 from sqlalchemy import String, cast, func, or_, select
 
 from acp_core.infrastructure.runtime_adapter import DefaultRuntimeAdapter, RuntimeAdapterProtocol
-from acp_core.logging import logger
 from acp_core.models import AgentSession, Event, Project, Repository, Task, WaitingQuestion, Worktree
 from acp_core.schemas import DashboardRead, DiagnosticsRead, EventRecord, SearchHit, SearchResults
 from acp_core.services.base_service import ServiceContext
@@ -492,4 +491,4 @@ class SearchService:
 
 
 # Deferred imports to keep the module order straightforward.
-from acp_core.schemas import BoardColumnRead, EventRecord, ProjectOverview, ProjectSummary, TaskRead  # noqa: E402
+from acp_core.schemas import ProjectSummary, TaskRead  # noqa: E402
