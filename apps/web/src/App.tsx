@@ -207,7 +207,8 @@ export function App() {
 
   useEffect(() => {
     const questions = questionsQuery.data ?? [];
-    if (!selectedQuestionId && questions[0]) {
+    const isCurrentStillAvailable = questions.some(q => q.id === selectedQuestionId);
+    if (!isCurrentStillAvailable && questions[0]) {
       setSelectedQuestionId(questions[0].id);
     }
   }, [questionsQuery.data, selectedQuestionId]);

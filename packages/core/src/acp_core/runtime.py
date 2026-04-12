@@ -29,6 +29,7 @@ class RuntimeSessionInfo:
 class RuntimeSessionSummary:
     session_name: str
     window_name: str
+    is_active: bool = True
 
 
 class TmuxRuntimeAdapter:
@@ -70,6 +71,19 @@ class TmuxRuntimeAdapter:
     def session_exists(self, session_name: str) -> bool:
         return self.server.find_where({"session_name": session_name}) is not None
 
+    def is_session_active(self, session_name: str) -> bool:
+        session = self.server.find_where({"session_name": session_name})
+        if session is None:
+            return False
+        
+        pane = session.attached_window.attached_pane
+        current_command = pane.get("pane_current_command")
+        # If the command is just a common shell, we consider it "idle" (not active)
+        # Note: 'exec''ing into a shell at the end of a turn is a common pattern here.
+        if current_command in {"zsh", "bash", "sh", "fish", "tmux"}:
+            return False
+        return True
+
     def capture_tail(self, session_name: str, *, lines: int = 120) -> str:
         session = self.server.find_where({"session_name": session_name})
         if session is None:
@@ -93,6 +107,7 @@ class TmuxRuntimeAdapter:
                 RuntimeSessionSummary(
                     session_name=session_name,
                     window_name=session.attached_window.get("window_name"),
+                    is_active=self.is_session_active(session_name),
                 )
             )
         return sessions

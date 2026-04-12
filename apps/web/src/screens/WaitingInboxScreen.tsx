@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowRight, CheckCircle2, CircleDot, MessageSquareText } from "lucide-react";
+import { ArrowRight, CheckCircle2, CircleDot, ExternalLink, LayoutGrid, MessageSquareText } from "lucide-react";
 import type { SessionSummary, TaskSummary, WaitingQuestionSummary } from "@acp/sdk";
 import { cn } from "@/lib/utils";
 import { SectionFrame, SectionTitle } from "@/components/ui";
@@ -306,8 +306,24 @@ export function WaitingInboxScreen({
                   </Button>
                 </>
               ) : (
-                <div className="mt-4 rounded-[6px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                  This question is closed. Switch the queue filter to Open to continue triage.
+                <div className="mt-4 flex flex-col gap-3">
+                  <div className="rounded-[6px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                    This question is closed and the blocker is resolved.
+                  </div>
+                  
+                  <div className="mt-2">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-[color:var(--text-muted)]">Next Actions</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button onClick={onOpenProjectBoard} className="px-3 py-1.5 text-xs">
+                        <LayoutGrid className="mr-1.5 h-3.5 w-3.5" />
+                        Go to Project Board
+                      </Button>
+                      <Button onClick={() => onOpenTask(questionDetail.task_id)} className="px-3 py-1.5 text-xs">
+                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                        Inspect Task
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               )}
             </>

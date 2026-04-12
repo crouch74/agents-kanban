@@ -1268,11 +1268,15 @@ class SessionService:
 
     def _runtime_session_status(self, session: AgentSession, *, exists: bool) -> str:
         if exists:
+            is_active = self.runtime.is_session_active(session.session_name)
+            if not is_active and session.status == "running":
+                return "done"
+            
             if session.status == "waiting_human":
                 return "waiting_human"
             if session.status == "blocked":
                 return "blocked"
-            return "running"
+            return "running" if is_active else "done"
         return "failed"
 
     def _next_attempt_number(self, task_id: str) -> int:
@@ -2312,6 +2316,8 @@ class WaitingService:
         ) or 0
         if task is not None:
             task.waiting_for_human = remaining_task_questions > 0
+            if remaining_task_questions == 0:
+                task.blocked_reason = None
 
         if question.session_id is not None:
             session = self.context.db.get(AgentSession, question.session_id)
@@ -2325,15 +2331,18 @@ class WaitingService:
                 if remaining_session_questions > 0:
                     session.status = "waiting_human"
                 else:
+                    # No more open questions for this session
                     try:
                         session_exists = self.runtime.session_exists(session.session_name)
-                    except Exception as exc:
-                        raise build_runtime_service_error(
-                            operation="session_status",
-                            exc=exc,
-                            details={"session_id": session.id, "session_name": session.session_name},
-                        ) from exc
-                    session.status = "running" if session_exists else "failed"
+                        is_active = self.runtime.is_session_active(session.session_name) if session_exists else False
+                    except Exception:
+                        session_exists = False
+                        is_active = False
+
+                    if session_exists:
+                        session.status = "running" if is_active else "done"
+                    else:
+                        session.status = "failed"
                 self.context.db.add(
                     SessionMessage(
                         session_id=session.id,

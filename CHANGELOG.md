@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- 🧭 Stale session status: Sessions that finish their agent turn and return to a shell prompt in tmux are now correctly reconciled from `running` to `done`.
+- 🧭 Stale task blockers: Tasks now explicitly clear their `blocked_reason` and `waiting_for_human` flag when the last pending waiting question is answered.
+
+### Added
+- 🧭 Session activity detection: Added `is_session_active` to `TmuxRuntimeAdapter` to detect idle shell prompts vs active agent turns.
+- 📥 Inbox "Next Actions": The waiting question triage panel now suggests follow-up actions (Go to Board, Inspect Task) after a question is closed.
+- 📥 Inbox auto-selection: The next open question in the queue is now automatically selected after answering the current one.
+
+### Fixed
 - 🤖 Bootstrap command used interactive `codex` CLI piped via stdin, which errors
   with "stdin is not a terminal" inside a non-interactive tmux session. Switched to
   `codex exec` — the explicit non-interactive subcommand that accepts piped stdin.
