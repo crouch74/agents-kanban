@@ -129,3 +129,26 @@ def test_worktree_mutations_validate_payload_foreign_keys_and_transitions(tmp_pa
         forbidden_transition = client.patch(f"/api/v1/worktrees/{worktree_id}", json={"status": "pruned"})
         assert forbidden_transition.status_code == 400
         assert forbidden_transition.json()["detail"].startswith("Invalid worktree transition")
+
+
+def test_worktree_creation_rejects_cross_project_task(tmp_path: Path) -> None:
+    repo_path = create_git_repo(tmp_path / "cross-project-worktree-repo")
+
+    with TestClient(app) as client:
+        project_a = client.post("/api/v1/projects", json={"name": "Repo Project"}).json()["id"]
+        project_b = client.post("/api/v1/projects", json={"name": "Task Project"}).json()["id"]
+        repository_id = client.post(
+            "/api/v1/repositories",
+            json={"project_id": project_a, "local_path": str(repo_path)},
+        ).json()["id"]
+        task_id = client.post(
+            "/api/v1/tasks",
+            json={"project_id": project_b, "title": "Cross-project task"},
+        ).json()["id"]
+
+        response = client.post(
+            "/api/v1/worktrees",
+            json={"repository_id": repository_id, "task_id": task_id},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Task must belong to the same project as the repository"

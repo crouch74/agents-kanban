@@ -91,6 +91,23 @@ export async function installMockApi(page: Page) {
       return json(state.project ? [state.project] : []);
     }
 
+    if (path.endsWith("/projects/bootstrap/preview") && method === "POST") {
+      const payload = request.postDataJSON() as any;
+      return json({
+        repo_path: payload.repo_path,
+        stack_preset: payload.stack_preset,
+        stack_notes: payload.stack_notes ?? null,
+        use_worktree: Boolean(payload.use_worktree),
+        repo_initialized_on_confirm: Boolean(payload.initialize_repo),
+        scaffold_applied_on_confirm: true,
+        has_existing_commits: false,
+        confirmation_required: false,
+        execution_path: payload.repo_path,
+        execution_branch: "main",
+        planned_changes: [],
+      });
+    }
+
     if (path.endsWith("/events")) {
       return json(state.events.slice().reverse());
     }
@@ -185,6 +202,10 @@ export async function installMockApi(page: Page) {
       });
     }
 
+    if (path.endsWith("/questions") && method === "GET") {
+      return json(state.waitingQuestions);
+    }
+
     if (path.endsWith("/tasks") && method === "POST") {
       const payload = request.postDataJSON() as any;
       const task = {
@@ -277,9 +298,13 @@ export async function installMockApi(page: Page) {
         created_at: nowIso(),
       };
       state.repliesByQuestionId[questionId] = [...(state.repliesByQuestionId[questionId] ?? []), reply];
-      question.status = "answered";
+      question.status = "closed";
       const task = state.board.tasks.find((item) => item.id === question.task_id);
-      if (task) task.waiting_for_human = false;
+      if (task) {
+        task.waiting_for_human = state.waitingQuestions.some(
+          (item) => item.task_id === question.task_id && item.status === "open" && item.id !== questionId,
+        );
+      }
       return json({ ...question, replies: state.repliesByQuestionId[questionId] });
     }
 
@@ -327,8 +352,10 @@ export async function installMockApi(page: Page) {
 }
 
 export async function bootstrapProject(page: Page, name: string) {
-  await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Local operator workspace" })).toBeVisible();
+  await page.goto("/?section=projects");
+  await expect(page.getByText("Agent Control Plane")).toBeVisible();
+  await page.getByRole("button", { name: "Projects" }).click();
+  await page.getByRole("button", { name: /\+ new project/i }).click();
   await page.getByPlaceholder("Acme migration program").fill(name);
   await page.getByPlaceholder("/absolute/path/to/repo").fill(`/tmp/${name.toLowerCase().replace(/\s+/g, "-")}`);
   await page
@@ -336,7 +363,8 @@ export async function bootstrapProject(page: Page, name: string) {
       "Describe the work to kick off. ACP will ask the agent to clarify requirements and create tasks/subtasks.",
     )
     .fill("Kick off a stable deterministic plan.");
-  await page.getByRole("button", { name: "Launch bootstrap" }).click();
+  await page.getByRole("button", { name: "Review bootstrap" }).click();
   await expect(page.getByText(`${name} is ready`)).toBeVisible();
   await expect(page.getByText("Kickoff task: Kick off planning and board setup")).toBeVisible();
+  await page.keyboard.press("Escape");
 }

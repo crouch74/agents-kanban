@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from acp_core.schemas import ProjectBootstrapCreate, ProjectBootstrapRead, ProjectCreate, ProjectOverview, ProjectSummary
+from acp_core.schemas import (
+    ProjectBootstrapCreate,
+    ProjectBootstrapPreviewRead,
+    ProjectBootstrapRead,
+    ProjectCreate,
+    ProjectOverview,
+    ProjectSummary,
+)
+from app.api.errors import RUNTIME_ERROR_RESPONSES
 from app.api.ws.events import broadcast_change
 from app.bootstrap.dependencies import get_bootstrap_service, get_project_service
 
@@ -51,7 +59,18 @@ def create_project(payload: ProjectCreate, request: Request, service=Depends(get
     return response
 
 
-@router.post("/bootstrap", response_model=ProjectBootstrapRead, status_code=201)
+@router.post("/bootstrap/preview", response_model=ProjectBootstrapPreviewRead)
+def preview_bootstrap_project(
+    payload: ProjectBootstrapCreate,
+    service=Depends(get_bootstrap_service),
+) -> ProjectBootstrapPreviewRead:
+    try:
+        return service.preview_bootstrap_project(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/bootstrap", response_model=ProjectBootstrapRead, status_code=201, responses=RUNTIME_ERROR_RESPONSES)
 def bootstrap_project(
     payload: ProjectBootstrapCreate,
     request: Request,

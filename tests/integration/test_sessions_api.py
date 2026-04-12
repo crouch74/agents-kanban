@@ -202,7 +202,37 @@ def test_session_spawn_and_follow_up_surface_runtime_adapter_failure(tmp_path: P
                 "/api/v1/sessions",
                 json={"task_id": task_id, "profile": "executor", "repository_id": repository_id},
             )
-            assert spawn_response.status_code == 500
-            assert spawn_response.text == "Internal Server Error"
+            assert spawn_response.status_code == 502
+            payload = spawn_response.json()
+            assert payload["error"]["code"] == "runtime_adapter_failure"
+            assert payload["error"]["details"]["operation"] == "session_spawn"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_session_spawn_rejects_cross_project_repository(tmp_path: Path) -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+    repo_path = create_git_repo(tmp_path / "cross-project-session-repo")
+
+    try:
+        with TestClient(app) as client:
+            project_a = client.post("/api/v1/projects", json={"name": "Project A"}).json()["id"]
+            project_b = client.post("/api/v1/projects", json={"name": "Project B"}).json()["id"]
+            repository_id = client.post(
+                "/api/v1/repositories",
+                json={"project_id": project_a, "local_path": str(repo_path)},
+            ).json()["id"]
+            task_id = client.post(
+                "/api/v1/tasks",
+                json={"project_id": project_b, "title": "Cross-project task"},
+            ).json()["id"]
+
+            response = client.post(
+                "/api/v1/sessions",
+                json={"task_id": task_id, "profile": "executor", "repository_id": repository_id},
+            )
+            assert response.status_code == 400
+            assert response.json()["detail"] == "Session repository must belong to the same project as the task"
     finally:
         app.dependency_overrides.clear()

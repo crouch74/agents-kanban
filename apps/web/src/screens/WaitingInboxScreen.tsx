@@ -14,7 +14,7 @@ type WaitingQuestionWithTimestamps = WaitingQuestionSummary & {
 
 type QueueSortKey = "urgency" | "impact" | "age" | "project" | "session" | "task";
 
-type StatusFilter = "all" | "open" | "answered";
+type StatusFilter = "all" | "open" | "closed";
 
 type WaitingInboxScreenProps = {
   active: boolean;
@@ -166,7 +166,7 @@ export function WaitingInboxScreen({
               className="text-xs"
             >
               <option value="open">Open</option>
-              <option value="answered">Answered</option>
+              <option value="closed">Closed</option>
               <option value="all">All</option>
             </Select>
             <Select
@@ -233,8 +233,8 @@ export function WaitingInboxScreen({
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
-                <Badge variant={questionDetail.status === "answered" ? "success" : "info"}>
-                  {questionDetail.status === "answered" ? (
+                <Badge variant={questionDetail.status === "closed" ? "success" : "info"}>
+                  {questionDetail.status === "closed" ? (
                     <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
                   ) : (
                     <CircleDot className="mr-1 h-3.5 w-3.5" />
@@ -301,13 +301,13 @@ export function WaitingInboxScreen({
                     disabled={!draftReplyBody.trim() || isSendingReply}
                     className="mt-3"
                   >
-                    Send + mark answered
+                    Send + close question
                     <ArrowRight className="ml-1.5 h-4 w-4" />
                   </Button>
                 </>
               ) : (
                 <div className="mt-4 rounded-[6px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                  This question is answered. Switch the queue filter to Open to continue triage.
+                  This question is closed. Switch the queue filter to Open to continue triage.
                 </div>
               )}
             </>

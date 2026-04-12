@@ -12,8 +12,13 @@ from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from acp_core.constants import DEFAULT_BOARD_COLUMNS, TASK_TRANSITIONS, WORKFLOW_BY_COLUMN_KEY
+from acp_core.errors import build_runtime_service_error
 from acp_core.logging import logger
-from acp_core.infrastructure.git_repository_adapter import GitRepositoryAdapter, GitRepositoryAdapterProtocol
+from acp_core.infrastructure.git_repository_adapter import (
+    GitRepositoryAdapter,
+    GitRepositoryAdapterProtocol,
+    GitRepositoryMetadata,
+)
 from acp_core.infrastructure.runtime_adapter import DefaultRuntimeAdapter, RuntimeAdapterProtocol
 from acp_core.infrastructure.scaffold_writer import ScaffoldWriter, ScaffoldWriterProtocol
 from acp_core.models import (
@@ -47,7 +52,9 @@ from acp_core.schemas import (
     EventRecord,
     HumanReplyCreate,
     HumanReplyRead,
+    ProjectBootstrapPlannedChange,
     ProjectBootstrapCreate,
+    ProjectBootstrapPreviewRead,
     ProjectBootstrapRead,
     ProjectCreate,
     ProjectOverview,
@@ -514,6 +521,12 @@ class TaskService:
                 "Task cannot move to done: " + ", ".join(readiness.missing_requirements)
             )
 
+    def _column_for_workflow_state(self, project_id: str, workflow_state: str) -> BoardColumn | None:
+        board = self.context.db.scalar(select(Board).where(Board.project_id == project_id))
+        if board is None:
+            return None
+        return next((column for column in board.columns if WORKFLOW_BY_COLUMN_KEY.get(column.key) == workflow_state), None)
+
     def get_completion_readiness(self, task_id: str) -> TaskCompletionReadinessRead:
         """Purpose: get completion readiness.
 
@@ -599,7 +612,13 @@ class TaskService:
         if "waiting_for_human" in provided and payload.waiting_for_human is not None:
             task.waiting_for_human = payload.waiting_for_human
 
-        if "workflow_state" in provided and payload.workflow_state is not None:
+        if "board_column_id" in provided and payload.board_column_id is not None:
+            column = self.context.db.get(BoardColumn, payload.board_column_id)
+            if column is None:
+                raise ValueError("Board column not found")
+            task.board_column_id = column.id
+            next_workflow_state = WORKFLOW_BY_COLUMN_KEY.get(column.key, next_workflow_state)
+        elif "workflow_state" in provided and payload.workflow_state is not None:
             allowed = TASK_TRANSITIONS[task.workflow_state]
             if payload.workflow_state not in allowed:
                 raise ValueError(
@@ -607,17 +626,14 @@ class TaskService:
                 )
             next_workflow_state = payload.workflow_state
 
-        if "board_column_id" in provided and payload.board_column_id is not None:
-            column = self.context.db.get(BoardColumn, payload.board_column_id)
-            if column is None:
-                raise ValueError("Board column not found")
-            task.board_column_id = column.id
-            next_workflow_state = WORKFLOW_BY_COLUMN_KEY.get(column.key, next_workflow_state)
-
         if task.workflow_state != "done" and next_workflow_state == "done":
             self._ensure_completion_evidence(task)
 
         task.workflow_state = next_workflow_state
+        if "board_column_id" not in provided and next_workflow_state != "cancelled":
+            column = self._column_for_workflow_state(task.project_id, next_workflow_state)
+            if column is not None:
+                task.board_column_id = column.id
 
         self.context.record_event(
             entity_type="task",
@@ -1042,6 +1058,8 @@ class WorktreeService:
             task = self.context.db.get(Task, payload.task_id)
             if task is None:
                 raise ValueError("Task not found")
+            if task.project_id != repository.project_id:
+                raise ValueError("Task must belong to the same project as the repository")
             branch_suffix = f"{task_slug(task.title)}-{task.id[:8]}"
         elif payload.label:
             branch_suffix = task_slug(payload.label)
@@ -1248,6 +1266,15 @@ class SessionService:
 
         return resolved_repository_id, worktree, working_directory
 
+    def _runtime_session_status(self, session: AgentSession, *, exists: bool) -> str:
+        if exists:
+            if session.status == "waiting_human":
+                return "waiting_human"
+            if session.status == "blocked":
+                return "blocked"
+            return "running"
+        return "failed"
+
     def _next_attempt_number(self, task_id: str) -> int:
         existing = self.list_sessions(task_id=task_id)
         if existing:
@@ -1270,14 +1297,27 @@ class SessionService:
             repository_id=repository_id,
             worktree_id=worktree_id,
         )
+        if repository_id is not None:
+            repository = self.context.db.get(Repository, repository_id)
+            if repository is None:
+                raise ValueError("Repository not found")
+            if repository.project_id != task.project_id:
+                raise ValueError("Session repository must belong to the same project as the task")
         attempt_number = self._next_attempt_number(task.id)
         session_name = safe_tmux_name(f"acp-{task.project_id[:6]}-{task.id[:8]}-{profile}-{attempt_number}")
-        runtime_info = self.runtime.spawn_session(
-            session_name=session_name,
-            working_directory=working_directory,
-            profile=profile,
-            command=command,
-        )
+        try:
+            runtime_info = self.runtime.spawn_session(
+                session_name=session_name,
+                working_directory=working_directory,
+                profile=profile,
+                command=command,
+            )
+        except Exception as exc:
+            raise build_runtime_service_error(
+                operation="session_spawn",
+                exc=exc,
+                details={"session_name": session_name, "task_id": task.id},
+            ) from exc
 
         runtime_metadata = {
             "pane_id": runtime_info.pane_id,
@@ -1477,11 +1517,15 @@ class SessionService:
         session = self.get_session(session_id)
         if session.status in {"cancelled", "failed"}:
             return session
-        exists = self.runtime.session_exists(session.session_name)
-        if session.status == "waiting_human" and exists:
-            next_status = "waiting_human"
-        else:
-            next_status = "running" if exists else "done"
+        try:
+            exists = self.runtime.session_exists(session.session_name)
+        except Exception as exc:
+            raise build_runtime_service_error(
+                operation="session_status",
+                exc=exc,
+                details={"session_id": session.id, "session_name": session.session_name},
+            ) from exc
+        next_status = self._runtime_session_status(session, exists=exists)
         if session.status != next_status:
             session.status = next_status
             self.context.record_event(
@@ -1509,7 +1553,14 @@ class SessionService:
         session = self.refresh_session_status(session_id)
         capture_lines: list[str]
         if session.status == "running":
-            capture_lines = self.runtime.capture_tail(session.session_name, lines=lines).splitlines()
+            try:
+                capture_lines = self.runtime.capture_tail(session.session_name, lines=lines).splitlines()
+            except Exception as exc:
+                raise build_runtime_service_error(
+                    operation="session_tail",
+                    exc=exc,
+                    details={"session_id": session.id, "session_name": session.session_name},
+                ) from exc
         else:
             capture_lines = ["📡 Session is not currently running."]
 
@@ -1612,7 +1663,14 @@ class SessionService:
         if session.status in {"done", "failed", "cancelled"}:
             return session
 
-        self.runtime.terminate_session(session.session_name)
+        try:
+            self.runtime.terminate_session(session.session_name)
+        except Exception as exc:
+            raise build_runtime_service_error(
+                operation="session_cancel",
+                exc=exc,
+                details={"session_id": session.id, "session_name": session.session_name},
+            ) from exc
         session.status = "cancelled"
 
         latest_run = self.context.db.scalar(
@@ -1783,16 +1841,29 @@ class BootstrapService:
         execution_path: Path | None = None
         execution_branch: str = ""
 
-    def _validate_or_init_repo(self, payload: ProjectBootstrapCreate) -> tuple[Path, Any, bool]:
+    @dataclass
+    class BootstrapInspection:
+        repo_path: Path
+        repo_details: GitRepositoryMetadata | None
+        repo_initialized_on_confirm: bool
+        has_commits: bool
+        is_detached: bool
+
+    def _inspect_repo(self, payload: ProjectBootstrapCreate) -> BootstrapInspection:
         repo_path = Path(payload.repo_path).expanduser().resolve()
         if not repo_path.exists():
             if not payload.initialize_repo:
                 raise ValueError("Repo path must point to an existing directory or enable Initialize repo with git")
-            repo_path.mkdir(parents=True, exist_ok=True)
+            return self.BootstrapInspection(
+                repo_path=repo_path,
+                repo_details=None,
+                repo_initialized_on_confirm=True,
+                has_commits=False,
+                is_detached=False,
+            )
         elif not repo_path.is_dir():
             raise ValueError("Repo path must point to a directory")
 
-        repo_initialized = False
         try:
             repo_details = self.git.inspect_repository(repo_path)
         except (InvalidGitRepositoryError, NoSuchPathError):
@@ -1800,10 +1871,91 @@ class BootstrapService:
                 raise ValueError("Repo path must already be a git repository or enable Initialize repo with git")
             if any(repo_path.iterdir()):
                 raise ValueError("Initialize repo with git is only available for an empty directory")
-            self.git.init_repository(repo_path)
-            repo_details = self.git.inspect_repository(repo_path)
-            repo_initialized = True
-        return repo_path, repo_details, repo_initialized
+            return self.BootstrapInspection(
+                repo_path=repo_path,
+                repo_details=None,
+                repo_initialized_on_confirm=True,
+                has_commits=False,
+                is_detached=False,
+            )
+        return self.BootstrapInspection(
+            repo_path=repo_path,
+            repo_details=repo_details,
+            repo_initialized_on_confirm=False,
+            has_commits=bool(repo_details.metadata_json.get("has_commits")),
+            is_detached=bool(repo_details.metadata_json.get("is_detached")),
+        )
+
+    def _materialize_repo(self, inspection: BootstrapInspection) -> tuple[Path, GitRepositoryMetadata, bool]:
+        if inspection.repo_details is not None:
+            return inspection.repo_path, inspection.repo_details, inspection.repo_initialized_on_confirm
+
+        inspection.repo_path.mkdir(parents=True, exist_ok=True)
+        self.git.init_repository(inspection.repo_path)
+        return inspection.repo_path, self.git.inspect_repository(inspection.repo_path), True
+
+    def _build_bootstrap_preview(self, payload: ProjectBootstrapCreate, inspection: BootstrapInspection) -> ProjectBootstrapPreviewRead:
+        if inspection.has_commits and not payload.use_worktree and inspection.is_detached:
+            raise ValueError("Repository is in detached HEAD; check out a branch or enable worktree kickoff")
+
+        project_slug = slugify(payload.name)
+        execution_path = str(inspection.repo_path)
+        execution_branch = inspection.repo_details.default_branch if inspection.repo_details else ""
+        if payload.use_worktree:
+            branch_suffix = task_slug("Kick off planning and board setup")
+            execution_path = str(settings.runtime_home / "worktrees" / project_slug / branch_suffix)
+            execution_branch = f"acp/{project_slug}/{branch_suffix}-<task-id>"
+        elif not execution_branch:
+            execution_branch = "(resolved on confirm)"
+
+        planned_changes: list[ProjectBootstrapPlannedChange] = []
+        scaffold_applied_on_confirm = not inspection.has_commits
+        if scaffold_applied_on_confirm:
+            planned_changes.append(
+                ProjectBootstrapPlannedChange(
+                    path=str(inspection.repo_path),
+                    action="scaffold",
+                    description=f"Create starter {payload.stack_preset.value} scaffold files in the repository root.",
+                )
+            )
+        planned_changes.extend(
+            [
+                ProjectBootstrapPlannedChange(
+                    path=str(inspection.repo_path / ".gitignore"),
+                    action="append_line",
+                    description="Ensure `.acp/` is ignored by git.",
+                ),
+                ProjectBootstrapPlannedChange(
+                    path=str(inspection.repo_path / "AGENTS.md"),
+                    action="create_or_update",
+                    description="Create or update the ACP-managed section in `AGENTS.md`.",
+                ),
+                ProjectBootstrapPlannedChange(
+                    path=str(inspection.repo_path / ".acp" / "project.local.json"),
+                    action="create_or_update",
+                    description="Write local ACP project context for kickoff.",
+                ),
+                ProjectBootstrapPlannedChange(
+                    path=str(inspection.repo_path / ".acp" / "bootstrap-prompt.md"),
+                    action="create_or_update",
+                    description="Write the kickoff prompt consumed by the bootstrap session.",
+                ),
+            ]
+        )
+
+        return ProjectBootstrapPreviewRead(
+            repo_path=str(inspection.repo_path),
+            stack_preset=payload.stack_preset,
+            stack_notes=payload.stack_notes,
+            use_worktree=payload.use_worktree,
+            repo_initialized_on_confirm=inspection.repo_initialized_on_confirm,
+            scaffold_applied_on_confirm=scaffold_applied_on_confirm,
+            has_existing_commits=inspection.has_commits,
+            confirmation_required=inspection.has_commits,
+            execution_path=execution_path,
+            execution_branch=execution_branch,
+            planned_changes=planned_changes,
+        )
 
     def _prepare_repository_files(self, state: BootstrapState, *, has_commits: bool) -> None:
         if not has_commits:
@@ -1963,6 +2115,10 @@ class BootstrapService:
             scaffold_applied=state.scaffold_applied,
         )
 
+    def preview_bootstrap_project(self, payload: ProjectBootstrapCreate) -> ProjectBootstrapPreviewRead:
+        inspection = self._inspect_repo(payload)
+        return self._build_bootstrap_preview(payload, inspection)
+
     def bootstrap_project(self, payload: ProjectBootstrapCreate) -> ProjectBootstrapRead:
         """Purpose: bootstrap project.
 
@@ -1977,7 +2133,10 @@ class BootstrapService:
         WHY:
             Enforces canonical gating/event/reconciliation semantics in the service layer.
         """
-        repo_path, repo_details, repo_initialized = self._validate_or_init_repo(payload)
+        inspection = self._inspect_repo(payload)
+        if inspection.has_commits and not payload.confirm_existing_repo:
+            raise ValueError("Existing repositories require preview confirmation before bootstrap can modify ACP-managed files")
+        repo_path, repo_details, repo_initialized = self._materialize_repo(inspection)
         state = self.BootstrapState(payload=payload, repo_path=repo_path, repo_initialized=repo_initialized)
         has_commits = bool(repo_details.metadata_json.get("has_commits"))
         is_detached = bool(repo_details.metadata_json.get("is_detached"))
@@ -2142,14 +2301,39 @@ class WaitingService:
         self.context.db.add(reply)
 
         task = self.context.db.get(Task, question.task_id)
+        question.status = "closed"
+        self.context.db.flush()
+
+        remaining_task_questions = self.context.db.scalar(
+            select(func.count(WaitingQuestion.id)).where(
+                WaitingQuestion.task_id == question.task_id,
+                WaitingQuestion.status == "open",
+            )
+        ) or 0
         if task is not None:
-            task.waiting_for_human = False
+            task.waiting_for_human = remaining_task_questions > 0
 
         if question.session_id is not None:
             session = self.context.db.get(AgentSession, question.session_id)
             if session is not None:
-                session_exists = self.runtime.session_exists(session.session_name)
-                session.status = "running" if session_exists else "done"
+                remaining_session_questions = self.context.db.scalar(
+                    select(func.count(WaitingQuestion.id)).where(
+                        WaitingQuestion.session_id == question.session_id,
+                        WaitingQuestion.status == "open",
+                    )
+                ) or 0
+                if remaining_session_questions > 0:
+                    session.status = "waiting_human"
+                else:
+                    try:
+                        session_exists = self.runtime.session_exists(session.session_name)
+                    except Exception as exc:
+                        raise build_runtime_service_error(
+                            operation="session_status",
+                            exc=exc,
+                            details={"session_id": session.id, "session_name": session.session_name},
+                        ) from exc
+                    session.status = "running" if session_exists else "failed"
                 self.context.db.add(
                     SessionMessage(
                         session_id=session.id,
@@ -2160,18 +2344,16 @@ class WaitingService:
                     )
                 )
 
-        question.status = "answered"
-        self.context.db.flush()
         self.context.record_event(
             entity_type="waiting_question",
             entity_id=question.id,
-            event_type="waiting_question.answered",
+            event_type="waiting_question.closed",
             payload_json={"responder_name": payload.responder_name},
         )
         self.context.db.commit()
         self.context.db.refresh(question)
 
-        logger.info("💬 waiting question answered", question_id=question.id, responder=payload.responder_name)
+        logger.info("💬 waiting question closed", question_id=question.id, responder=payload.responder_name)
         return question
 
     def get_question_detail(self, question_id: str) -> WaitingQuestionDetail:
@@ -2277,18 +2459,22 @@ class RecoveryService:
                 select(AgentSession).where(AgentSession.status.in_(["running", "waiting_human", "blocked"]))
             )
         }
-        runtime_sessions = self.runtime.list_sessions(prefix="acp-")
+        try:
+            runtime_sessions = self.runtime.list_sessions(prefix="acp-")
+        except Exception as exc:
+            raise build_runtime_service_error(operation="runtime_reconcile", exc=exc) from exc
         runtime_session_names = {item.session_name for item in runtime_sessions}
         reconciled = 0
 
         for session_name, session in tracked_runtime_sessions.items():
             next_status = None
-            if session.status == "waiting_human" and session_name in runtime_session_names:
-                next_status = "waiting_human"
-            elif session_name in runtime_session_names:
-                next_status = "running"
+            if session_name in runtime_session_names:
+                next_status = SessionService(self.context, runtime=self.runtime)._runtime_session_status(
+                    session,
+                    exists=True,
+                )
             elif session.status != "cancelled":
-                next_status = "done"
+                next_status = "failed"
 
             if next_status is not None and session.status != next_status:
                 session.status = next_status

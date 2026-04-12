@@ -46,6 +46,7 @@ import {
   useProjectDetailQuery,
   useProjectsQuery,
   useQuestionDetailQuery,
+  useQuestionsQuery,
   useSearchQuery,
   useSessionTailQuery,
   useSessionTimelineQuery,
@@ -135,7 +136,7 @@ export function App() {
   const [draftCommentBody, setDraftCommentBody] = useState("");
   const [draftCheckSummary, setDraftCheckSummary] = useState("");
   const [draftCheckType] = useState("verification");
-  const [draftCheckStatus] = useState("passed");
+  const [draftCheckStatus, setDraftCheckStatus] = useState("pending");
   const [draftArtifactName, setDraftArtifactName] = useState("");
   const [draftArtifactType] = useState("log");
   const [draftArtifactUri, setDraftArtifactUri] = useState("");
@@ -184,6 +185,7 @@ export function App() {
   useLiveInvalidationSocket(invalidation.invalidateLiveUpdate);
 
   const projectDetailQuery = useProjectDetailQuery(selectedProjectId);
+  const questionsQuery = useQuestionsQuery(selectedProjectId);
 
   useEffect(() => {
     setSelectedRepositoryId(null);
@@ -204,13 +206,14 @@ export function App() {
   }, [projectDetailQuery.data?.repositories, selectedRepositoryId]);
 
   useEffect(() => {
-    const questions = projectDetailQuery.data?.waiting_questions ?? [];
+    const questions = questionsQuery.data ?? [];
     if (!selectedQuestionId && questions[0]) {
       setSelectedQuestionId(questions[0].id);
     }
-  }, [projectDetailQuery.data?.waiting_questions, selectedQuestionId]);
+  }, [questionsQuery.data, selectedQuestionId]);
 
   const {
+    bootstrapPreviewMutation,
     bootstrapProjectMutation,
     createTaskMutation,
     createSubtaskMutation,
@@ -707,7 +710,7 @@ export function App() {
                                       value={draftTaskTitle}
                                       onChange={(event) => setDraftTaskTitle(event.target.value)}
                                       placeholder={column.key === "backlog" ? "Add task" : "Add task title"}
-                                      className="hidden"
+                                      className="w-full rounded-[4px] border border-[color:var(--border)] px-3 py-2 text-sm"
                                     />
                                     <button
                                       type="button"
@@ -716,11 +719,12 @@ export function App() {
                                         selectedProjectId
                                           ? createTaskMutation.mutate({
                                               project_id: selectedProjectId,
-                                              title: draftTaskTitle || "New task",
+                                              title: draftTaskTitle,
                                               board_column_key: column.key,
                                             })
                                           : null
                                       }
+                                      disabled={!draftTaskTitle.trim() || createTaskMutation.isPending}
                                     >
                                       + Add task
                                     </button>
@@ -1019,25 +1023,46 @@ export function App() {
                                         </button>
                                       ) : null}
                                       {sessionTimelineQuery.data ? (
-                                        <button
-                                          onClick={() =>
-                                            createFollowUpSessionMutation.mutate({
-                                              sessionId:
-                                                sessionTimelineQuery.data.session.id,
-                                              profile:
-                                                sessionTimelineQuery.data.session
-                                                  .profile,
-                                              followUpType: "retry",
-                                            })
-                                          }
-                                          disabled={
-                                            createFollowUpSessionMutation.isPending
-                                          }
-                                          className="btn-secondary inline-flex items-center gap-2 !h-8 text-xs"
-                                        >
-                                          <GitFork className="h-3.5 w-3.5" />
-                                          Retry
-                                        </button>
+                                        <div className="flex flex-wrap gap-2">
+                                          {[
+                                            {
+                                              label: "Retry",
+                                              profile: sessionTimelineQuery.data.session.profile,
+                                              followUpType: "retry" as const,
+                                            },
+                                            {
+                                              label: "Review",
+                                              profile: "reviewer",
+                                              followUpType: "review" as const,
+                                            },
+                                            {
+                                              label: "Verify",
+                                              profile: "verifier",
+                                              followUpType: "verify" as const,
+                                            },
+                                            {
+                                              label: "Handoff",
+                                              profile: "executor",
+                                              followUpType: "handoff" as const,
+                                            },
+                                          ].map((followUp) => (
+                                            <button
+                                              key={followUp.label}
+                                              onClick={() =>
+                                                createFollowUpSessionMutation.mutate({
+                                                  sessionId: sessionTimelineQuery.data.session.id,
+                                                  profile: followUp.profile,
+                                                  followUpType: followUp.followUpType,
+                                                })
+                                              }
+                                              disabled={createFollowUpSessionMutation.isPending}
+                                              className="btn-secondary inline-flex items-center gap-2 !h-8 text-xs"
+                                            >
+                                              <GitFork className="h-3.5 w-3.5" />
+                                              {followUp.label}
+                                            </button>
+                                          ))}
+                                        </div>
                                       ) : null}
                                     </>
                                   }
@@ -1293,7 +1318,7 @@ export function App() {
               <div className="min-w-0 flex flex-col gap-6">
                 <WaitingSectionContainer
                   active={activeSection === "waiting"}
-                  questions={projectDetailQuery.data?.waiting_questions ?? []}
+                  questions={questionsQuery.data ?? []}
                   selectedQuestionId={selectedQuestionId}
                   questionDetail={questionDetailQuery.data}
                   sessions={projectDetailQuery.data?.sessions ?? []}
@@ -1333,10 +1358,18 @@ export function App() {
             title="New Project"
           >
             <ProjectBootstrapWizard
-              isPending={bootstrapProjectMutation.isPending}
-              errorMessage={bootstrapProjectMutation.error instanceof Error ? bootstrapProjectMutation.error.message : undefined}
+              isPreviewPending={bootstrapPreviewMutation.isPending}
+              isConfirmPending={bootstrapProjectMutation.isPending}
+              errorMessage={
+                bootstrapProjectMutation.error instanceof Error
+                  ? bootstrapProjectMutation.error.message
+                  : bootstrapPreviewMutation.error instanceof Error
+                    ? bootstrapPreviewMutation.error.message
+                    : undefined
+              }
               result={bootstrapProjectMutation.data as never}
-              onSubmit={(payload) => bootstrapProjectMutation.mutate(payload)}
+              onPreview={bootstrapPreviewMutation.mutateAsync}
+              onConfirm={bootstrapProjectMutation.mutateAsync}
             />
           </DialogFrame>
         </>
@@ -1367,9 +1400,31 @@ export function App() {
                         </button>
                       </DropdownMenu.Trigger>
                       <DropdownMenu.Content className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-1 shadow-[var(--shadow-panel)]">
-                        <DropdownMenu.Item className="rounded px-2 py-1.5 text-sm outline-none">
-                          Task actions
-                        </DropdownMenu.Item>
+                        {taskDetailQuery.data.workflow_state !== "cancelled" ? (
+                          <DropdownMenu.Item
+                            className="rounded px-2 py-1.5 text-sm outline-none"
+                            onSelect={() =>
+                              patchTaskMutation.mutate({
+                                taskId: taskDetailQuery.data.id,
+                                workflowState: "cancelled",
+                              })
+                            }
+                          >
+                            Cancel task
+                          </DropdownMenu.Item>
+                        ) : (
+                          <DropdownMenu.Item
+                            className="rounded px-2 py-1.5 text-sm outline-none"
+                            onSelect={() =>
+                              patchTaskMutation.mutate({
+                                taskId: taskDetailQuery.data.id,
+                                workflowState: "backlog",
+                              })
+                            }
+                          >
+                            Reopen to backlog
+                          </DropdownMenu.Item>
+                        )}
                       </DropdownMenu.Content>
                     </DropdownMenu.Root>
                   </div>
@@ -1397,7 +1452,6 @@ export function App() {
                               onSelect={() =>
                                 patchTaskMutation.mutate({
                                   taskId: taskDetailQuery.data.id,
-                                  workflowState: column.key,
                                   boardColumnId: column.id,
                                 })
                               }
@@ -1549,6 +1603,17 @@ export function App() {
                           <div className="text-[color:var(--text-muted)]">{check.summary}</div>
                         </div>
                       ))}
+                      <select
+                        value={draftCheckStatus}
+                        onChange={(event) => setDraftCheckStatus(event.target.value)}
+                        className="w-full rounded-[4px] border border-[color:var(--border)] px-3 py-2 text-sm"
+                      >
+                        {["pending", "passed", "failed", "warning"].map((status) => (
+                          <option key={status} value={status}>
+                            {toDisplay(status)}
+                          </option>
+                        ))}
+                      </select>
                       <input
                         value={draftCheckSummary}
                         onChange={(event) => setDraftCheckSummary(event.target.value)}

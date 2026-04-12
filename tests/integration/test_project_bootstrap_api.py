@@ -72,6 +72,23 @@ def test_bootstrap_existing_repo_in_repo_mode(tmp_path: Path) -> None:
 
     try:
         with TestClient(app) as client:
+            preview_response = client.post(
+                "/api/v1/projects/bootstrap/preview",
+                json={
+                    "name": "Bootstrap Existing Repo",
+                    "repo_path": str(repo_path),
+                    "stack_preset": "node-library",
+                    "initial_prompt": "Plan the initial roadmap and create ACP tasks.",
+                },
+            )
+            assert preview_response.status_code == 200
+            preview = preview_response.json()
+            assert preview["confirmation_required"] is True
+            assert preview["has_existing_commits"] is True
+            assert not (repo_path / ".gitignore").exists()
+            assert not (repo_path / ".acp").exists()
+            assert "<!-- acp-managed:start -->" not in (repo_path / "AGENTS.md").read_text(encoding="utf-8")
+
             response = client.post(
                 "/api/v1/projects/bootstrap",
                 json={
@@ -79,6 +96,7 @@ def test_bootstrap_existing_repo_in_repo_mode(tmp_path: Path) -> None:
                     "repo_path": str(repo_path),
                     "stack_preset": "node-library",
                     "initial_prompt": "Plan the initial roadmap and create ACP tasks.",
+                    "confirm_existing_repo": True,
                 },
             )
             assert response.status_code == 201
@@ -110,6 +128,19 @@ def test_bootstrap_existing_repo_with_worktree(tmp_path: Path) -> None:
 
     try:
         with TestClient(app) as client:
+            preview_response = client.post(
+                "/api/v1/projects/bootstrap/preview",
+                json={
+                    "name": "Bootstrap Worktree Repo",
+                    "repo_path": str(repo_path),
+                    "stack_preset": "react-vite",
+                    "initial_prompt": "Break the initial work into tasks and subtasks.",
+                    "use_worktree": True,
+                },
+            )
+            assert preview_response.status_code == 200
+            assert preview_response.json()["confirmation_required"] is True
+
             response = client.post(
                 "/api/v1/projects/bootstrap",
                 json={
@@ -118,6 +149,7 @@ def test_bootstrap_existing_repo_with_worktree(tmp_path: Path) -> None:
                     "stack_preset": "react-vite",
                     "initial_prompt": "Break the initial work into tasks and subtasks.",
                     "use_worktree": True,
+                    "confirm_existing_repo": True,
                 },
             )
             assert response.status_code == 201
@@ -258,10 +290,13 @@ def test_bootstrap_surfaces_runtime_adapter_failure(tmp_path: Path) -> None:
                     "repo_path": str(repo_path),
                     "stack_preset": "node-library",
                     "initial_prompt": "Create the first tasks.",
+                    "confirm_existing_repo": True,
                 },
             )
-            assert response.status_code == 500
-            assert response.text == "Internal Server Error"
+            assert response.status_code == 502
+            payload = response.json()
+            assert payload["error"]["code"] == "runtime_adapter_failure"
+            assert payload["error"]["details"]["operation"] == "session_spawn"
     finally:
         app.dependency_overrides.clear()
 
@@ -276,7 +311,7 @@ def test_bootstrap_rejects_detached_head_in_repo_mode(tmp_path: Path) -> None:
     try:
         with TestClient(app) as client:
             response = client.post(
-                "/api/v1/projects/bootstrap",
+                "/api/v1/projects/bootstrap/preview",
                 json={
                     "name": "Detached Repo",
                     "repo_path": str(repo_path),
@@ -286,5 +321,27 @@ def test_bootstrap_rejects_detached_head_in_repo_mode(tmp_path: Path) -> None:
             )
             assert response.status_code == 400
             assert "detached HEAD" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_bootstrap_existing_repo_requires_explicit_confirmation(tmp_path: Path) -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+    repo_path = create_git_repo(tmp_path / "confirm-repo")
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/projects/bootstrap",
+                json={
+                    "name": "Needs Confirm",
+                    "repo_path": str(repo_path),
+                    "stack_preset": "node-library",
+                    "initial_prompt": "Plan the work.",
+                },
+            )
+            assert response.status_code == 400
+            assert "preview confirmation" in response.json()["detail"]
     finally:
         app.dependency_overrides.clear()

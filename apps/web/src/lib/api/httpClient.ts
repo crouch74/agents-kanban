@@ -14,20 +14,52 @@ export const WS_BASE =
   API_BASE.replace(/^http:\/\//u, "ws://").replace(/^https:\/\//u, "wss://") +
     "/ws";
 
+export class ApiError extends Error {
+  code?: string;
+  details?: Record<string, unknown>;
+  retryable?: boolean;
+  status: number;
+
+  constructor(message: string, status: number, options?: { code?: string; details?: Record<string, unknown>; retryable?: boolean }) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = options?.code;
+    this.details = options?.details;
+    this.retryable = options?.retryable;
+  }
+}
+
 async function readError(response: Response): Promise<Error> {
   try {
-    const payload = (await response.json()) as { detail?: string; message?: string };
+    const payload = (await response.json()) as {
+      detail?: string;
+      message?: string;
+      error?: {
+        code?: string;
+        message?: string;
+        details?: Record<string, unknown>;
+        retryable?: boolean;
+      };
+    };
+    if (payload.error?.message) {
+      return new ApiError(payload.error.message, response.status, {
+        code: payload.error.code,
+        details: payload.error.details,
+        retryable: payload.error.retryable,
+      });
+    }
     if (payload.detail) {
-      return new Error(payload.detail);
+      return new ApiError(payload.detail, response.status);
     }
     if (payload.message) {
-      return new Error(payload.message);
+      return new ApiError(payload.message, response.status);
     }
   } catch {
     // Ignore JSON parsing issues and fall through.
   }
 
-  return new Error(`Request failed: ${response.status}`);
+  return new ApiError(`Request failed: ${response.status}`, response.status);
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {

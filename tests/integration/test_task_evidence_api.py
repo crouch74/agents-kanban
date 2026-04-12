@@ -115,3 +115,16 @@ def test_task_evidence_write_routes_reject_invalid_payloads_and_missing_foreign_
         )
         assert missing_foreign_key_dependency.status_code == 400
         assert missing_foreign_key_dependency.json() == {"detail": "Task not found"}
+
+
+def test_task_check_defaults_to_pending_when_status_is_omitted() -> None:
+    with TestClient(app) as client:
+        project_id = client.post("/api/v1/projects", json={"name": "Default Check Status"}).json()["id"]
+        task_id = client.post("/api/v1/tasks", json={"project_id": project_id, "title": "Check me"}).json()["id"]
+
+        check_response = client.post(
+            f"/api/v1/tasks/{task_id}/checks",
+            json={"check_type": "verification", "summary": "Needs review"},
+        )
+        assert check_response.status_code == 201
+        assert check_response.json()["status"] == "pending"

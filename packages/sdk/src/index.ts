@@ -97,6 +97,26 @@ export interface WaitingQuestionSummary {
   updated_at?: string;
 }
 
+export interface ProjectBootstrapPlannedChange {
+  path: string;
+  action: "create" | "create_or_update" | "append_line" | "scaffold";
+  description: string;
+}
+
+export interface ProjectBootstrapPreview {
+  repo_path: string;
+  stack_preset: StackPreset;
+  stack_notes?: string | null;
+  use_worktree: boolean;
+  repo_initialized_on_confirm: boolean;
+  scaffold_applied_on_confirm: boolean;
+  has_existing_commits: boolean;
+  confirmation_required: boolean;
+  execution_path: string;
+  execution_branch: string;
+  planned_changes: ProjectBootstrapPlannedChange[];
+}
+
 export interface ProjectBootstrapResult {
   project: ProjectSummary;
   repository: RepositorySummary;

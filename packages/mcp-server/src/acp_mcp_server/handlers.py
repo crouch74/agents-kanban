@@ -278,6 +278,7 @@ def project_bootstrap(
     initialize_repo: bool = False,
     stack_notes: str | None = None,
     use_worktree: bool = False,
+    confirm_existing_repo: bool = False,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
     return _run_idempotent_write(
@@ -293,6 +294,7 @@ def project_bootstrap(
                 stack_notes=stack_notes,
                 initial_prompt=initial_prompt,
                 use_worktree=use_worktree,
+                confirm_existing_repo=confirm_existing_repo,
             )
         ),
         serialize_fn=lambda _context, result: result.model_dump(),

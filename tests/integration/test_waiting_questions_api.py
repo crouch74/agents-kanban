@@ -126,7 +126,7 @@ def test_waiting_question_blocks_and_resumes_session(tmp_path: Path) -> None:
                 json={"responder_name": "operator", "body": "Use the lower-risk path and document the tradeoff."},
             )
             assert answer_response.status_code == 200
-            assert answer_response.json()["status"] == "answered"
+            assert answer_response.json()["status"] == "closed"
             assert len(answer_response.json()["replies"]) == 1
 
             session_after_response = client.get(f"/api/v1/sessions/{session_id}")
@@ -180,7 +180,70 @@ def test_waiting_question_reply_surfaces_runtime_adapter_failure(tmp_path: Path)
                 f"/api/v1/questions/{question_id}/replies",
                 json={"responder_name": "operator", "body": "Proceed with plan A."},
             )
-            assert reply_response.status_code == 500
-            assert reply_response.text == "Internal Server Error"
+            assert reply_response.status_code == 502
+            payload = reply_response.json()
+            assert payload["error"]["code"] == "runtime_adapter_failure"
+            assert payload["error"]["details"]["operation"] == "session_status"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_waiting_question_reply_keeps_waiting_until_last_open_question(tmp_path: Path) -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+    repo_path = create_git_repo(tmp_path / "multi-question-repo")
+
+    try:
+        with TestClient(app) as client:
+            project_id = client.post("/api/v1/projects", json={"name": "Multi Question Ops"}).json()["id"]
+            repository_id = client.post(
+                "/api/v1/repositories",
+                json={"project_id": project_id, "local_path": str(repo_path)},
+            ).json()["id"]
+            task_id = client.post(
+                "/api/v1/tasks",
+                json={"project_id": project_id, "title": "Need multiple answers", "board_column_key": "in_progress"},
+            ).json()["id"]
+            worktree_id = client.post(
+                "/api/v1/worktrees",
+                json={"repository_id": repository_id, "task_id": task_id},
+            ).json()["id"]
+            session_id = client.post(
+                "/api/v1/sessions",
+                json={"task_id": task_id, "profile": "executor", "worktree_id": worktree_id},
+            ).json()["id"]
+
+            first_question = client.post(
+                "/api/v1/questions",
+                json={"task_id": task_id, "session_id": session_id, "prompt": "First question?"},
+            ).json()
+            second_question = client.post(
+                "/api/v1/questions",
+                json={"task_id": task_id, "session_id": session_id, "prompt": "Second question?"},
+            ).json()
+
+            first_reply = client.post(
+                f"/api/v1/questions/{first_question['id']}/replies",
+                json={"responder_name": "operator", "body": "Answer the first one."},
+            )
+            assert first_reply.status_code == 200
+            assert first_reply.json()["status"] == "closed"
+
+            task_mid = client.get(f"/api/v1/tasks/{task_id}").json()
+            session_mid = client.get(f"/api/v1/sessions/{session_id}").json()
+            assert task_mid["waiting_for_human"] is True
+            assert session_mid["status"] == "waiting_human"
+
+            second_reply = client.post(
+                f"/api/v1/questions/{second_question['id']}/replies",
+                json={"responder_name": "operator", "body": "Answer the second one."},
+            )
+            assert second_reply.status_code == 200
+            assert second_reply.json()["status"] == "closed"
+
+            task_after = client.get(f"/api/v1/tasks/{task_id}").json()
+            session_after = client.get(f"/api/v1/sessions/{session_id}").json()
+            assert task_after["waiting_for_human"] is False
+            assert session_after["status"] == "running"
     finally:
         app.dependency_overrides.clear()

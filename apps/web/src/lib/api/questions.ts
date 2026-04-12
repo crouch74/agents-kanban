@@ -2,6 +2,18 @@ import type { WaitingQuestionSummary } from "@acp/sdk";
 import { fetchJson, postJson } from "./httpClient";
 import type { WaitingQuestionDetail } from "./types";
 
+export function getQuestions(params?: { projectId?: string; status?: string }) {
+  const search = new URLSearchParams();
+  if (params?.projectId) {
+    search.set("project_id", params.projectId);
+  }
+  if (params?.status) {
+    search.set("status", params.status);
+  }
+  const suffix = search.size ? `?${search.toString()}` : "";
+  return fetchJson<WaitingQuestionSummary[]>(`/questions${suffix}`);
+}
+
 /**
  * Purpose: Call `createQuestion` API endpoint.
  * Parameters: See function signature payload/query fields.

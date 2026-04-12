@@ -40,6 +40,7 @@ class ProjectBootstrapCreate(BaseModel):
     stack_notes: str | None = None
     initial_prompt: str = Field(min_length=3)
     use_worktree: bool = False
+    confirm_existing_repo: bool = False
 
 
 class RepositoryCreate(BaseModel):
@@ -373,6 +374,26 @@ class ProjectOverview(BaseModel):
     waiting_questions: list[WaitingQuestionRead]
 
 
+class ProjectBootstrapPlannedChange(BaseModel):
+    path: str
+    action: Literal["create", "create_or_update", "append_line", "scaffold"]
+    description: str
+
+
+class ProjectBootstrapPreviewRead(BaseModel):
+    repo_path: str
+    stack_preset: StackPreset
+    stack_notes: str | None
+    use_worktree: bool
+    repo_initialized_on_confirm: bool
+    scaffold_applied_on_confirm: bool
+    has_existing_commits: bool
+    confirmation_required: bool
+    execution_path: str
+    execution_branch: str
+    planned_changes: list[ProjectBootstrapPlannedChange]
+
+
 class ProjectBootstrapRead(BaseModel):
     project: ProjectSummary
     repository: RepositoryRead
@@ -448,3 +469,14 @@ class DashboardRead(BaseModel):
     waiting_count: int
     blocked_count: int
     running_sessions: int
+
+
+class ApiErrorDetail(BaseModel):
+    code: str
+    message: str
+    details: dict[str, Any] | None = None
+    retryable: bool | None = None
+
+
+class ApiErrorEnvelope(BaseModel):
+    error: ApiErrorDetail

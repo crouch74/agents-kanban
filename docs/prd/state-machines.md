@@ -63,22 +63,24 @@ Observed transitions:
 Practical reconciliation behavior:
 
 - startup reconciliation maps tracked sessions back to `running`,
-  `waiting_human`, or `done` based on tmux presence
+  `waiting_human`, `blocked`, or `failed` based on tmux presence
 - terminal status alone is not trusted; persisted state is refreshed through the
   service layer
 
 ## Waiting Question Workflow
 
-- `open -> answered`
-- `answered -> closed`
+- `open -> closed`
 - `open -> dismissed`
 
 Important coupling:
 
 - opening a question marks the task `waiting_for_human`
 - if linked to a running session, that session moves to `waiting_human`
-- answering a question can resume the linked session if its runtime still
-  exists
+- replying to a question closes it immediately
+- linked tasks and sessions only leave waiting mode once no other open
+  questions remain for the same task/session
+- closing the last linked question resumes the session if its runtime still
+  exists; otherwise the session becomes `failed`
 
 ## Worktree Workflow
 

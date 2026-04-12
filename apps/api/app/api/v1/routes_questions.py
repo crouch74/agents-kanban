@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from app.api.errors import RUNTIME_ERROR_RESPONSES
 from acp_core.schemas import (
     HumanReplyCreate,
     WaitingQuestionCreate,
@@ -87,7 +88,7 @@ def get_question(question_id: str, service=Depends(get_waiting_service)) -> Wait
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("/questions/{question_id}/replies", response_model=WaitingQuestionDetail)
+@router.post("/questions/{question_id}/replies", response_model=WaitingQuestionDetail, responses=RUNTIME_ERROR_RESPONSES)
 def answer_question(
     question_id: str,
     payload: HumanReplyCreate,
@@ -114,7 +115,7 @@ def answer_question(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     broadcast_change(
         request,
-        event_type="waiting_question.answered",
+        event_type="waiting_question.closed",
         entity_type="waiting_question",
         entity_id=response.id,
         project_id=response.project_id,

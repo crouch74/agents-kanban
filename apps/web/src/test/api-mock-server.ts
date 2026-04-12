@@ -57,6 +57,7 @@ addRoute('GET', '/api/v1/diagnostics', () =>
 );
 
 addRoute('GET', '/api/v1/projects', () => Response.json([]));
+addRoute('GET', '/api/v1/questions', () => Response.json([]));
 
 addRoute('GET', '/api/v1/search', (request) => {
   const url = new URL(request.url);
@@ -81,6 +82,22 @@ addRoute('GET', '/api/v1/search', (request) => {
     ],
   });
 });
+
+addRoute('POST', '/api/v1/projects/bootstrap/preview', () =>
+  Response.json({
+    repo_path: '/tmp/demo-repo',
+    stack_preset: 'nextjs',
+    stack_notes: 'demo notes',
+    use_worktree: false,
+    repo_initialized_on_confirm: true,
+    scaffold_applied_on_confirm: true,
+    has_existing_commits: false,
+    confirmation_required: false,
+    execution_path: '/tmp/demo-repo',
+    execution_branch: 'main',
+    planned_changes: [],
+  }),
+);
 
 addRoute('POST', '/api/v1/projects/bootstrap', () =>
   Response.json({

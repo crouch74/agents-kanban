@@ -90,7 +90,7 @@ def test_recovery_reconciles_missing_runtime_and_reports_orphans(tmp_path: Path)
 
             report = RecoveryService(ServiceContext(db=db, actor_type="system", actor_name="test"), runtime=fake_runtime).reconcile_runtime_sessions()
             db.refresh(session)
-            assert session.status == "done"
+            assert session.status == "failed"
             assert report["reconciled_session_count"] >= 1
             assert report["orphan_runtime_session_count"] == 1
             assert report["orphan_runtime_sessions"] == ["acp-orphan-demo"]

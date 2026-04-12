@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import type { ProjectBootstrapResult, StackPreset } from "@acp/sdk";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import type { ProjectBootstrapPreview, ProjectBootstrapResult, StackPreset } from "@acp/sdk";
 import { ArrowRight, CheckCircle2, GitBranch, TerminalSquare } from "lucide-react";
 import { Badge, Button, Input, Select, Textarea } from "@/components/primitives";
 
@@ -23,15 +23,19 @@ type BootstrapPayload = {
 };
 
 export function ProjectBootstrapWizard({
-  isPending,
+  isPreviewPending,
+  isConfirmPending,
   errorMessage,
   result,
-  onSubmit,
+  onPreview,
+  onConfirm,
 }: {
-  isPending: boolean;
+  isPreviewPending: boolean;
+  isConfirmPending: boolean;
   errorMessage?: string;
   result?: ProjectBootstrapResult;
-  onSubmit: (payload: BootstrapPayload) => void;
+  onPreview: (payload: BootstrapPayload) => Promise<ProjectBootstrapPreview>;
+  onConfirm: (payload: BootstrapPayload & { confirm_existing_repo?: boolean }) => Promise<ProjectBootstrapResult>;
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -41,10 +45,11 @@ export function ProjectBootstrapWizard({
   const [stackNotes, setStackNotes] = useState("");
   const [initialPrompt, setInitialPrompt] = useState("");
   const [useWorktree, setUseWorktree] = useState(false);
+  const [preview, setPreview] = useState<ProjectBootstrapPreview | null>(null);
+  const [previewSignature, setPreviewSignature] = useState<string | null>(null);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onSubmit({
+  const payload = useMemo(
+    () => ({
       name,
       description: description || undefined,
       repo_path: repoPath,
@@ -53,7 +58,31 @@ export function ProjectBootstrapWizard({
       stack_notes: stackNotes || undefined,
       initial_prompt: initialPrompt,
       use_worktree: useWorktree,
-    });
+    }),
+    [description, initialPrompt, initializeRepo, name, repoPath, stackNotes, stackPreset, useWorktree],
+  );
+  const payloadSignature = useMemo(() => JSON.stringify(payload), [payload]);
+  const awaitingConfirmation = Boolean(preview?.confirmation_required && previewSignature === payloadSignature);
+
+  useEffect(() => {
+    if (result) {
+      setPreview(null);
+      setPreviewSignature(null);
+    }
+  }, [result]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (awaitingConfirmation) {
+      await onConfirm({ ...payload, confirm_existing_repo: true });
+      return;
+    }
+    const nextPreview = await onPreview(payload);
+    setPreview(nextPreview);
+    setPreviewSignature(payloadSignature);
+    if (!nextPreview.confirmation_required) {
+      await onConfirm(payload);
+    }
   }
 
   return (
@@ -128,13 +157,41 @@ export function ProjectBootstrapWizard({
         </div>
       ) : null}
 
+      {preview?.confirmation_required ? (
+        <div className="rounded-[6px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+          <div className="font-semibold">Review planned repo changes before kickoff</div>
+          <div className="mt-2 text-[color:inherit]">
+            ACP detected an existing repository and will only proceed after explicit confirmation.
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Badge variant="info">{preview.use_worktree ? "worktree kickoff" : "repo kickoff"}</Badge>
+            {preview.repo_initialized_on_confirm ? <Badge variant="info">git init on confirm</Badge> : null}
+            {preview.scaffold_applied_on_confirm ? <Badge variant="info">starter scaffold on confirm</Badge> : null}
+          </div>
+          <div className="mt-3 space-y-2">
+            {preview.planned_changes.map((change) => (
+              <div key={`${change.path}:${change.action}`} className="rounded-[4px] border border-amber-200 bg-white/70 px-3 py-2">
+                <div className="font-medium">{change.path}</div>
+                <div className="text-xs uppercase tracking-[0.12em] text-amber-700">{change.action.replaceAll("_", " ")}</div>
+                <div className="mt-1 text-sm">{change.description}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex items-center gap-2 text-xs text-amber-800">
+            <GitBranch className="h-3.5 w-3.5" />
+            {preview.execution_branch}
+          </div>
+          <div className="mt-1 break-all text-xs text-amber-800">{preview.execution_path}</div>
+        </div>
+      ) : null}
+
       <div className="flex items-center justify-end gap-2">
         <Button
           type="submit"
           variant="primary"
-          disabled={!name.trim() || !repoPath.trim() || !initialPrompt.trim() || isPending}
+          disabled={!name.trim() || !repoPath.trim() || !initialPrompt.trim() || isPreviewPending || isConfirmPending}
         >
-          Launch bootstrap
+          {awaitingConfirmation ? "Confirm + launch bootstrap" : "Review bootstrap"}
           <ArrowRight className="h-4 w-4" />
         </Button>
       </div>

@@ -80,6 +80,7 @@ def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path:
         repo_path=str(repo_path.resolve()),
         stack_preset="python-package",
         initial_prompt="Plan the first project tasks.",
+        confirm_existing_repo=True,
         client_request_id="bootstrap-1",
     )
     assert bootstrap["kickoff_session"]["status"] == "running"
@@ -88,6 +89,7 @@ def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path:
         repo_path=str(repo_path.resolve()),
         stack_preset="python-package",
         initial_prompt="Plan the first project tasks.",
+        confirm_existing_repo=True,
         client_request_id="bootstrap-1",
     )
     assert bootstrap_replayed["project"]["id"] == bootstrap["project"]["id"]
@@ -251,7 +253,7 @@ def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path:
 
     worktree = handlers.worktree_create(
         repository_id=bootstrap["repository"]["id"],
-        task_id=task_id,
+        task_id=bootstrap["kickoff_task"]["id"],
         label="handler-test",
         client_request_id="worktree-1",
     )
@@ -273,7 +275,7 @@ def test_mcp_handlers_expose_core_control_plane_workflows(monkeypatch, tmp_path:
     )
     worktree_replayed = handlers.worktree_create(
         repository_id=bootstrap["repository"]["id"],
-        task_id=task_id,
+        task_id=bootstrap["kickoff_task"]["id"],
         label="handler-test",
         client_request_id="worktree-1",
     )

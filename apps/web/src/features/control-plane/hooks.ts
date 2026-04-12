@@ -4,8 +4,9 @@ import {
   bootstrapProject,
   getProject,
   getProjects,
+  previewBootstrapProject,
 } from "@/lib/api/projects";
-import { answerQuestion, createQuestion, getQuestion } from "@/lib/api/questions";
+import { answerQuestion, createQuestion, getQuestion, getQuestions } from "@/lib/api/questions";
 import { createRepository } from "@/lib/api/repositories";
 import {
   cancelSession,
@@ -75,6 +76,12 @@ export const useDiagnosticsQuery = () => useQuery({ queryKey: controlPlaneQueryK
 export const useProjectsQuery = () => useQuery({ queryKey: controlPlaneQueryKeys.projects, queryFn: getProjects });
 export const useProjectDetailQuery = (projectId: string | null) =>
   useQuery({ queryKey: controlPlaneQueryKeys.project(projectId), queryFn: () => getProject(projectId!), enabled: Boolean(projectId) });
+export const useQuestionsQuery = (projectId: string | null, status: string | null = null) =>
+  useQuery({
+    queryKey: controlPlaneQueryKeys.questions(projectId, status),
+    queryFn: () => getQuestions({ projectId: projectId ?? undefined, status: status ?? undefined }),
+    enabled: Boolean(projectId),
+  });
 export const useEventsQuery = (projectId: string | null) =>
   useQuery({ queryKey: controlPlaneQueryKeys.events(projectId), queryFn: () => getEvents({ projectId: projectId ?? undefined, limit: 18 }) });
 export const useSearchQuery = (deferredSearch: string, projectId?: string | null) =>
@@ -106,6 +113,9 @@ type MutationHookOptions<TData, TVars> = Omit<UseMutationOptions<TData, Error, T
 
 export const useBootstrapProjectMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof bootstrapProject>>, Parameters<typeof bootstrapProject>[0]>) =>
   useMutation({ mutationFn: bootstrapProject, ...options });
+export const useBootstrapProjectPreviewMutation = (
+  options?: MutationHookOptions<Awaited<ReturnType<typeof previewBootstrapProject>>, Parameters<typeof previewBootstrapProject>[0]>,
+) => useMutation({ mutationFn: previewBootstrapProject, ...options });
 export const useCreateTaskMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof createTask>>, Parameters<typeof createTask>[0]>) =>
   useMutation({ mutationFn: createTask, ...options });
 export const usePatchTaskMutation = (

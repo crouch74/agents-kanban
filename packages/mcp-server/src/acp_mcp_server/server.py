@@ -47,6 +47,7 @@ def project_bootstrap(
     initialize_repo: bool = False,
     stack_notes: str | None = None,
     use_worktree: bool = False,
+    confirm_existing_repo: bool = False,
     client_request_id: str | None = None,
 ) -> dict:
     """Create a project, prepare the repository, and launch the kickoff session."""
@@ -59,6 +60,7 @@ def project_bootstrap(
         initialize_repo,
         stack_notes,
         use_worktree,
+        confirm_existing_repo,
         client_request_id,
     )
 

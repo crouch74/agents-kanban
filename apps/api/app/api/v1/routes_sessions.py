@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from acp_core.schemas import AgentSessionCreate, AgentSessionFollowUpCreate, AgentSessionRead, SessionTailRead, SessionTimelineRead
+from app.api.errors import RUNTIME_ERROR_RESPONSES
 from app.api.ws.events import broadcast_change
 from app.bootstrap.dependencies import get_session_service
 
@@ -32,7 +33,7 @@ def list_sessions(
     ]
 
 
-@router.post("/sessions", response_model=AgentSessionRead, status_code=201)
+@router.post("/sessions", response_model=AgentSessionRead, status_code=201, responses=RUNTIME_ERROR_RESPONSES)
 def spawn_session(payload: AgentSessionCreate, request: Request, service=Depends(get_session_service)) -> AgentSessionRead:
     """Handle spawn session requests.
 
@@ -63,7 +64,7 @@ def spawn_session(payload: AgentSessionCreate, request: Request, service=Depends
     return response
 
 
-@router.post("/sessions/{session_id}/follow-up", response_model=AgentSessionRead, status_code=201)
+@router.post("/sessions/{session_id}/follow-up", response_model=AgentSessionRead, status_code=201, responses=RUNTIME_ERROR_RESPONSES)
 def spawn_follow_up_session(
     session_id: str,
     payload: AgentSessionFollowUpCreate,
@@ -101,7 +102,7 @@ def spawn_follow_up_session(
     return response
 
 
-@router.get("/sessions/{session_id}", response_model=AgentSessionRead)
+@router.get("/sessions/{session_id}", response_model=AgentSessionRead, responses=RUNTIME_ERROR_RESPONSES)
 def get_session(session_id: str, service=Depends(get_session_service)) -> AgentSessionRead:
     """Handle get session requests.
 
@@ -121,7 +122,7 @@ def get_session(session_id: str, service=Depends(get_session_service)) -> AgentS
     return AgentSessionRead.model_validate(session)
 
 
-@router.get("/sessions/{session_id}/tail", response_model=SessionTailRead)
+@router.get("/sessions/{session_id}/tail", response_model=SessionTailRead, responses=RUNTIME_ERROR_RESPONSES)
 def tail_session(
     session_id: str,
     lines: int = Query(default=80, ge=1, le=400),
@@ -144,7 +145,7 @@ def tail_session(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.get("/sessions/{session_id}/timeline", response_model=SessionTimelineRead)
+@router.get("/sessions/{session_id}/timeline", response_model=SessionTimelineRead, responses=RUNTIME_ERROR_RESPONSES)
 def session_timeline(session_id: str, service=Depends(get_session_service)) -> SessionTimelineRead:
     """Handle session timeline requests.
 
@@ -163,7 +164,7 @@ def session_timeline(session_id: str, service=Depends(get_session_service)) -> S
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("/sessions/{session_id}/cancel", response_model=AgentSessionRead)
+@router.post("/sessions/{session_id}/cancel", response_model=AgentSessionRead, responses=RUNTIME_ERROR_RESPONSES)
 def cancel_session(session_id: str, request: Request, service=Depends(get_session_service)) -> AgentSessionRead:
     """Handle cancel session requests.
 

@@ -15,6 +15,7 @@ the shared domain services in `packages/core`.
 
 - `GET /projects`
 - `POST /projects`
+- `POST /projects/bootstrap/preview`
 - `POST /projects/bootstrap`
 - `GET /projects/{project_id}`
 - `GET /projects/{project_id}/board`
@@ -28,10 +29,15 @@ the shared domain services in `packages/core`.
 - sessions
 - open waiting questions
 
+`POST /projects/bootstrap/preview` inspects the target repository and returns a
+non-mutating preview for bootstrap, including ACP-managed file changes and the
+planned kickoff execution target.
+
 `POST /projects/bootstrap` creates the project, prepares the repository,
-creates a kickoff planning task, and starts the kickoff session. Default
-execution stays on the repository's current branch; kickoff worktrees are
-optional.
+creates a kickoff planning task, and starts the kickoff session. Existing
+repositories with commits require explicit confirmation via
+`confirm_existing_repo=true`. Default execution stays on the repository's
+current branch; kickoff worktrees are optional.
 
 ## Tasks
 
@@ -51,6 +57,10 @@ Notes:
 - subtasks are created through `POST /tasks` using `parent_task_id`
 - patching a task can update title, description, workflow/column, blocked
   reason, and waiting flag
+- `board_column_id` is authoritative for board-driven moves and may skip
+  intermediate workflow states while still enforcing the `done` readiness gate
+- explicit workflow-state transitions still follow the canonical adjacency rules
+- cancelled tasks can reopen to `backlog`
 
 ## Repositories and Worktrees
 
@@ -85,6 +95,12 @@ Notes:
 - `POST /questions`
 - `GET /questions/{question_id}`
 - `POST /questions/{question_id}/replies`
+
+Notes:
+
+- replies close questions immediately
+- question history is fetched through `GET /questions` with status filtering
+  rather than only through project-overview open-question snapshots
 
 ## Search and Events
 

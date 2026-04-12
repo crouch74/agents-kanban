@@ -27,7 +27,7 @@ test('submits the project bootstrap wizard and shows kickoff summary details', a
     },
   );
 
-  fireEvent.click(screen.getByRole('button', { name: /launch bootstrap/i }));
+  fireEvent.click(screen.getByRole('button', { name: /review bootstrap/i }));
 
   await waitFor(() => {
     expect(screen.getByText('Bootstrap Demo is ready')).toBeInTheDocument();

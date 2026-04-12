@@ -1,4 +1,4 @@
-import type { ProjectBootstrapResult, ProjectSummary, StackPreset } from "@acp/sdk";
+import type { ProjectBootstrapPreview, ProjectBootstrapResult, ProjectSummary, StackPreset } from "@acp/sdk";
 import { fetchJson, postJson } from "./httpClient";
 import type { ProjectOverview } from "./types";
 
@@ -37,8 +37,22 @@ export function bootstrapProject(payload: {
   stack_notes?: string;
   initial_prompt: string;
   use_worktree?: boolean;
+  confirm_existing_repo?: boolean;
 }) {
   return postJson<ProjectBootstrapResult>("/projects/bootstrap", payload);
+}
+
+export function previewBootstrapProject(payload: {
+  name: string;
+  description?: string;
+  repo_path: string;
+  initialize_repo?: boolean;
+  stack_preset: StackPreset;
+  stack_notes?: string;
+  initial_prompt: string;
+  use_worktree?: boolean;
+}) {
+  return postJson<ProjectBootstrapPreview>("/projects/bootstrap/preview", payload);
 }
 
 /**

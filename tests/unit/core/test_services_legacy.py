@@ -135,7 +135,7 @@ def test_open_question_applies_waiting_overlay_to_task_and_session(
 
 @pytest.mark.parametrize(
     ("session_exists", "expected_status"),
-    [(True, "running"), (False, "done")],
+    [(True, "running"), (False, "failed")],
 )
 def test_answer_question_clears_waiting_overlay_and_refreshes_session_status(
     service_context: ServiceContext,
@@ -185,10 +185,62 @@ def test_answer_question_clears_waiting_overlay_and_refreshes_session_status(
         HumanReplyCreate(responder_name="Operator", body="Use staging."),
     )
 
-    assert answered.status == "answered"
+    assert answered.status == "closed"
     assert task.waiting_for_human is False
     assert session.status == expected_status
     service_context.db.commit.assert_called_once()
+
+
+def test_answer_question_keeps_waiting_overlay_until_all_questions_close(
+    service_context: ServiceContext,
+) -> None:
+    task = Task(
+        id="task-1",
+        project_id="proj-1",
+        board_column_id="col-1",
+        title="Need operator input",
+        workflow_state="in_progress",
+        priority="high",
+        waiting_for_human=True,
+        metadata_json={},
+    )
+    session = AgentSession(
+        id="sess-1",
+        project_id="proj-1",
+        task_id=task.id,
+        profile="executor",
+        status="waiting_human",
+        session_name="sess-name",
+        runtime_metadata={"session_family_id": "sess-1"},
+    )
+    question = WaitingQuestion(
+        id="q-1",
+        project_id=task.project_id,
+        task_id=task.id,
+        session_id=session.id,
+        status="open",
+        prompt="Clarify priority",
+    )
+
+    service_context.db.get.side_effect = lambda model, key: {
+        (Task, task.id): task,
+        (AgentSession, session.id): session,
+    }.get((model, key))
+    service_context.db.scalar.side_effect = [1, 1]
+
+    runtime = MagicMock()
+    service = WaitingService(service_context, runtime=runtime)
+    service.get_question = MagicMock(return_value=question)
+
+    answered = service.answer_question(
+        question.id,
+        HumanReplyCreate(responder_name="Operator", body="Use staging."),
+    )
+
+    assert answered.status == "closed"
+    assert task.waiting_for_human is True
+    assert session.status == "waiting_human"
+    runtime.session_exists.assert_not_called()
 
 
 def test_spawn_follow_up_session_keeps_session_lineage_and_sets_default_follow_up_type(

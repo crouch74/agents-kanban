@@ -6,6 +6,8 @@ export const controlPlaneQueryKeys = {
   project: (projectId: string | null) => ["project", projectId] as const,
   taskDetailRoot: ["task-detail"] as const,
   taskDetail: (taskId: string | null) => ["task-detail", taskId] as const,
+  questionsRoot: ["questions"] as const,
+  questions: (projectId: string | null, status: string | null = null) => ["questions", projectId, status] as const,
   questionRoot: ["question"] as const,
   question: (questionId: string | null) => ["question", questionId] as const,
   sessionTailRoot: ["session-tail"] as const,

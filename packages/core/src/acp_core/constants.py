@@ -64,6 +64,5 @@ TASK_TRANSITIONS: Mapping[str, set[str]] = {
     "in_progress": {"ready", "review", "cancelled"},
     "review": {"in_progress", "done", "cancelled"},
     "done": {"review", "cancelled"},
-    "cancelled": set(),
+    "cancelled": {"backlog"},
 }
-

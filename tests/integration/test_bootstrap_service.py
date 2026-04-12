@@ -55,6 +55,20 @@ def test_bootstrap_project_existing_repo_uses_repo_execution_path(tmp_path: Path
 
     try:
         with TestClient(app) as client:
+            preview_response = client.post(
+                "/api/v1/projects/bootstrap/preview",
+                json={
+                    "name": "Bootstrap Existing Path",
+                    "repo_path": str(repo_path),
+                    "stack_preset": "node-library",
+                    "initial_prompt": "Plan and create bootstrap tasks.",
+                },
+            )
+            assert preview_response.status_code == 200
+            preview_payload = preview_response.json()
+            assert preview_payload["confirmation_required"] is True
+            assert preview_payload["execution_path"] == str(repo_path)
+
             response = client.post(
                 "/api/v1/projects/bootstrap",
                 json={
@@ -62,6 +76,7 @@ def test_bootstrap_project_existing_repo_uses_repo_execution_path(tmp_path: Path
                     "repo_path": str(repo_path),
                     "stack_preset": "node-library",
                     "initial_prompt": "Plan and create bootstrap tasks.",
+                    "confirm_existing_repo": True,
                 },
             )
             assert response.status_code == 201
@@ -130,6 +145,7 @@ def test_bootstrap_project_detached_head_without_worktree_fails(tmp_path: Path) 
                     "repo_path": str(repo_path),
                     "stack_preset": "python-package",
                     "initial_prompt": "Plan the board.",
+                    "confirm_existing_repo": True,
                 },
             )
             assert response.status_code == 400
@@ -145,6 +161,21 @@ def test_bootstrap_project_worktree_kickoff_uses_worktree_execution_path(tmp_pat
 
     try:
         with TestClient(app) as client:
+            preview_response = client.post(
+                "/api/v1/projects/bootstrap/preview",
+                json={
+                    "name": "Bootstrap Worktree Kickoff",
+                    "repo_path": str(repo_path),
+                    "stack_preset": "react-vite",
+                    "initial_prompt": "Create initial tasks.",
+                    "use_worktree": True,
+                },
+            )
+            assert preview_response.status_code == 200
+            preview_payload = preview_response.json()
+            assert preview_payload["use_worktree"] is True
+            assert preview_payload["execution_path"] != str(repo_path)
+
             response = client.post(
                 "/api/v1/projects/bootstrap",
                 json={
@@ -153,6 +184,7 @@ def test_bootstrap_project_worktree_kickoff_uses_worktree_execution_path(tmp_pat
                     "stack_preset": "react-vite",
                     "initial_prompt": "Create initial tasks.",
                     "use_worktree": True,
+                    "confirm_existing_repo": True,
                 },
             )
             assert response.status_code == 201

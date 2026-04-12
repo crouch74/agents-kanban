@@ -58,6 +58,7 @@ export function createControlPlaneInvalidation({ queryClient, projectId, taskId 
     if (questionId) {
       queryKeys.push(controlPlaneQueryKeys.question(questionId));
     }
+    queryKeys.push(controlPlaneQueryKeys.questionsRoot);
 
     invalidateMany(queryClient, queryKeys);
   };
@@ -105,6 +106,7 @@ export function createControlPlaneInvalidation({ queryClient, projectId, taskId 
       controlPlaneQueryKeys.projects,
       controlPlaneQueryKeys.projectRoot,
       controlPlaneQueryKeys.taskDetailRoot,
+      controlPlaneQueryKeys.questionsRoot,
       controlPlaneQueryKeys.questionRoot,
       controlPlaneQueryKeys.sessionTailRoot,
       controlPlaneQueryKeys.sessionTimelineRoot,

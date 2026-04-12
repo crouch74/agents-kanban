@@ -7,6 +7,7 @@ import {
   useAddTaskDependencyMutation,
   useAnswerQuestionMutation,
   useBootstrapProjectMutation,
+  useBootstrapProjectPreviewMutation,
   useCancelSessionMutation,
   useCreateFollowUpSessionMutation,
   useCreateQuestionMutation,
@@ -88,6 +89,7 @@ export function useControlPlaneMutations({
       });
     },
   });
+  const bootstrapPreviewMutation = useBootstrapProjectPreviewMutation();
 
   const createTaskMutation = useCreateTaskMutation({
     onSuccess: () => {
@@ -203,6 +205,7 @@ export function useControlPlaneMutations({
   });
 
   return {
+    bootstrapPreviewMutation,
     bootstrapProjectMutation,
     createTaskMutation,
     createSubtaskMutation,

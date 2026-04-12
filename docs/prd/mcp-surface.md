@@ -99,6 +99,9 @@ A common agent loop today looks like:
   can self-correct before a human intervenes
 - `project_bootstrap` can initialize an empty repo, add ACP guidance files, and
   launch the kickoff Codex session in either repo mode or worktree mode
+- existing repositories now require explicit confirmation through
+  `confirm_existing_repo=true` before `project_bootstrap` can mutate ACP-managed
+  files
 
 ## MCP Error Mapping Guidance
 
@@ -214,4 +217,3 @@ Runtime adapter unavailable:
 - Set `retryable` only for transient runtime/infrastructure conditions.
 - If a tool wraps an internal REST call, propagate canonical codes instead of
   inventing transport-specific variants.
-

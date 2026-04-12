@@ -7,7 +7,8 @@ test.beforeEach(async ({ page }) => {
 
 test("session follow-up flow", async ({ page }, testInfo) => {
   await bootstrapProject(page, "Session Follow-up Project");
-  await page.getByRole("button", { name: "Sessions" }).click();
+  await page.getByRole("button", { name: "Back to board" }).click();
+  await page.getByRole("button", { name: "Sessions" }).last().click();
   await expect(page.getByRole("heading", { name: "Session Runtime" })).toBeVisible();
 
   const kickoffSessionButton = page.getByRole("button").filter({ hasText: "acp-bootstrap-kickoff" }).first();
@@ -17,7 +18,7 @@ test("session follow-up flow", async ({ page }, testInfo) => {
   await expect(page.getByText("Implemented slice")).toBeVisible();
 
   await page.getByRole("button", { name: "Retry" }).click();
-  await expect(page.getByRole("heading", { name: "acp-bootstrap-kickoff-retry" })).toBeVisible();
+  await expect(page.getByText("acp-bootstrap-kickoff-retry").first()).toBeVisible();
 
   await page.screenshot({ path: testInfo.outputPath("session-follow-up-flow.png"), fullPage: true });
 });

@@ -22,16 +22,16 @@ test("waiting-question pause and resume flow", async ({ page }, testInfo) => {
   });
   await page.reload();
 
-  await expect(page.getByRole("button", { name: "Waiting Inbox" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Inbox" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Waiting Inbox" }).click();
+  await page.getByRole("button", { name: "Inbox" }).click();
   await expect(page.getByPlaceholder("Reply to unblock the agent")).toBeVisible();
   await page.getByRole("button", { name: /Should we pause deployment/i }).first().click();
 
   await page.getByPlaceholder("Reply to unblock the agent").fill("Approved. Continue with the current plan.");
-  await page.getByRole("button", { name: "Send + mark answered" }).click();
+  await page.getByRole("button", { name: "Send + close question" }).click();
   await expect(
-    page.getByText("This question is answered. Switch the queue filter to Open to continue triage."),
+    page.getByText("This question is closed. Switch the queue filter to Open to continue triage."),
   ).toBeVisible();
 
   await page.screenshot({ path: testInfo.outputPath("waiting-question-pause-resume-flow.png"), fullPage: true });
