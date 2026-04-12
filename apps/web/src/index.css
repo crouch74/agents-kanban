@@ -75,6 +75,7 @@ a {
 }
 
 .app-main {
+  position: relative;
   min-width: 0;
   background: var(--bg);
 }
@@ -115,12 +116,13 @@ a {
   position: fixed;
   right: 0;
   top: 48px;
-  z-index: 45;
+  z-index: 60;
   height: calc(100vh - 48px);
   width: 480px;
   border-left: 1px solid var(--border);
   background: var(--surface);
   box-shadow: var(--shadow-panel);
+  pointer-events: auto;
 }
 
 .detail-panel-spacer {

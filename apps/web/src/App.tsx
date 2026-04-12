@@ -504,8 +504,24 @@ export function App() {
     artifacts: taskDetailQuery.data?.artifacts ?? [],
   };
 
+  const linkedTaskSessions = useMemo(
+    () =>
+      taskDetailQuery.data
+        ? (projectDetailQuery.data?.sessions ?? []).filter(
+            (session) => session.task_id === taskDetailQuery.data?.id,
+          )
+        : [],
+    [projectDetailQuery.data?.sessions, taskDetailQuery.data],
+  );
+
   const toggleTaskSection = (key: string) => {
     setOpenTaskSections((current) => ({ ...current, [key]: !current[key] }));
+  };
+
+  const closeTaskDetail = () => {
+    setDrawerSelection(null);
+    setInspectedTaskId(null);
+    setMobileTaskPanelOpen(false);
   };
 
   const isProjectScopedSection =
@@ -1335,14 +1351,18 @@ export function App() {
                     <button
                       type="button"
                       className="btn-ghost !px-0"
-                      onClick={() => setDrawerSelection(null)}
+                      onClick={closeTaskDetail}
                     >
                       <X className="h-4 w-4" />
                       Back to board
                     </button>
                     <DropdownMenu.Root>
                       <DropdownMenu.Trigger asChild>
-                        <button type="button" className="btn-ghost">
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          aria-label="Task actions"
+                        >
                           <MoreHorizontal className="h-4 w-4" />
                         </button>
                       </DropdownMenu.Trigger>
@@ -1388,12 +1408,43 @@ export function App() {
                           ))}
                         </DropdownMenu.Content>
                       </DropdownMenu.Root>
-                      <button type="button" className="btn-secondary">
-                        {taskDetailQuery.data.priority ? toDisplay(taskDetailQuery.data.priority) : "Priority"}
-                      </button>
-                      <button type="button" className="btn-secondary">
-                        Session {taskSessionCount > 0 ? `(${taskSessionCount})` : ""}
-                      </button>
+                      <div className="inline-flex h-8 items-center rounded-[4px] border border-[color:var(--border)] bg-[color:var(--surface)] px-3 text-[13px] font-medium text-[color:var(--text)]">
+                        {taskDetailQuery.data.priority
+                          ? toDisplay(taskDetailQuery.data.priority)
+                          : "Priority"}
+                      </div>
+                      <DropdownMenu.Root>
+                        <DropdownMenu.Trigger asChild>
+                          <button type="button" className="btn-secondary">
+                            Session {taskSessionCount > 0 ? `(${taskSessionCount})` : ""}
+                          </button>
+                        </DropdownMenu.Trigger>
+                        <DropdownMenu.Content className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-1 shadow-[var(--shadow-panel)]">
+                          {linkedTaskSessions.length ? (
+                            linkedTaskSessions.map((session) => (
+                              <DropdownMenu.Item
+                                key={session.id}
+                                className="flex items-center gap-2 rounded px-2 py-1.5 text-sm outline-none"
+                                onSelect={() => {
+                                  selectSession(session.id);
+                                  setActiveSection("sessions");
+                                  closeTaskDetail();
+                                }}
+                              >
+                                <StatusDot status={session.status} />
+                                {toDisplay(session.profile)} · {session.session_name}
+                              </DropdownMenu.Item>
+                            ))
+                          ) : (
+                            <DropdownMenu.Item
+                              disabled
+                              className="rounded px-2 py-1.5 text-sm text-[color:var(--text-muted)] outline-none"
+                            >
+                              No linked sessions
+                            </DropdownMenu.Item>
+                          )}
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Root>
                     </div>
                   </div>
                 }
