@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from re import sub
-import sys
 import textwrap
 from typing import Any, Protocol
 
@@ -51,10 +50,12 @@ class ScaffoldWriter:
             # Agent Control Plane Workflow
 
             - Treat the ACP board as the source of truth for planning and execution state.
-            - Use the Agent Control Plane MCP server named `{settings.bootstrap_agent_mcp_name}` to read project state.
-            - Create top-level tasks with `task_create` and one-level subtasks with `subtask_create`.
-            - Keep task progress current with `task_update`, `task_comment_add`, `task_check_add`, and `task_artifact_add`.
-            - Ask operators for missing requirements through `question_open` instead of leaving ambiguity in local notes.
+            - Read `{settings.bootstrap_agent_skill_path}` first and use it to discover the active ACP REST API from `.acp/project.local.json`.
+            - Load the live OpenAPI document from `${{api_base_url}}/openapi.json`; never hardcode host or port.
+            - Use `/api/v1` REST endpoints for project, board, task, session, question, worktree, search, and diagnostics operations.
+            - Create top-level tasks with `task_create` and one-level subtasks with `parent_task_id`.
+            - Keep task progress current with comments, checks, artifacts, task patching, and question replies as the API exposes them.
+            - Ask operators for missing requirements through the ACP question flow instead of leaving ambiguity in local notes.
             - Do not mark tasks done until ACP readiness is satisfied.
             - Read `.acp/project.local.json` for the active ACP project, task, and execution context.
             {ACP_AGENTS_SECTION_END}
@@ -192,13 +193,8 @@ class ScaffoldWriter:
 
     def build_bootstrap_command(self, execution_root: Path) -> str:
         prompt_file = execution_root / ".acp" / "bootstrap-prompt.md"
-        mcp_pythonpath = ":".join([str(settings.control_plane_root / "packages" / "core" / "src"), str(settings.control_plane_root / "packages" / "mcp-server" / "src")])
         template_values = {
-            "mcp_name": shell_join([settings.bootstrap_agent_mcp_name]),
-            "mcp_pythonpath": shell_join([mcp_pythonpath]),
-            "python_executable": shell_join([sys.executable]),
             "prompt_file": shell_join([str(prompt_file)]),
             "acp_runtime_home": shell_join([str(settings.runtime_home)]),
-            "execution_path": str(execution_root),
         }
         return settings.bootstrap_agent_command_template.format(**template_values)

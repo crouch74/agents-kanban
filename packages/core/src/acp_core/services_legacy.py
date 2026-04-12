@@ -1790,9 +1790,9 @@ class BootstrapService:
             f"""
             You are the kickoff coding agent for the project "{project.name}".
 
-            Start by reading `AGENTS.md` and `.acp/project.local.json`.
+            Start by reading `AGENTS.md`, `.acp/project.local.json`, and `skills/agent-control-plane-api/SKILL.md`.
 
-            The Agent Control Plane MCP server named `{settings.bootstrap_agent_mcp_name}` is available for board updates.
+            The skill explains how to resolve the active API base URL from the local ACP context and use the REST API directly.
             Use it to:
             - inspect project and board state
             - create top-level tasks and one-level subtasks

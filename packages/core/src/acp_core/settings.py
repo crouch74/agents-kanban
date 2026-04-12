@@ -16,12 +16,10 @@ class Settings(BaseSettings):
     web_origins: list[str] = ["http://127.0.0.1:5173", "http://localhost:5173"]
     runtime_home: Path = Field(default_factory=lambda: Path.cwd() / ".acp")
     database_name: str = "acp.sqlite3"
-    bootstrap_agent_mcp_name: str = "agent-control-plane"
+    bootstrap_agent_skill_path: str = "skills/agent-control-plane-api/SKILL.md"
     bootstrap_agent_command_template: str = (
         "export ACP_RUNTIME_HOME={acp_runtime_home}; "
-        "codex mcp get {mcp_name} >/dev/null 2>&1 || "
-        "codex mcp add {mcp_name} --env PYTHONPATH={mcp_pythonpath} --env ACP_RUNTIME_HOME={acp_runtime_home} -- {python_executable} -m acp_mcp_server.server "
-        "&& codex --dangerously-bypass-approvals-and-sandbox exec - < {prompt_file}"
+        "codex --dangerously-bypass-approvals-and-sandbox exec - < {prompt_file}"
     )
 
     @property

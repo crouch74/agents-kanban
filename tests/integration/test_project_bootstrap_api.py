@@ -109,7 +109,8 @@ def test_bootstrap_existing_repo_in_repo_mode(tmp_path: Path) -> None:
             assert payload["scaffold_applied"] is False
             assert payload["kickoff_session"]["repository_id"] == payload["repository"]["id"]
             assert payload["kickoff_session"]["worktree_id"] is None
-            assert "codex mcp add" in payload["kickoff_session"]["runtime_metadata"]["command"]
+            assert "codex mcp add" not in payload["kickoff_session"]["runtime_metadata"]["command"]
+            assert "agent-control-plane-api/SKILL.md" in (repo_path / ".acp" / "bootstrap-prompt.md").read_text(encoding="utf-8")
 
             assert "Keep this note." in (repo_path / "AGENTS.md").read_text(encoding="utf-8")
             assert "<!-- acp-managed:start -->" in (repo_path / "AGENTS.md").read_text(encoding="utf-8")
@@ -117,6 +118,7 @@ def test_bootstrap_existing_repo_in_repo_mode(tmp_path: Path) -> None:
             project_local = json.loads((repo_path / ".acp" / "project.local.json").read_text(encoding="utf-8"))
             assert project_local["project_id"] == payload["project"]["id"]
             assert project_local["kickoff_task_id"] == payload["kickoff_task"]["id"]
+            assert project_local["api_base_url"].startswith("http://")
     finally:
         app.dependency_overrides.clear()
 
@@ -345,3 +347,12 @@ def test_bootstrap_existing_repo_requires_explicit_confirmation(tmp_path: Path) 
             assert "preview confirmation" in response.json()["detail"]
     finally:
         app.dependency_overrides.clear()
+
+
+def test_bootstrap_skill_guides_dynamic_api_discovery() -> None:
+    skill_path = Path(__file__).resolve().parents[2] / "skills" / "agent-control-plane-api" / "SKILL.md"
+    content = skill_path.read_text(encoding="utf-8")
+
+    assert "api_base_url" in content
+    assert "/openapi.json" in content
+    assert "127.0.0.1:8000/openapi.json" not in content
