@@ -9,7 +9,7 @@ from acp_core.errors import build_runtime_service_error
 from acp_core.infrastructure.runtime_adapter import DefaultRuntimeAdapter, RuntimeAdapterProtocol
 from acp_core.logging import logger
 from acp_core.models import AgentRun, AgentSession, Event, Repository, SessionMessage, Task, WaitingQuestion, Worktree, utc_now
-from acp_core.runtime import safe_tmux_name
+from acp_core.runtime import RuntimeLaunchSpec, safe_tmux_name
 from acp_core.schemas import (
     AgentRunRead,
     AgentSessionCreate,
@@ -147,6 +147,7 @@ class SessionService:
         profile: str,
         repository_id: str | None = None,
         worktree_id: str | None = None,
+        launch_spec: RuntimeLaunchSpec | None = None,
         command: str | None = None,
         runtime_metadata_extra: dict[str, Any] | None = None,
         run_summary: str | None = None,
@@ -169,6 +170,7 @@ class SessionService:
                 session_name=session_name,
                 working_directory=working_directory,
                 profile=profile,
+                launch_spec=launch_spec,
                 command=command,
             )
         except Exception as exc:
@@ -245,6 +247,7 @@ class SessionService:
             profile=payload.profile,
             repository_id=payload.repository_id,
             worktree_id=payload.worktree_id,
+            launch_spec=RuntimeLaunchSpec(**payload.launch_spec.model_dump()) if payload.launch_spec else None,
             command=payload.command,
             runtime_metadata_extra={"session_family_id": None},
         )
@@ -304,6 +307,7 @@ class SessionService:
             profile=payload.profile,
             repository_id=repository_id,
             worktree_id=worktree_id,
+            launch_spec=RuntimeLaunchSpec(**payload.launch_spec.model_dump()) if payload.launch_spec else None,
             command=payload.command,
             runtime_metadata_extra={
                 "session_family_id": family_id,
@@ -561,5 +565,4 @@ class SessionService:
 
         logger.info("⚠️ session cancelled", session_id=session.id, session_name=session.session_name)
         return session
-
 

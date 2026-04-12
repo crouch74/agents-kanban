@@ -19,18 +19,19 @@ class FakeRuntime:
         session_name: str,
         working_directory: Path,
         profile: str,
+        launch_spec=None,
         command: str | None = None,
     ):
         self.sessions[session_name] = {
             "working_directory": str(working_directory),
-            "command": command or profile,
+            "command": launch_spec.display_command if launch_spec else (command or profile),
         }
         return RuntimeSessionInfo(
             session_name=session_name,
             pane_id="%2",
             window_name="main",
-            working_directory=str(working_directory),
-            command=command or profile,
+            working_directory=str(launch_spec.working_directory) if launch_spec else str(working_directory),
+            command=launch_spec.display_command if launch_spec else (command or profile),
         )
 
     def session_exists(self, session_name: str) -> bool:
