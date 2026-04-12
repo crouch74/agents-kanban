@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from shutil import which
 import textwrap
 
 from acp_core.infrastructure.scaffold_writer import ScaffoldWriter, ScaffoldWriterProtocol
 from acp_core.infrastructure.runtime_adapter import DefaultRuntimeAdapter, RuntimeAdapterProtocol
 from acp_core.logging import logger
-from acp_core.models import Event
 from acp_core.schemas import (
     AgentSessionCreate,
     ProjectBootstrapPlannedChange,

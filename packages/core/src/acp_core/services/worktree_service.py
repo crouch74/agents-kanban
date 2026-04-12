@@ -4,7 +4,7 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from acp_core.infrastructure.git_repository_adapter import GitRepositoryAdapter, GitRepositoryAdapterProtocol, GitRepositoryMetadata
+from acp_core.infrastructure.git_repository_adapter import GitRepositoryAdapter, GitRepositoryAdapterProtocol
 from acp_core.logging import logger
 from acp_core.models import Project, Repository, Task, Worktree
 from acp_core.schemas import WorktreeCreate, WorktreeHygieneIssueRead, WorktreePatch
