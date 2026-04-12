@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import String, cast, or_, select
 
 from acp_core.agents import (
+    AgentRegistry,
     AgentRequest,
     SessionLaunchInputs,
     resolve_adapter_and_validate_request,
@@ -53,10 +55,14 @@ class SessionService:
     """
 
     def __init__(
-        self, context: ServiceContext, runtime: RuntimeAdapterProtocol | None = None
+        self,
+        context: ServiceContext,
+        runtime: RuntimeAdapterProtocol | None = None,
+        agent_registry: AgentRegistry | None = None,
     ) -> None:
         self.context = context
         self.runtime = runtime or DefaultRuntimeAdapter()
+        self.agent_registry = agent_registry or AgentRegistry.default()
 
     def list_sessions(
         self, project_id: str | None = None, task_id: str | None = None
@@ -176,6 +182,30 @@ class SessionService:
         }
         return mapping.get(profile, "execute")
 
+    def _default_agent_for_flow(
+        self,
+        *,
+        profile: str,
+        follow_up_type: str | None = None,
+    ) -> str:
+        configured_agent = None
+        if follow_up_type == "review":
+            configured_agent = settings.review_agent
+        elif follow_up_type == "verify":
+            configured_agent = settings.verify_agent
+        elif profile == "executor":
+            configured_agent = settings.execution_agent
+        elif profile == "reviewer":
+            configured_agent = settings.review_agent
+        elif profile == "verifier":
+            configured_agent = settings.verify_agent
+        elif profile == "research":
+            configured_agent = settings.research_agent
+        elif profile == "docs":
+            configured_agent = settings.docs_agent
+
+        return configured_agent or settings.default_agent
+
     def _build_launch_inputs(
         self,
         *,
@@ -184,11 +214,12 @@ class SessionService:
         launch_input_payload: Any | None,
         repository_id: str | None,
         worktree_id: str | None,
+        follow_up_type: str | None = None,
         session_family_id: str | None = None,
         follow_up_of_session_id: str | None = None,
     ) -> SessionLaunchInputs:
         payload = launch_input_payload
-        return SessionLaunchInputs(
+        launch_inputs = SessionLaunchInputs(
             task_kind=(
                 payload.task_kind if payload else self._task_kind_from_profile(profile)
             ),
@@ -224,6 +255,13 @@ class SessionService:
                 else follow_up_of_session_id
             ),
         )
+        fallback_agent = self._default_agent_for_flow(
+            profile=profile, follow_up_type=follow_up_type
+        )
+        resolved_agent = self.agent_registry.canonical_key(
+            launch_inputs.agent_name or fallback_agent
+        )
+        return replace(launch_inputs, agent_name=resolved_agent)
 
     def _build_launch_spec_from_inputs(
         self, *, launch_inputs: SessionLaunchInputs, task: Task
@@ -266,7 +304,7 @@ class SessionService:
             metadata={"task_id": task.id},
         )
         adapter = resolve_adapter_and_validate_request(
-            launch_inputs.agent_name, request
+            launch_inputs.agent_name, request, registry=self.agent_registry
         )
 
         request = AgentRequest(
@@ -575,6 +613,7 @@ class SessionService:
             launch_input_payload=payload.launch_input,
             repository_id=repository_id,
             worktree_id=worktree_id,
+            follow_up_type=follow_up_type,
             session_family_id=family_id,
             follow_up_of_session_id=source.id,
         )

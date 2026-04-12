@@ -4,16 +4,33 @@ from pathlib import Path
 
 from sqlalchemy import String, cast, func, or_, select
 
-from acp_core.infrastructure.runtime_adapter import DefaultRuntimeAdapter, RuntimeAdapterProtocol
-from acp_core.logging import logger
-from acp_core.models import AgentSession, Event, Project, Repository, Task, WaitingQuestion, Worktree
-from acp_core.schemas import DashboardRead, DiagnosticsRead, EventRecord, SearchHit, SearchResults
+from acp_core.infrastructure.runtime_adapter import (
+    DefaultRuntimeAdapter,
+    RuntimeAdapterProtocol,
+)
+from acp_core.models import (
+    AgentSession,
+    Event,
+    Project,
+    Repository,
+    Task,
+    WaitingQuestion,
+    Worktree,
+)
+from acp_core.schemas import (
+    DashboardRead,
+    DiagnosticsRead,
+    EventRecord,
+    SearchHit,
+    SearchResults,
+)
 from acp_core.services.base_service import ServiceContext
 from acp_core.services.session_service import SessionService
 
 
 class EventService:
     """Read service for append-only event streams."""
+
     def __init__(self, context: ServiceContext) -> None:
         self.context = context
 
@@ -58,7 +75,9 @@ class EventService:
                     cast(Event.payload_json, String).like(f'%"{session_id}"%'),
                 )
             )
-        return [EventRecord.model_validate(item) for item in self.context.db.scalars(stmt)]
+        return [
+            EventRecord.model_validate(item) for item in self.context.db.scalars(stmt)
+        ]
 
 
 class RecoveryService:
@@ -68,7 +87,10 @@ class RecoveryService:
         Detects drift and reconciles stale session statuses so operators see
         durable truth even when external runtime state changes unexpectedly.
     """
-    def __init__(self, context: ServiceContext, runtime: RuntimeAdapterProtocol | None = None) -> None:
+
+    def __init__(
+        self, context: ServiceContext, runtime: RuntimeAdapterProtocol | None = None
+    ) -> None:
         self.context = context
         self.runtime = runtime or DefaultRuntimeAdapter()
 
@@ -89,20 +111,26 @@ class RecoveryService:
         tracked_runtime_sessions = {
             session.session_name: session
             for session in self.context.db.scalars(
-                select(AgentSession).where(AgentSession.status.in_(["running", "waiting_human", "blocked"]))
+                select(AgentSession).where(
+                    AgentSession.status.in_(["running", "waiting_human", "blocked"])
+                )
             )
         }
         try:
             runtime_sessions = self.runtime.list_sessions(prefix="acp-")
         except Exception as exc:
-            raise build_runtime_service_error(operation="runtime_reconcile", exc=exc) from exc
+            raise build_runtime_service_error(
+                operation="runtime_reconcile", exc=exc
+            ) from exc
         runtime_session_names = {item.session_name for item in runtime_sessions}
         reconciled = 0
 
         for session_name, session in tracked_runtime_sessions.items():
             next_status = None
             if session_name in runtime_session_names:
-                next_status = SessionService(self.context, runtime=self.runtime)._runtime_session_status(
+                next_status = SessionService(
+                    self.context, runtime=self.runtime
+                )._runtime_session_status(
                     session,
                     exists=True,
                 )
@@ -115,14 +143,19 @@ class RecoveryService:
                     entity_type="session",
                     entity_id=session.id,
                     event_type="session.reconciled",
-                    payload_json={"status": next_status, "session_name": session.session_name},
+                    payload_json={
+                        "status": next_status,
+                        "session_name": session.session_name,
+                    },
                 )
                 reconciled += 1
 
         if reconciled:
             self.context.db.commit()
 
-        orphan_runtime_sessions = sorted(runtime_session_names.difference(tracked_runtime_sessions.keys()))
+        orphan_runtime_sessions = sorted(
+            runtime_session_names.difference(tracked_runtime_sessions.keys())
+        )
         return {
             "reconciled_session_count": reconciled,
             "runtime_managed_session_count": len(runtime_sessions),
@@ -133,10 +166,13 @@ class RecoveryService:
 
 class WorktreeHygieneService:
     """Detect stale or drifted worktrees and suggest recovery actions."""
+
     def __init__(self, context: ServiceContext) -> None:
         self.context = context
 
-    def list_issues(self, *, project_id: str | None = None, task_id: str | None = None) -> list[WorktreeHygieneIssueRead]:
+    def list_issues(
+        self, *, project_id: str | None = None, task_id: str | None = None
+    ) -> list[WorktreeHygieneIssueRead]:
         """Purpose: list issues.
 
         Args:
@@ -150,7 +186,9 @@ class WorktreeHygieneService:
         """
         stmt = select(Worktree).order_by(Worktree.updated_at.desc())
         if project_id is not None:
-            stmt = stmt.join(Repository, Repository.id == Worktree.repository_id).where(Repository.project_id == project_id)
+            stmt = stmt.join(Repository, Repository.id == Worktree.repository_id).where(
+                Repository.project_id == project_id
+            )
         if task_id is not None:
             stmt = stmt.where(Worktree.task_id == task_id)
 
@@ -160,8 +198,16 @@ class WorktreeHygieneService:
                 continue
 
             repository = self.context.db.get(Repository, worktree.repository_id)
-            task = self.context.db.get(Task, worktree.task_id) if worktree.task_id else None
-            session = self.context.db.get(AgentSession, worktree.session_id) if worktree.session_id else None
+            task = (
+                self.context.db.get(Task, worktree.task_id)
+                if worktree.task_id
+                else None
+            )
+            session = (
+                self.context.db.get(AgentSession, worktree.session_id)
+                if worktree.session_id
+                else None
+            )
             reasons: list[str] = []
             recommendation: str | None = None
 
@@ -169,14 +215,20 @@ class WorktreeHygieneService:
                 reasons.append("worktree_path_missing")
                 recommendation = "inspect"
 
-            if session is not None and session.status in {"done", "failed", "cancelled"}:
+            if session is not None and session.status in {
+                "done",
+                "failed",
+                "cancelled",
+            }:
                 reasons.append(f"session_{session.status}")
                 recommendation = "archive" if worktree.status == "active" else "prune"
 
             if task is not None and task.workflow_state in {"done", "cancelled"}:
                 reasons.append(f"task_{task.workflow_state}")
                 if recommendation is None:
-                    recommendation = "archive" if worktree.status == "active" else "prune"
+                    recommendation = (
+                        "archive" if worktree.status == "active" else "prune"
+                    )
 
             if worktree.status == "archived" and not reasons:
                 continue
@@ -206,7 +258,10 @@ class DiagnosticsService:
         Aggregates counts plus reconciliation/hygiene outputs so operators can
         quickly diagnose runtime and persistence drift from one read model.
     """
-    def __init__(self, context: ServiceContext, runtime: RuntimeAdapterProtocol | None = None) -> None:
+
+    def __init__(
+        self, context: ServiceContext, runtime: RuntimeAdapterProtocol | None = None
+    ) -> None:
         self.context = context
         self.runtime = runtime or DefaultRuntimeAdapter()
 
@@ -223,12 +278,19 @@ class DiagnosticsService:
             ValueError: When validation or lookup constraints fail.
         """
         project_count = self.context.db.scalar(select(func.count(Project.id))) or 0
-        repository_count = self.context.db.scalar(select(func.count(Repository.id))) or 0
+        repository_count = (
+            self.context.db.scalar(select(func.count(Repository.id))) or 0
+        )
         task_count = self.context.db.scalar(select(func.count(Task.id))) or 0
         worktree_count = self.context.db.scalar(select(func.count(Worktree.id))) or 0
         session_count = self.context.db.scalar(select(func.count(AgentSession.id))) or 0
         open_question_count = (
-            self.context.db.scalar(select(func.count(WaitingQuestion.id)).where(WaitingQuestion.status == "open")) or 0
+            self.context.db.scalar(
+                select(func.count(WaitingQuestion.id)).where(
+                    WaitingQuestion.status == "open"
+                )
+            )
+            or 0
         )
         event_count = self.context.db.scalar(select(func.count(Event.id))) or 0
         tmux_server_running = False
@@ -238,7 +300,9 @@ class DiagnosticsService:
                 tmux_server_running = True
             except Exception:
                 tmux_server_running = False
-        recovery = RecoveryService(self.context, runtime=self.runtime).reconcile_runtime_sessions()
+        recovery = RecoveryService(
+            self.context, runtime=self.runtime
+        ).reconcile_runtime_sessions()
         stale_worktrees = WorktreeHygieneService(self.context).list_issues()
         return DiagnosticsRead(
             app_name=settings.app_name,
@@ -266,6 +330,7 @@ class DiagnosticsService:
 
 class DashboardService:
     """Operator dashboard read-model service for glanceable control-plane state."""
+
     def __init__(self, context: ServiceContext) -> None:
         self.context = context
 
@@ -281,8 +346,16 @@ class DashboardService:
         Raises:
             ValueError: When validation or lookup constraints fail.
         """
-        projects = list(self.context.db.scalars(select(Project).order_by(Project.created_at.desc()).limit(8)))
-        events = list(self.context.db.scalars(select(Event).order_by(Event.created_at.desc()).limit(12)))
+        projects = list(
+            self.context.db.scalars(
+                select(Project).order_by(Project.created_at.desc()).limit(8)
+            )
+        )
+        events = list(
+            self.context.db.scalars(
+                select(Event).order_by(Event.created_at.desc()).limit(12)
+            )
+        )
         waiting_questions = list(
             self.context.db.scalars(
                 select(WaitingQuestion)
@@ -313,9 +386,14 @@ class DashboardService:
         return DashboardRead(
             projects=[ProjectSummary.model_validate(project) for project in projects],
             recent_events=[EventRecord.model_validate(event) for event in events],
-            waiting_questions=[WaitingQuestionRead.model_validate(question) for question in waiting_questions],
+            waiting_questions=[
+                WaitingQuestionRead.model_validate(question)
+                for question in waiting_questions
+            ],
             blocked_tasks=[TaskRead.model_validate(task) for task in blocked_tasks],
-            active_sessions=[AgentSessionRead.model_validate(session) for session in active_sessions],
+            active_sessions=[
+                AgentSessionRead.model_validate(session) for session in active_sessions
+            ],
             waiting_count=waiting_count,
             blocked_count=blocked_count,
             running_sessions=running_sessions,
@@ -329,10 +407,13 @@ class SearchService:
         Builds structured hits server-side to avoid UI scraping and to preserve
         parity for REST/MCP consumers using the same relevance rules.
     """
+
     def __init__(self, context: ServiceContext) -> None:
         self.context = context
 
-    def search(self, query: str, project_id: str | None = None, limit: int = 20) -> SearchResults:
+    def search(
+        self, query: str, project_id: str | None = None, limit: int = 20
+    ) -> SearchResults:
         """Purpose: search.
 
         Args:
@@ -402,7 +483,9 @@ class SearchService:
         )
         if project_id is not None:
             comment_stmt = comment_stmt.where(Task.project_id == project_id)
-        for comment, comment_project_id, task_title in self.context.db.execute(comment_stmt.limit(5)):
+        for comment, comment_project_id, task_title in self.context.db.execute(
+            comment_stmt.limit(5)
+        ):
             hits.append(
                 SearchHit(
                     entity_type="task_comment",
@@ -418,11 +501,15 @@ class SearchService:
         question_stmt = select(WaitingQuestion).where(
             or_(
                 func.lower(WaitingQuestion.prompt).like(pattern),
-                func.lower(func.coalesce(WaitingQuestion.blocked_reason, "")).like(pattern),
+                func.lower(func.coalesce(WaitingQuestion.blocked_reason, "")).like(
+                    pattern
+                ),
             )
         )
         if project_id is not None:
-            question_stmt = question_stmt.where(WaitingQuestion.project_id == project_id)
+            question_stmt = question_stmt.where(
+                WaitingQuestion.project_id == project_id
+            )
         for question in self.context.db.scalars(question_stmt.limit(5)):
             hits.append(
                 SearchHit(
@@ -452,7 +539,9 @@ class SearchService:
                     entity_id=session.id,
                     project_id=session.project_id,
                     title=session.session_name,
-                    snippet=session.runtime_metadata.get("working_directory", session.status),
+                    snippet=session.runtime_metadata.get(
+                        "working_directory", session.status
+                    ),
                     secondary=session.profile,
                     created_at=session.created_at,
                 )
@@ -492,4 +581,4 @@ class SearchService:
 
 
 # Deferred imports to keep the module order straightforward.
-from acp_core.schemas import BoardColumnRead, EventRecord, ProjectOverview, ProjectSummary, TaskRead  # noqa: E402
+from acp_core.schemas import EventRecord, ProjectSummary, TaskRead  # noqa: E402
