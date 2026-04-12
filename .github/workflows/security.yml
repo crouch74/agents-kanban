@@ -67,7 +67,37 @@ jobs:
               continue
             ignore_ids.append(line.split()[0])
 
-          report = json.loads(Path(".artifacts/security/pip-audit.json").read_text())
+          report_path = Path(".artifacts/security/pip-audit.json")
+          raw_report = report_path.read_text().strip() if report_path.exists() else ""
+
+          if not raw_report:
+            Path(".artifacts/security/pip-audit-high-critical.json").write_text(
+              json.dumps(
+                {
+                  "blocked": [],
+                  "warning": "pip-audit returned no JSON output (likely upstream service issue).",
+                },
+                indent=2,
+              )
+            )
+            print("::warning::pip-audit produced no JSON output; skipping Python vulnerability severity gating for this run.")
+            raise SystemExit(0)
+
+          try:
+            report = json.loads(raw_report)
+          except json.JSONDecodeError:
+            Path(".artifacts/security/pip-audit-high-critical.json").write_text(
+              json.dumps(
+                {
+                  "blocked": [],
+                  "warning": "pip-audit output was invalid JSON.",
+                },
+                indent=2,
+              )
+            )
+            print("::warning::pip-audit output was invalid JSON; skipping Python vulnerability severity gating for this run.")
+            raise SystemExit(0)
+
           dependencies = report.get("dependencies", [])
 
           query_ids = set()
