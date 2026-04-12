@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from shutil import which
 import textwrap
 
 from git import InvalidGitRepositoryError, NoSuchPathError
@@ -14,7 +13,7 @@ from acp_core.infrastructure.git_repository_adapter import (
 from acp_core.infrastructure.scaffold_writer import ScaffoldWriter, ScaffoldWriterProtocol
 from acp_core.infrastructure.runtime_adapter import DefaultRuntimeAdapter, RuntimeAdapterProtocol
 from acp_core.logging import logger
-from acp_core.models import AgentSession, Event, Project, Repository, Task, Worktree
+from acp_core.models import AgentSession, Project, Repository, Task, Worktree
 from acp_core.schemas import (
     AgentSessionRead,
     AgentSessionCreate,
@@ -495,4 +494,3 @@ class BootstrapService:
             use_worktree=payload.use_worktree,
         )
         return self._build_bootstrap_read_model(state)
-
