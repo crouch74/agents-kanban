@@ -1,30 +1,45 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
-from shutil import which
 import textwrap
 
+from git import InvalidGitRepositoryError, NoSuchPathError
+
+from acp_core.agents import AgentRequest, render_launch_plan_command, resolve_coding_agent_adapter
+from acp_core.infrastructure.git_repository_adapter import (
+    GitRepositoryAdapter,
+    GitRepositoryAdapterProtocol,
+    GitRepositoryMetadata,
+)
 from acp_core.infrastructure.scaffold_writer import ScaffoldWriter, ScaffoldWriterProtocol
 from acp_core.infrastructure.runtime_adapter import DefaultRuntimeAdapter, RuntimeAdapterProtocol
 from acp_core.logging import logger
-from acp_core.models import Event
+from acp_core.models import AgentSession, Project, Repository, Task, Worktree
 from acp_core.schemas import (
     AgentSessionCreate,
+    AgentSessionRead,
     ProjectBootstrapPlannedChange,
     ProjectBootstrapCreate,
     ProjectBootstrapPreviewRead,
     ProjectBootstrapRead,
     ProjectCreate,
+    ProjectSummary,
+    RepositoryCreate,
+    RepositoryRead,
     StackPreset,
     TaskCreate,
+    TaskRead,
     WorktreeCreate,
+    WorktreeRead,
 )
-from acp_core.services.base_service import ServiceContext
+from acp_core.services.base_service import ServiceContext, slugify, task_slug
 from acp_core.services.project_service import ProjectService
 from acp_core.services.repository_service import RepositoryService
 from acp_core.services.session_service import SessionService
 from acp_core.services.task_service import TaskService
 from acp_core.services.worktree_service import WorktreeService
+from acp_core.settings import settings
 
 
 class BootstrapService:
@@ -147,8 +162,23 @@ class BootstrapService:
             prompt_body=prompt_body,
         )
 
-    def _build_session_command(self, execution_root: Path) -> str:
-        return self.scaffold_writer.build_bootstrap_command(execution_root)
+    def _build_agent_request(self, state: BootstrapState) -> AgentRequest:
+        if state.execution_path is None:
+            raise ValueError("Bootstrap state is missing execution path")
+        prompt_file = state.execution_path / ".acp" / "bootstrap-prompt.md"
+        return AgentRequest(
+            agent_name=state.payload.agent_name or settings.bootstrap_agent_name,
+            task_kind="kickoff",
+            prompt_file=prompt_file,
+            execution_root=state.execution_path,
+            model=state.payload.agent_model or settings.bootstrap_agent_model,
+            permissions=state.payload.agent_permissions or settings.bootstrap_agent_permissions,
+            output=state.payload.agent_output or settings.bootstrap_agent_output,
+            metadata={
+                "project_id": state.project.id if state.project else None,
+                "task_id": state.kickoff_task.id if state.kickoff_task else None,
+            },
+        )
 
     @dataclass
     class BootstrapState:
@@ -358,15 +388,37 @@ class BootstrapService:
             kickoff_task=state.kickoff_task,
             payload=state.payload,
         )
+        request = self._build_agent_request(state)
+        adapter = resolve_coding_agent_adapter(request.agent_name)
+        launch_plan = adapter.build_launch_plan(request)
+        runtime_command = render_launch_plan_command(launch_plan)
         state.session = SessionService(self.context, runtime=self.runtime).spawn_session(
             AgentSessionCreate(
                 task_id=state.kickoff_task.id,
                 profile="executor",
                 repository_id=state.repository.id if not state.payload.use_worktree else None,
                 worktree_id=state.kickoff_worktree.id if state.kickoff_worktree else None,
-                command=self._build_session_command(state.execution_path),
+                command=runtime_command,
             )
         )
+        state.session.runtime_metadata = {
+            **state.session.runtime_metadata,
+            "agent_request": {
+                "agent_name": request.agent_name,
+                "task_kind": request.task_kind,
+                "prompt_file": str(request.prompt_file),
+                "model": request.model,
+                "permissions": request.permissions,
+                "output": request.output,
+            },
+            "agent_launch_plan": {
+                "argv": launch_plan.argv,
+                "env": launch_plan.env,
+                "display_command": launch_plan.display_command,
+                "metadata": launch_plan.metadata,
+                "resume_hint": launch_plan.resume_hint,
+            },
+        }
 
     def _record_bootstrap_event(self, state: BootstrapState) -> None:
         if state.project is None or state.repository is None or state.kickoff_task is None or state.session is None:
@@ -481,5 +533,3 @@ class BootstrapService:
             use_worktree=payload.use_worktree,
         )
         return self._build_bootstrap_read_model(state)
-
-

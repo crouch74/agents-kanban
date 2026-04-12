@@ -19,7 +19,11 @@ Agent Control Plane loads environment variables through `packages/core/src/acp_c
 | `ACP_RUNTIME_HOME` | `path` | `.acp` under current working directory | Root runtime folder for DB, logs, and artifacts. | Usually keep `.acp` in repo root for easy cleanup. | CI commonly leaves default; override only when isolating artifacts per step. |
 | `ACP_DATABASE_NAME` | `str` | `acp.sqlite3` | SQLite database filename inside `ACP_RUNTIME_HOME`. | Change only if you need multiple side-by-side local databases. | Optional; can be overridden for matrix/isolation scenarios. |
 | `ACP_BOOTSTRAP_AGENT_SKILL_PATH` | `str` | `skills/agent-control-plane-api/SKILL.md` | Repo-local skill path used by bootstrap agent setup commands. | Usually unchanged. | Usually unchanged. |
-| `ACP_BOOTSTRAP_AGENT_COMMAND_TEMPLATE` | `str` | `export ACP_RUNTIME_HOME={acp_runtime_home}; codex --dangerously-bypass-approvals-and-sandbox exec - < {prompt_file}` | Command template used for bootstrap agent execution. | Keep default unless you intentionally customize Codex bootstrap behavior. | Usually unchanged; only override in specialized CI bootstrap experiments. |
+| `ACP_BOOTSTRAP_AGENT_NAME` | `str` | `codex` | Adapter key for bootstrap kickoff sessions (`codex`, `claude-code`, `aider`). | Keep `codex` unless you intentionally switch agent families. | Usually unchanged. |
+| `ACP_BOOTSTRAP_AGENT_MODEL` | `str \| null` | `null` | Optional default model hint forwarded to adapter-native flags. | Set only when you need a non-default model. | Optional. |
+| `ACP_BOOTSTRAP_AGENT_PERMISSIONS` | `str` | `danger-full-access` | Optional default permission profile forwarded to adapters that support it. | Keep default for autonomous bootstrap unless you need tighter controls. | Optional. |
+| `ACP_BOOTSTRAP_AGENT_OUTPUT` | `str \| null` | `null` | Optional default output format hint for adapters that support structured output. | Leave empty for normal interactive text. | Optional. |
+| `ACP_BOOTSTRAP_AGENT_COMMAND_TEMPLATE` | `str` | `export ACP_RUNTIME_HOME={acp_runtime_home}; codex --dangerously-bypass-approvals-and-sandbox exec - < {prompt_file}` | **Deprecated compatibility bridge** for legacy command customization; adapter-native launch plans should be used instead. | Avoid setting this for new environments. | Temporary only while migrating old setups. |
 
 ## Local setup flow
 

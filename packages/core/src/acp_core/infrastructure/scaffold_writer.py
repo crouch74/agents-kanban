@@ -30,7 +30,6 @@ class ScaffoldWriterProtocol(Protocol):
 
     def build_bootstrap_command(self, execution_root: Path) -> str: ...
 
-
 class ScaffoldWriter:
     def ensure_line(self, path: Path, line: str) -> None:
         existing = path.read_text(encoding="utf-8") if path.exists() else ""
@@ -192,6 +191,10 @@ class ScaffoldWriter:
             (acp_dir / "bootstrap-prompt.md").write_text(prompt_body, encoding="utf-8")
 
     def build_bootstrap_command(self, execution_root: Path) -> str:
+        """Deprecated bridge for legacy bootstrap flows.
+
+        TODO(bootstrap-agents): delete this once services_legacy bootstrap is removed.
+        """
         prompt_file = execution_root / ".acp" / "bootstrap-prompt.md"
         template_values = {
             "prompt_file": shell_join([str(prompt_file)]),
