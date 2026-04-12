@@ -27,6 +27,9 @@ class FakeRuntime:
     def session_exists(self, session_name: str) -> bool:
         return session_name in self.sessions
 
+    def is_session_active(self, session_name: str) -> bool:
+        return self.session_exists(session_name)
+
     def capture_tail(self, session_name: str, *, lines: int = 120) -> str:
         return f"session={session_name}\nlines={lines}"
 

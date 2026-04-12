@@ -5,7 +5,7 @@ from pathlib import Path
 from sqlalchemy import String, cast, func, or_, select
 
 from acp_core.infrastructure.runtime_adapter import DefaultRuntimeAdapter, RuntimeAdapterProtocol
-from acp_core.models import AgentSession, Event, Project, Repository, Task, WaitingQuestion, Worktree
+from acp_core.models import AgentSession, Event, Project, Repository, Task, TaskComment, WaitingQuestion, Worktree
 from acp_core.schemas import DashboardRead, DiagnosticsRead, EventRecord, SearchHit, SearchResults
 from acp_core.services.base_service import ServiceContext
 from acp_core.services.session_service import SessionService
