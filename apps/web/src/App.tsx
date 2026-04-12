@@ -38,20 +38,12 @@ import {
 import { TaskDetailScreen } from "@/screens/TaskDetailScreen";
 import { SessionDetailScreen } from "@/screens/SessionDetailScreen";
 import { ProjectOverviewScreen } from "@/screens/ProjectOverviewScreen";
-import {
-  useDashboardQuery,
-  useDiagnosticsQuery,
-  useEventsQuery,
-  useLiveInvalidationSocket,
-  useProjectDetailQuery,
-  useProjectsQuery,
-  useQuestionDetailQuery,
-  useQuestionsQuery,
-  useSearchQuery,
-  useSessionTailQuery,
-  useSessionTimelineQuery,
-  useTaskDetailQuery,
-} from "@/features/control-plane/hooks";
+import { useLiveInvalidationSocket } from "@/features/control-plane/hooks/liveUpdates";
+import { useProjectDetailQuery, useProjectsQuery } from "@/features/control-plane/hooks/projects";
+import { useQuestionDetailQuery, useQuestionsQuery } from "@/features/control-plane/hooks/questions";
+import { useSessionTailQuery, useSessionTimelineQuery } from "@/features/control-plane/hooks/sessions";
+import { useDashboardQuery, useDiagnosticsQuery, useEventsQuery, useSearchQuery } from "@/features/control-plane/hooks/system";
+import { useTaskDetailQuery } from "@/features/control-plane/hooks/tasks";
 import type { EventRecord, SearchHit } from "@/lib/api";
 import { useAppUrlState } from "@/app-shell/useAppUrlState";
 import { useControlPlaneMutations } from "@/app-shell/useControlPlaneMutations";

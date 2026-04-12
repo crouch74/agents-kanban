@@ -2,23 +2,26 @@ import { startTransition } from "react";
 import { type QueryClient } from "@tanstack/react-query";
 import { type NavSection } from "@/app-shell/types";
 import {
+  useBootstrapProjectMutation,
+  useBootstrapProjectPreviewMutation,
+  useCreateRepositoryMutation,
+  useCreateWorktreeMutation,
+  usePatchWorktreeMutation,
+} from "@/features/control-plane/hooks/projects";
+import { useAnswerQuestionMutation, useCreateQuestionMutation } from "@/features/control-plane/hooks/questions";
+import {
+  useCancelSessionMutation,
+  useCreateFollowUpSessionMutation,
+  useCreateSessionMutation,
+} from "@/features/control-plane/hooks/sessions";
+import {
   useAddTaskArtifactMutation,
   useAddTaskCheckMutation,
   useAddTaskCommentMutation,
   useAddTaskDependencyMutation,
-  useAnswerQuestionMutation,
-  useBootstrapProjectMutation,
-  useBootstrapProjectPreviewMutation,
-  useCancelSessionMutation,
-  useCreateFollowUpSessionMutation,
-  useCreateQuestionMutation,
-  useCreateRepositoryMutation,
-  useCreateSessionMutation,
   useCreateTaskMutation,
-  useCreateWorktreeMutation,
   usePatchTaskMutation,
-  usePatchWorktreeMutation,
-} from "@/features/control-plane/hooks";
+} from "@/features/control-plane/hooks/tasks";
 import { createControlPlaneInvalidation } from "@/features/control-plane/invalidation";
 
 type Params = {
