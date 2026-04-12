@@ -34,7 +34,7 @@ export function SidebarNavigation({
         {systemItems.map((item, index) => (
           <ShellNavItem
             key={`${item.label}-${index}`}
-            active={activeSection === item.key}
+            active={item.label === "Diagnostics" && activeSection === item.key}
             icon={item.icon}
             label={item.label}
             onClick={() => setActiveSection(item.key)}
