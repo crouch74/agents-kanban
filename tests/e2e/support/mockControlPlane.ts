@@ -9,6 +9,10 @@ type MockState = {
   events: any[];
 };
 
+type MockApiOptions = {
+  requireBootstrapConfirmation?: boolean;
+};
+
 function nowIso() {
   return "2026-04-11T10:00:00Z";
 }
@@ -34,11 +38,12 @@ function createInitialState(): MockState {
   };
 }
 
-export async function installMockApi(page: Page) {
+export async function installMockApi(page: Page, options: MockApiOptions = {}) {
   const state = createInitialState();
   let taskCounter = 1;
   let sessionCounter = 1;
   let questionCounter = 1;
+  const requireBootstrapConfirmation = Boolean(options.requireBootstrapConfirmation);
 
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -91,6 +96,32 @@ export async function installMockApi(page: Page) {
       return json(state.project ? [state.project] : []);
     }
 
+    if (path.endsWith("/projects") && method === "POST") {
+      const payload = request.postDataJSON() as any;
+      state.project = {
+        id: "project-created",
+        name: payload.name,
+        slug: String(payload.name).toLowerCase().replace(/\s+/g, "-"),
+        description: payload.description ?? null,
+        archived: false,
+        created_at: nowIso(),
+      };
+      state.board = {
+        id: "board-created",
+        project_id: state.project.id,
+        name: "Main Board",
+        columns: [
+          { id: "col-backlog", key: "backlog", name: "Backlog", order_index: 0, wip_limit: null },
+          { id: "col-ready", key: "ready", name: "Ready", order_index: 1, wip_limit: null },
+          { id: "col-in-progress", key: "in_progress", name: "In Progress", order_index: 2, wip_limit: null },
+          { id: "col-review", key: "review", name: "Review", order_index: 3, wip_limit: null },
+          { id: "col-done", key: "done", name: "Done", order_index: 4, wip_limit: null },
+        ],
+        tasks: [],
+      };
+      return json(state.project, 201);
+    }
+
     if (path.endsWith("/projects/bootstrap/preview") && method === "POST") {
       const payload = request.postDataJSON() as any;
       return json({
@@ -100,11 +131,19 @@ export async function installMockApi(page: Page) {
         use_worktree: Boolean(payload.use_worktree),
         repo_initialized_on_confirm: Boolean(payload.initialize_repo),
         scaffold_applied_on_confirm: true,
-        has_existing_commits: false,
-        confirmation_required: false,
+        has_existing_commits: requireBootstrapConfirmation,
+        confirmation_required: requireBootstrapConfirmation,
         execution_path: payload.repo_path,
         execution_branch: "main",
-        planned_changes: [],
+        planned_changes: requireBootstrapConfirmation
+          ? [
+              {
+                path: `${payload.repo_path}/.acp/project.local.json`,
+                action: "create_or_update",
+                description: "Write local ACP project context for kickoff.",
+              },
+            ]
+          : [],
       });
     }
 
@@ -114,6 +153,12 @@ export async function installMockApi(page: Page) {
 
     if (path.endsWith("/projects/bootstrap") && method === "POST") {
       const payload = request.postDataJSON() as any;
+      if (requireBootstrapConfirmation && !payload.confirm_existing_repo) {
+        return json(
+          { detail: "Existing repositories require preview confirmation before bootstrap can modify ACP-managed files" },
+          400,
+        );
+      }
       state.project = {
         id: "project-bootstrap",
         name: payload.name,
