@@ -709,6 +709,26 @@ export function App() {
                                     wipLimit={column.wip_limit}
                                   />
                                   <div className="space-y-2">
+                                    {(groupedTasks.get(column.id) ?? []).map((task) => (
+                                      <DraggableTaskCard
+                                        key={task.id}
+                                        task={task}
+                                        subtasks={subtasksByParent.get(task.id) ?? []}
+                                        selected={inspectedTaskId === task.id}
+                                        metadata={{
+                                          sessions: taskCardMetadata.sessionsByTask.get(task.id) ?? 0,
+                                          worktree: taskCardMetadata.worktreeByTask.has(task.id),
+                                          checks: 0,
+                                          artifacts: 0,
+                                          assignees: (projectDetailQuery.data?.sessions ?? [])
+                                            .filter((session) => session.task_id === task.id)
+                                            .map((session) => session.profile),
+                                        }}
+                                        onInspect={() => selectTask(task.id)}
+                                      />
+                                    ))}
+                                  </div>
+                                  <div className="space-y-2">
                                     <input
                                       value={draftTaskTitle}
                                       onChange={(event) => setDraftTaskTitle(event.target.value)}
@@ -731,24 +751,6 @@ export function App() {
                                     >
                                       + Add task
                                     </button>
-                                    {(groupedTasks.get(column.id) ?? []).map((task) => (
-                                      <DraggableTaskCard
-                                        key={task.id}
-                                        task={task}
-                                        subtasks={subtasksByParent.get(task.id) ?? []}
-                                        selected={inspectedTaskId === task.id}
-                                        metadata={{
-                                          sessions: taskCardMetadata.sessionsByTask.get(task.id) ?? 0,
-                                          worktree: taskCardMetadata.worktreeByTask.has(task.id),
-                                          checks: 0,
-                                          artifacts: 0,
-                                          assignees: (projectDetailQuery.data?.sessions ?? [])
-                                            .filter((session) => session.task_id === task.id)
-                                            .map((session) => session.profile),
-                                        }}
-                                        onInspect={() => selectTask(task.id)}
-                                      />
-                                    ))}
                                   </div>
                                 </ColumnShell>
                               </DroppableBoardColumn>
@@ -1470,6 +1472,20 @@ export function App() {
                           ? toDisplay(taskDetailQuery.data.priority)
                           : "Priority"}
                       </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          createSessionMutation.mutate({
+                            task_id: taskDetailQuery.data.id,
+                            profile: "executor",
+                          })
+                        }
+                        disabled={createSessionMutation.isPending}
+                        className="btn-primary inline-flex h-8 items-center gap-1.5 rounded-[4px] px-3 text-[13px] font-medium"
+                      >
+                        <Play className="h-3.5 w-3.5 fill-current" />
+                        Spawn Agent
+                      </button>
                       <DropdownMenu.Root>
                         <DropdownMenu.Trigger asChild>
                           <button type="button" className="btn-secondary">

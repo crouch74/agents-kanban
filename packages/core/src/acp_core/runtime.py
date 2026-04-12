@@ -8,7 +8,7 @@ from libtmux import Server
 
 
 DEFAULT_PROFILE_COMMANDS: dict[str, str] = {
-    "executor": "printf '🤖 Executor session ready\\n'; exec ${SHELL:-/bin/zsh} -l",
+    "executor": "printf '🤖 Agent session initialized\\n🚀 Run `codex exec` to start an autonomous turn or types commands to explore.\\n'; exec ${SHELL:-/bin/zsh} -l",
     "reviewer": "printf '🤖 Reviewer session ready\\n'; exec ${SHELL:-/bin/zsh} -l",
     "verifier": "printf '🤖 Verifier session ready\\n'; exec ${SHELL:-/bin/zsh} -l",
     "research": "printf '🤖 Research session ready\\n'; exec ${SHELL:-/bin/zsh} -l",
@@ -34,7 +34,21 @@ class RuntimeSessionSummary:
 
 class TmuxRuntimeAdapter:
     def __init__(self) -> None:
-        self.server = Server()
+        import shutil
+        tmux_bin = shutil.which("tmux")
+        if not tmux_bin:
+            # Common macOS paths if which fails
+            for p in ["/usr/local/bin/tmux", "/opt/homebrew/bin/tmux", "/opt/local/bin/tmux"]:
+                if Path(p).exists():
+                    tmux_bin = p
+                    break
+        
+        self.server = Server(tmux_executable=tmux_bin)
+        if tmux_bin:
+            import os
+            bin_dir = str(Path(tmux_bin).parent)
+            if bin_dir not in os.environ["PATH"]:
+                os.environ["PATH"] = f"{bin_dir}{os.pathsep}{os.environ['PATH']}"
 
     def spawn_session(
         self,
@@ -61,9 +75,9 @@ class TmuxRuntimeAdapter:
             pane = session.attached_window.attached_pane
 
         return RuntimeSessionInfo(
-            session_name=session.get("session_name"),
-            pane_id=pane.get("pane_id"),
-            window_name=session.attached_window.get("window_name"),
+            session_name=str(session.session_name),
+            pane_id=str(pane.pane_id),
+            window_name=str(session.attached_window.window_name),
             working_directory=str(working_directory),
             command=resolved_command,
         )
@@ -77,7 +91,7 @@ class TmuxRuntimeAdapter:
             return False
         
         pane = session.attached_window.attached_pane
-        current_command = pane.get("pane_current_command")
+        current_command = str(pane.pane_current_command)
         # If the command is just a common shell, we consider it "idle" (not active)
         # Note: 'exec''ing into a shell at the end of a turn is a common pattern here.
         if current_command in {"zsh", "bash", "sh", "fish", "tmux"}:
@@ -100,13 +114,13 @@ class TmuxRuntimeAdapter:
     def list_sessions(self, *, prefix: str | None = None) -> list[RuntimeSessionSummary]:
         sessions: list[RuntimeSessionSummary] = []
         for session in self.server.sessions:
-            session_name = session.get("session_name")
+            session_name = str(session.session_name)
             if prefix is not None and not session_name.startswith(prefix):
                 continue
             sessions.append(
                 RuntimeSessionSummary(
                     session_name=session_name,
-                    window_name=session.attached_window.get("window_name"),
+                    window_name=str(session.attached_window.window_name),
                     is_active=self.is_session_active(session_name),
                 )
             )

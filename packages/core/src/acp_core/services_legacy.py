@@ -38,6 +38,7 @@ from acp_core.models import (
     TaskDependency,
     WaitingQuestion,
     Worktree,
+    utc_now,
 )
 from acp_core.runtime import safe_tmux_name
 from acp_core.schemas import (
@@ -582,6 +583,47 @@ class TaskService:
             missing_requirements=missing_requirements,
         )
 
+    def _auto_trigger_agent_session(self, task: Task) -> None:
+        """Auto-triggers an autonomous agent session if none is currently active."""
+        # Check if there is already an active session for this task
+        from acp_core.services_legacy import SessionService
+        session_service = SessionService(self.context)
+        sessions = session_service.list_sessions(task_id=task.id)
+        
+        has_active = False
+        for s in sessions:
+            if s.status in {"running", "waiting_human"}:
+                # Double check with the runtime if it's actually alive
+                try:
+                    is_active = session_service.runtime.is_session_active(s.session_name)
+                except Exception:
+                    is_active = False
+                
+                if is_active:
+                    has_active = True
+                    break
+        
+        if not has_active:
+            logger.info("🤖 agentic board: auto-triggering session", task_id=task.id)
+            # Find a suitable worktree if one already exists
+            worktree_id = None
+            if task.worktrees:
+                # Pick the most recent active worktree
+                for wt in sorted(task.worktrees, key=lambda x: x.created_at, reverse=True):
+                    if wt.status in {"active", "locked"}:
+                        worktree_id = wt.id
+                        break
+            
+            try:
+                session_service._spawn_session_record(
+                    task=task,
+                    profile="executor",
+                    worktree_id=worktree_id,
+                )
+            except Exception:
+                import traceback
+                logger.error("🤖 agentic board: failed to auto-trigger", task_id=task.id, exc=traceback.format_exc())
+
     def patch_task(self, task_id: str, payload: TaskPatch) -> Task:
         """Purpose: patch task.
 
@@ -598,6 +640,7 @@ class TaskService:
         """
         task = self.get_task(task_id)
         provided = payload.model_fields_set
+        old_workflow_state = task.workflow_state
         next_workflow_state = task.workflow_state
 
         if "title" in provided and payload.title is not None:
@@ -647,6 +690,11 @@ class TaskService:
         )
         self.context.db.commit()
         self.context.db.refresh(task)
+
+        # Agentic Board: Auto-trigger session on Ready
+        if task.workflow_state == "ready" and old_workflow_state != "ready":
+             self._auto_trigger_agent_session(task)
+             self.context.db.commit()
 
         logger.info("🗂️ task updated", task_id=task.id, workflow_state=task.workflow_state)
         return task
@@ -1269,6 +1317,24 @@ class SessionService:
     def _runtime_session_status(self, session: AgentSession, *, exists: bool) -> str:
         if exists:
             is_active = self.runtime.is_session_active(session.session_name)
+            
+            # Grace period for new sessions to avoid early completion reconciliation
+            # if the command hasn't fully registered in tmux pane_current_command yet.
+            now = utc_now()
+            created_at = session.created_at
+            if created_at.tzinfo is None and now.tzinfo is not None:
+                # SQLAlchemy/SQLite might return naive datetimes; assume UTC
+                from datetime import UTC
+                created_at = created_at.replace(tzinfo=UTC)
+            
+            session_age_seconds = (now - created_at).total_seconds()
+            if session_age_seconds < 10:
+                if session.status == "waiting_human":
+                    return "waiting_human"
+                if session.status == "blocked":
+                    return "blocked"
+                return "running"
+
             if not is_active and session.status == "running":
                 return "done"
             
