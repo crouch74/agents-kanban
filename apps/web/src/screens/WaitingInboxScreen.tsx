@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { SectionFrame, SectionTitle } from "@/components/ui";
 import { Badge, Button, Card, Panel, Select, Textarea } from "@/components/primitives";
 import type { WaitingQuestionDetail } from "@/lib/api";
+import { toDisplay } from "@/utils/display";
 
 type WaitingQuestionWithTimestamps = WaitingQuestionSummary & {
   created_at?: string;
@@ -143,7 +144,7 @@ export function WaitingInboxScreen({
 
   return (
     <SectionFrame className="px-5 py-5">
-      <SectionTitle>Waiting Inbox</SectionTitle>
+      <SectionTitle>Inbox</SectionTitle>
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(300px,1fr)_minmax(0,1.25fr)]">
         <Card className="p-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -192,42 +193,42 @@ export function WaitingInboxScreen({
                   key={question.id}
                   onClick={() => onSelectQuestion(question.id)}
                   className={cn(
-                    "rounded-2xl border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-focus-ring)]",
+                    "rounded-[6px] border px-3 py-3 text-left transition focus-visible:outline-none",
                     isSelected
-                      ? "border-[color:var(--color-accent-primary)] bg-[color:var(--color-accent-soft)]"
-                      : "border-white/7 bg-white/3 hover:border-white/20",
+                      ? "border-[color:var(--accent)] bg-[rgba(37,99,235,0.08)]"
+                      : "border-[color:var(--border)] bg-[color:var(--surface)] hover:bg-[color:var(--surface-2)]",
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="line-clamp-2 text-sm font-medium text-slate-100">{question.prompt}</div>
-                    <Badge variant={toneVariant(question.urgency ?? "low")}>{question.urgency ?? "low"}</Badge>
+                    <div className="line-clamp-2 text-sm font-medium text-[color:var(--text)]">{question.prompt}</div>
+                    <Badge variant={toneVariant(question.urgency ?? "low")}>{toDisplay(question.urgency ?? "low")}</Badge>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-                    <Badge variant={toneVariant(impact.label)} className="text-[10px]">impact {impact.label}</Badge>
+                    <Badge variant={toneVariant(impact.label)} className="text-[10px]">Impact {toDisplay(impact.label)}</Badge>
                     <Badge className="text-[10px]">age {formatAge(question.created_at)}</Badge>
-                    <Badge className="text-[10px]">{question.status}</Badge>
+                    <Badge className="text-[10px]">{toDisplay(question.status)}</Badge>
                   </div>
-                  <div className="mt-2 text-xs text-slate-400">
+                  <div className="mt-2 text-xs text-[color:var(--text-muted)]">
                     {question.blocked_reason ?? "Awaiting operator guidance."}
                   </div>
                 </button>
               );
             })}
 
-            {!queue.length ? <div className="text-sm text-slate-500">No questions match this triage filter.</div> : null}
+            {!queue.length ? <div className="text-sm text-[color:var(--text-muted)]">No questions match this triage filter.</div> : null}
           </div>
         </Card>
 
         <Card className="p-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
-            <MessageSquareText className="h-4 w-4 text-slate-400" />
+          <div className="flex items-center gap-2 text-sm font-medium text-[color:var(--text)]">
+            <MessageSquareText className="h-4 w-4 text-[color:var(--text-muted)]" />
             Question triage + response
           </div>
 
           {questionDetail ? (
             <>
-              <div className="mt-3 text-base font-semibold text-slate-50">{questionDetail.prompt}</div>
-              <div className="mt-2 text-sm text-slate-400">
+              <div className="mt-3 text-base font-semibold text-[color:var(--text)]">{questionDetail.prompt}</div>
+              <div className="mt-2 text-sm text-[color:var(--text-muted)]">
                 {questionDetail.blocked_reason ?? "No blocked reason provided by the agent."}
               </div>
 
@@ -238,10 +239,10 @@ export function WaitingInboxScreen({
                   ) : (
                     <CircleDot className="mr-1 h-3.5 w-3.5" />
                   )}
-                  {questionDetail.status}
+                  {toDisplay(questionDetail.status)}
                 </Badge>
                 <Badge variant={toneVariant(questionDetail.urgency ?? "low")}>
-                  urgency {questionDetail.urgency ?? "low"}
+                  Urgency {toDisplay(questionDetail.urgency ?? "low")}
                 </Badge>
                 <Badge>age {formatAge(questionDetail.created_at)}</Badge>
               </div>
@@ -263,11 +264,11 @@ export function WaitingInboxScreen({
               <div className="mt-4 space-y-2">
                 {questionDetail.replies.map((reply) => (
                   <Panel key={reply.id} className="px-3 py-2">
-                    <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{reply.responder_name}</div>
-                    <div className="mt-1 text-sm text-slate-200">{reply.body}</div>
+                    <div className="text-[11px] text-[color:var(--text-muted)]">{reply.responder_name}</div>
+                    <div className="mt-1 text-sm text-[color:var(--text)]">{reply.body}</div>
                   </Panel>
                 ))}
-                {!questionDetail.replies.length ? <div className="text-sm text-slate-500">No replies yet.</div> : null}
+                {!questionDetail.replies.length ? <div className="text-sm text-[color:var(--text-muted)]">No replies yet.</div> : null}
               </div>
 
               {questionDetail.status === "open" ? (
@@ -305,13 +306,13 @@ export function WaitingInboxScreen({
                   </Button>
                 </>
               ) : (
-                <div className="mt-4 rounded-xl border border-emerald-300/20 bg-emerald-100/10 px-3 py-2 text-sm text-emerald-100">
+                <div className="mt-4 rounded-[6px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
                   This question is answered. Switch the queue filter to Open to continue triage.
                 </div>
               )}
             </>
           ) : (
-            <div className="mt-3 text-sm text-slate-500">Select a waiting question from the queue to triage and reply.</div>
+            <div className="mt-3 text-sm text-[color:var(--text-muted)]">Select a waiting question from the queue to triage and reply.</div>
           )}
 
           {!questionDetail && selectedQuestion ? (

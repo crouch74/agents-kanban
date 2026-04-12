@@ -34,15 +34,15 @@ export function DataTable<TRow>({
   state,
 }: DataTableProps<TRow>) {
   return (
-    <div className="overflow-x-auto rounded-2xl border border-white/7 bg-white/3">
+    <div className="overflow-x-auto rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)]">
       <table className="w-full min-w-[1080px] border-collapse">
         <thead>
-          <tr className="border-b border-white/7 bg-black/10 text-left">
+          <tr className="border-b border-[color:var(--border)] bg-[color:var(--surface-2)] text-left">
             {columns.map((column) => (
               <th
                 key={column.key}
                 className={cn(
-                  "px-4 py-3 text-[length:var(--type-metadata-size)] uppercase tracking-[0.14em] text-slate-500",
+                  "px-4 py-3 text-xs font-medium text-[color:var(--text-muted)]",
                   column.className,
                 )}
               >
@@ -56,7 +56,7 @@ export function DataTable<TRow>({
             <tr>
               <td
                 colSpan={columns.length}
-                className="px-4 py-6 text-sm text-slate-500"
+                className="px-4 py-6 text-sm text-[color:var(--text-muted)]"
               >
                 Loading data…
               </td>
@@ -65,7 +65,7 @@ export function DataTable<TRow>({
             <tr>
               <td
                 colSpan={columns.length}
-                className="px-4 py-6 text-sm text-rose-200"
+                className="px-4 py-6 text-sm text-rose-600"
               >
                 {state.error}
               </td>
@@ -74,7 +74,7 @@ export function DataTable<TRow>({
             <tr>
               <td
                 colSpan={columns.length}
-                className="px-4 py-6 text-sm text-slate-500"
+                className="px-4 py-6 text-sm text-[color:var(--text-muted)]"
               >
                 {state?.emptyMessage ?? "No records found."}
               </td>
@@ -88,14 +88,14 @@ export function DataTable<TRow>({
                 key={key}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={cn(
-                  "border-b border-white/7 last:border-b-0",
-                  onRowClick ? "cursor-pointer hover:bg-white/5" : "",
-                  selected ? "bg-[color:var(--color-accent-soft)]/30" : "",
+                  "border-b border-[color:var(--border)] last:border-b-0",
+                  onRowClick ? "cursor-pointer hover:bg-[color:var(--surface-2)]" : "",
+                  selected ? "bg-[rgba(37,99,235,0.08)]" : "",
                   rowClassName ?? "align-top",
                 )}
               >
                 {columns.map((column) => (
-                  <td key={column.key} className="px-4 py-3.5 text-sm text-slate-200">
+                  <td key={column.key} className="px-4 py-3.5 text-sm text-[color:var(--text)]">
                     {column.render(row)}
                   </td>
                 ))}

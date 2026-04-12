@@ -101,7 +101,7 @@ export function ActivityScreen({
 
       <div className="mt-4 flex flex-col gap-3">
         {loading ? <LoadingState label="Loading timeline events…" /> : null}
-        {error ? <div className="rounded-2xl border border-rose-300/30 bg-rose-300/10 px-4 py-4 text-sm text-rose-100">{error}</div> : null}
+        {error ? <div className="rounded-[6px] border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">{error}</div> : null}
         {!loading && !error && filtered.map((event) => <TimelineRow key={event.id} event={event} />)}
         {!loading && !error && !filtered.length ? (<EmptyState title="No timeline activity matches the current filters." />) : null}
       </div>

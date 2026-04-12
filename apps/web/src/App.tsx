@@ -744,19 +744,19 @@ export function App() {
                     controls={
                       selectedProjectId ? (
                         <div className="grid gap-4 lg:grid-cols-2">
-                          <div className="rounded-2xl border border-white/7 bg-black/10 p-4">
-                            <div className="text-sm font-medium text-slate-200">Attach repository</div>
+                          <div className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
+                            <div className="text-sm font-medium text-[color:var(--text)]">Attach repository</div>
                             <input
                               value={draftRepoPath}
                               onChange={(event) => setDraftRepoPath(event.target.value)}
                               placeholder="/absolute/path/to/repo"
-                              className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                              className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
                             />
                             <input
                               value={draftRepoName}
                               onChange={(event) => setDraftRepoName(event.target.value)}
                               placeholder="Optional display name"
-                              className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                              className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
                             />
                             <button
                               onClick={() =>
@@ -767,18 +767,18 @@ export function App() {
                                 })
                               }
                               disabled={!draftRepoPath.trim() || createRepositoryMutation.isPending}
-                              className="mt-3 rounded-full bg-[color:var(--color-accent-primary)] px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="btn-primary mt-3"
                             >
                               Attach repo
                             </button>
                           </div>
 
-                          <div className="rounded-2xl border border-white/7 bg-black/10 p-4">
-                            <div className="text-sm font-medium text-slate-200">Allocate worktree</div>
+                          <div className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
+                            <div className="text-sm font-medium text-[color:var(--text)]">Allocate worktree</div>
                             <select
                               value={selectedRepositoryId ?? ""}
                               onChange={(event) => setSelectedRepositoryId(event.target.value || null)}
-                              className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                              className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
                             >
                               <option value="">Choose repository</option>
                               {(projectDetailQuery.data?.repositories ?? []).map((repository) => (
@@ -790,7 +790,7 @@ export function App() {
                             <select
                               value={selectedTaskId}
                               onChange={(event) => setSelectedTaskId(event.target.value)}
-                              className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                              className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
                             >
                               <option value="">No task linkage</option>
                               {topLevelTasks.map((task) => (
@@ -803,7 +803,7 @@ export function App() {
                               value={draftWorktreeLabel}
                               onChange={(event) => setDraftWorktreeLabel(event.target.value)}
                               placeholder="Optional label for an unlinked worktree"
-                              className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                              className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
                             />
                             <button
                               onClick={() =>
@@ -814,7 +814,7 @@ export function App() {
                                 })
                               }
                               disabled={!selectedRepositoryId || createWorktreeMutation.isPending}
-                              className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="btn-secondary mt-3"
                             >
                               Allocate
                             </button>
@@ -833,36 +833,34 @@ export function App() {
                             key={session.id}
                             onClick={() => selectSession(session.id)}
                             className={[
-                              "rounded-2xl border px-4 py-4 text-left",
+                              "rounded-[6px] border px-4 py-4 text-left",
                               selectedSessionId === session.id
-                                ? "border-[color:var(--color-accent-primary)] bg-[color:var(--color-accent-soft)]"
-                                : "border-white/7 bg-white/3",
+                                ? "border-[color:var(--accent)] bg-[rgba(37,99,235,0.08)]"
+                                : "border-[color:var(--border)] bg-[color:var(--surface)]",
                             ].join(" ")}
                           >
                             <div className="flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
-                                <Terminal className="h-4 w-4 text-slate-400" />
-                                {session.profile}
+                              <div className="flex items-center gap-2 text-sm font-semibold text-[color:var(--text)]">
+                                <Terminal className="h-4 w-4 text-[color:var(--text-muted)]" />
+                                {toDisplay(session.profile)}
                               </div>
-                              <Pill className="border-white/8 text-slate-300">
-                                {session.status}
-                              </Pill>
+                              <Pill>{toDisplay(session.status)}</Pill>
                             </div>
-                            <div className="mt-2 text-xs text-slate-500">
+                            <div className="mt-2 text-xs text-[color:var(--text-muted)]">
                               {session.session_name}
                             </div>
                           </button>
                         ))}
                         {!projectDetailQuery.data?.sessions.length ? (
-                          <div className="text-sm text-slate-500">
+                          <div className="text-sm text-[color:var(--text-muted)]">
                             No agent sessions yet.
                           </div>
                         ) : null}
                       </div>
 
                       {selectedProjectId ? (
-                        <div className="mt-5 rounded-2xl border border-white/7 bg-black/10 p-4">
-                          <div className="text-sm font-medium text-slate-200">
+                        <div className="mt-5 rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
+                          <div className="text-sm font-medium text-[color:var(--text)]">
                             Spawn session
                           </div>
                           <select
@@ -870,7 +868,7 @@ export function App() {
                             onChange={(event) =>
                               setSelectedSessionTaskId(event.target.value)
                             }
-                            className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                            className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
                           >
                             <option value="">Choose task</option>
                             {topLevelTasks.map((task) => (
@@ -884,7 +882,7 @@ export function App() {
                             onChange={(event) =>
                               setSelectedSessionWorktreeId(event.target.value)
                             }
-                            className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                            className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
                           >
                             <option value="">No worktree</option>
                             {(projectDetailQuery.data?.worktrees ?? [])
@@ -902,7 +900,7 @@ export function App() {
                             onChange={(event) =>
                               setSessionProfile(event.target.value)
                             }
-                            className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                            className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
                           >
                             {[
                               "executor",
@@ -912,7 +910,7 @@ export function App() {
                               "docs",
                             ].map((profile) => (
                               <option key={profile} value={profile}>
-                                {profile}
+                                {toDisplay(profile)}
                               </option>
                             ))}
                           </select>
@@ -929,7 +927,7 @@ export function App() {
                               !selectedSessionTaskId ||
                               createSessionMutation.isPending
                             }
-                            className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="btn-primary mt-3 inline-flex items-center gap-2"
                           >
                             <Play className="h-4 w-4" />
                             Spawn
@@ -974,7 +972,7 @@ export function App() {
                                       )
                                     }
                                     disabled={cancelSessionMutation.isPending}
-                                    className="rounded-full border border-rose-300/25 px-4 py-2 text-sm font-semibold text-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="btn-secondary border-rose-200 text-rose-600"
                                   >
                                     Cancel session
                                   </button>
@@ -994,7 +992,7 @@ export function App() {
                                     disabled={
                                       createFollowUpSessionMutation.isPending
                                     }
-                                    className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="btn-secondary inline-flex items-center gap-2 !h-8 text-xs"
                                   >
                                     <GitFork className="h-3.5 w-3.5" />
                                     Retry
@@ -1004,11 +1002,11 @@ export function App() {
                             }
                             outputPanel={
                               sessionTailQuery.data ? (
-                                <pre className="max-h-72 overflow-auto rounded-2xl bg-black/25 p-3 text-xs leading-5 text-slate-300">
+                                <pre className="max-h-72 overflow-auto rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] p-3 text-xs leading-5 text-[color:var(--text)]">
                                   {sessionTailQuery.data.lines.join("\n")}
                                 </pre>
                               ) : (
-                                <div className="text-sm text-slate-500">
+                                <div className="text-sm text-[color:var(--text-muted)]">
                                   Select a session to inspect recent runtime
                                   output.
                                 </div>
@@ -1025,25 +1023,25 @@ export function App() {
                                       .map((message) => (
                                         <div
                                           key={message.id}
-                                          className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3"
+                                          className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-3 py-3"
                                         >
-                                          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                                            {message.source}
+                                          <div className="text-xs text-[color:var(--text-muted)]">
+                                            {toDisplay(message.source)}
                                           </div>
-                                          <div className="mt-2 text-sm text-slate-200">
+                                          <div className="mt-2 text-sm text-[color:var(--text)]">
                                             {message.body}
                                           </div>
                                         </div>
                                       ))}
                                     {!sessionTimelineQuery.data.messages
                                       .length ? (
-                                      <div className="text-sm text-slate-500">
+                                      <div className="text-sm text-[color:var(--text-muted)]">
                                         No structured session messages yet.
                                       </div>
                                     ) : null}
                                   </div>
                                 ) : (
-                                  <div className="text-sm text-slate-500">
+                                  <div className="text-sm text-[color:var(--text-muted)]">
                                     No selected session.
                                   </div>
                                 ),
@@ -1058,30 +1056,28 @@ export function App() {
                                       .map((check) => (
                                         <div
                                           key={check.id}
-                                          className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3"
+                                          className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-3 py-3"
                                         >
                                           <div className="flex items-center justify-between gap-2">
-                                            <div className="text-sm text-slate-100">
-                                              {check.check_type}
+                                            <div className="text-sm text-[color:var(--text)]">
+                                              {toDisplay(check.check_type)}
                                             </div>
-                                            <Pill className="border-white/8 text-slate-300">
-                                              {check.status}
-                                            </Pill>
+                                            <Pill>{toDisplay(check.status)}</Pill>
                                           </div>
-                                          <div className="mt-2 text-sm text-slate-400">
+                                          <div className="mt-2 text-sm text-[color:var(--text-muted)]">
                                             {check.summary}
                                           </div>
                                         </div>
                                       ))}
                                     {!selectedSessionTaskDetailQuery.data.checks
                                       .length ? (
-                                      <div className="text-sm text-slate-500">
+                                      <div className="text-sm text-[color:var(--text-muted)]">
                                         No task checks emitted yet.
                                       </div>
                                     ) : null}
                                   </div>
                                 ) : (
-                                  <div className="text-sm text-slate-500">
+                                  <div className="text-sm text-[color:var(--text-muted)]">
                                     No linked task selected.
                                   </div>
                                 ),
@@ -1096,12 +1092,12 @@ export function App() {
                                       .map((question) => (
                                         <div
                                           key={question.id}
-                                          className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3"
+                                          className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-3 py-3"
                                         >
-                                          <div className="text-sm font-medium text-slate-100">
+                                          <div className="text-sm font-medium text-[color:var(--text)]">
                                             {question.prompt}
                                           </div>
-                                          <div className="mt-2 text-sm text-slate-400">
+                                          <div className="mt-2 text-sm text-[color:var(--text-muted)]">
                                             {question.blocked_reason ??
                                               "Waiting on operator input."}
                                           </div>
@@ -1109,13 +1105,13 @@ export function App() {
                                       ))}
                                     {!sessionTimelineQuery.data
                                       .waiting_questions.length ? (
-                                      <div className="text-sm text-slate-500">
+                                      <div className="text-sm text-[color:var(--text-muted)]">
                                         No waiting items linked to this session.
                                       </div>
                                     ) : null}
                                   </div>
                                 ) : (
-                                  <div className="text-sm text-slate-500">
+                                  <div className="text-sm text-[color:var(--text-muted)]">
                                     No selected session.
                                   </div>
                                 ),
@@ -1130,12 +1126,12 @@ export function App() {
                                       .map((event) => (
                                         <div
                                           key={event.id}
-                                          className="rounded-2xl border border-white/8 bg-black/15 px-3 py-3"
+                                          className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] px-3 py-3"
                                         >
-                                          <div className="text-sm font-medium text-slate-100">
+                                          <div className="text-sm font-medium text-[color:var(--text)]">
                                             {formatEvent(event.event_type)}
                                           </div>
-                                          <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+                                          <div className="mt-2 text-xs text-[color:var(--text-muted)]">
                                             {new Date(
                                               event.created_at,
                                             ).toLocaleString()}
@@ -1144,13 +1140,13 @@ export function App() {
                                       ))}
                                     {!sessionTimelineQuery.data.events
                                       .length ? (
-                                      <div className="text-sm text-slate-500">
+                                      <div className="text-sm text-[color:var(--text-muted)]">
                                         No session events recorded yet.
                                       </div>
                                     ) : null}
                                   </div>
                                 ) : (
-                                  <div className="text-sm text-slate-500">
+                                  <div className="text-sm text-[color:var(--text-muted)]">
                                     No selected session.
                                   </div>
                                 ),
@@ -1160,8 +1156,8 @@ export function App() {
                         </div>
                       ) : null}
 
-                      <div className="mt-5 rounded-2xl border border-white/7 bg-black/10 p-4">
-                        <div className="text-sm font-medium text-slate-200">
+                      <div className="mt-5 rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
+                        <div className="text-sm font-medium text-[color:var(--text)]">
                           Open waiting question
                         </div>
                         <select
@@ -1169,7 +1165,7 @@ export function App() {
                           onChange={(event) =>
                             setSelectedSessionTaskId(event.target.value)
                           }
-                          className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                          className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
                         >
                           <option value="">Choose task</option>
                           {topLevelTasks.map((task) => (
@@ -1183,13 +1179,13 @@ export function App() {
                           onChange={(event) =>
                             setSelectedSessionId(event.target.value || null)
                           }
-                          className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                          className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
                         >
                           <option value="">Optional linked session</option>
                           {(projectDetailQuery.data?.sessions ?? []).map(
                             (session) => (
                               <option key={session.id} value={session.id}>
-                                {session.profile} · {session.session_name}
+                                {toDisplay(session.profile)} · {session.session_name}
                               </option>
                             ),
                           )}
@@ -1200,7 +1196,7 @@ export function App() {
                             setDraftQuestionPrompt(event.target.value)
                           }
                           placeholder="What decision or clarification does the agent need?"
-                          className="mt-3 min-h-24 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                          className="mt-3 min-h-24 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
                         />
                         <input
                           value={draftQuestionReason}
@@ -1208,19 +1204,19 @@ export function App() {
                             setDraftQuestionReason(event.target.value)
                           }
                           placeholder="Why is work blocked?"
-                          className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                          className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
                         />
                         <select
                           value={draftQuestionUrgency}
                           onChange={(event) =>
                             setDraftQuestionUrgency(event.target.value)
                           }
-                          className="mt-3 w-full rounded-2xl border border-white/8 bg-black/15 px-3 py-3 text-sm outline-none"
+                          className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
                         >
                           {["low", "medium", "high", "urgent"].map(
                             (urgency) => (
                               <option key={urgency} value={urgency}>
-                                {urgency}
+                                {toDisplay(urgency)}
                               </option>
                             ),
                           )}
@@ -1240,7 +1236,7 @@ export function App() {
                             !draftQuestionPrompt.trim() ||
                             createQuestionMutation.isPending
                           }
-                          className="mt-3 rounded-full bg-[color:var(--color-accent-primary)] px-4 py-2 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="btn-primary mt-3"
                         >
                           Open question
                         </button>

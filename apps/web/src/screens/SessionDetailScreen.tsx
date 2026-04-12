@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Pill } from "@/components/ui";
+import { toDisplay } from "@/utils/display";
 
 type SessionDetailPanel = {
   id: string;
@@ -25,21 +26,21 @@ export function SessionDetailScreen({
   structuredPanels,
 }: SessionDetailScreenProps) {
   return (
-    <section className="rounded-3xl border border-white/7 bg-black/10 px-5 py-5">
-      <header className="rounded-2xl border border-white/8 bg-white/4 p-4">
+    <section className="rounded-[8px] border border-[color:var(--border)] bg-[color:var(--surface)] px-5 py-5">
+      <header className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface-2)] p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
+            <div className="text-xs text-[color:var(--text-muted)]">
               Session detail
             </div>
-            <h2 className="mt-1 text-xl font-semibold text-slate-100">
-              {profile}
+            <h2 className="mt-1 text-xl font-semibold text-[color:var(--text)]">
+              {toDisplay(profile)}
             </h2>
             {summary ? (
-              <div className="mt-2 text-sm text-slate-400">{summary}</div>
+              <div className="mt-2 text-sm text-[color:var(--text-muted)]">{summary}</div>
             ) : null}
           </div>
-          <Pill className="border-white/8 text-slate-300">{status}</Pill>
+          <Pill>{toDisplay(status)}</Pill>
         </div>
         {actions ? (
           <div className="mt-3 flex flex-wrap gap-2">{actions}</div>
@@ -47,8 +48,8 @@ export function SessionDetailScreen({
       </header>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[1.3fr,1fr]">
-        <section className="rounded-2xl border border-white/8 bg-black/15 p-4">
-          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
+        <section className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
+          <div className="text-xs text-[color:var(--text-muted)]">
             Output + runtime logs
           </div>
           <div className="mt-3">{outputPanel}</div>
@@ -58,9 +59,9 @@ export function SessionDetailScreen({
           {structuredPanels.map((panel) => (
             <section
               key={panel.id}
-              className="rounded-2xl border border-white/8 bg-white/4 p-4"
+              className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4"
             >
-              <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
+              <div className="text-xs text-[color:var(--text-muted)]">
                 {panel.label}
               </div>
               <div className="mt-3">{panel.content}</div>

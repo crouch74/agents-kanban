@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Command } from "cmdk";
 import { Search } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
 
 export function CommandSearchTrigger({
   search,
@@ -39,7 +40,10 @@ export function CommandSearchTrigger({
         label="Global search"
         className="fixed left-1/2 top-[72px] z-[90] w-[min(640px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-[8px] border border-[color:var(--border)] bg-[color:var(--surface)] shadow-[var(--shadow-panel)]"
       >
-        <div className="sr-only">Global search</div>
+        <Dialog.Title className="sr-only">Global search</Dialog.Title>
+        <Dialog.Description className="sr-only">
+          Search across projects, tasks, sessions, waiting questions, and events.
+        </Dialog.Description>
         <div className="flex items-center gap-2 border-b border-[color:var(--border)] px-3">
           <Search className="h-4 w-4 text-[color:var(--text-muted)]" />
           <Command.Input

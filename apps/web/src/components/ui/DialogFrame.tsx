@@ -26,10 +26,12 @@ export function DialogFrame({
               <X className="h-4 w-4" />
             </Dialog.Close>
           </div>
+          <Dialog.Description className="sr-only">
+            Dialog content for {title}
+          </Dialog.Description>
           <div className="mt-4">{children}</div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
   );
 }
-

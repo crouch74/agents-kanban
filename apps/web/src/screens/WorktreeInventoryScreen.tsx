@@ -5,6 +5,7 @@ import type { EventRecord } from "@/lib/api";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { SectionFrame, SectionTitle } from "@/components/ui";
 import { Badge, Button, SearchInput, Select } from "@/components/primitives";
+import { toDisplay } from "@/utils/display";
 
 type WorktreeInventoryScreenProps = {
   active: boolean;
@@ -102,14 +103,14 @@ export function WorktreeInventoryScreen({
   const columns: DataTableColumn<WorktreeRow>[] = [
     { key: "repo", header: "Repo", render: (row) => row.repository },
     { key: "branch", header: "Branch", render: (row) => <span className="font-medium">{row.branch}</span> },
-    { key: "owner", header: "Owner task/session", render: (row) => <span className="text-slate-300">{row.owner}</span> },
+    { key: "owner", header: "Owner task/session", render: (row) => <span className="text-[color:var(--text-muted)]">{row.owner}</span> },
     {
       key: "lifecycle",
       header: "Lifecycle",
-      render: (row) => <Badge variant="neutral">{row.lifecycle}</Badge>,
+      render: (row) => <Badge variant="neutral">{toDisplay(row.lifecycle)}</Badge>,
     },
-    { key: "path", header: "Path", className: "w-[24%]", render: (row) => <span className="break-all text-xs text-slate-400">{row.path}</span> },
-    { key: "recent", header: "Recent activity", className: "w-[24%]", render: (row) => <span className="text-xs text-slate-400">{row.recentActivity}</span> },
+    { key: "path", header: "Path", className: "w-[24%]", render: (row) => <span className="break-all text-xs text-[color:var(--text-muted)]">{row.path}</span> },
+    { key: "recent", header: "Recent activity", className: "w-[24%]", render: (row) => <span className="text-xs text-[color:var(--text-muted)]">{row.recentActivity}</span> },
     {
       key: "actions",
       header: "Actions",
@@ -153,7 +154,7 @@ export function WorktreeInventoryScreen({
           <option value="all">All lifecycle states</option>
           {[...new Set(worktrees.map((worktree) => worktree.status))].map((status) => (
             <option key={status} value={status}>
-              {status}
+              {toDisplay(status)}
             </option>
           ))}
         </Select>
