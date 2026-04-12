@@ -173,6 +173,22 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
             )
             assert session["runtime_metadata"]["launch_inputs"]["agent_name"] == "codex"
             assert session["runtime_metadata"]["launch_inputs"]["max_turns"] == 3
+            assert session["runtime_metadata"]["agent_name"] == "codex"
+            assert session["runtime_metadata"]["task_kind"] == "execute"
+            assert session["runtime_metadata"]["permission_mode"] == "danger-full-access"
+            assert session["runtime_metadata"]["output_mode"] == "json"
+            assert session["runtime_metadata"]["model"] is None
+            assert session["runtime_metadata"]["launch_argv"][0] == "codex"
+            assert (
+                session["runtime_metadata"]["display_command"].startswith("codex ")
+            )
+            assert session["runtime_metadata"]["resume_token"] is None
+            assert session["runtime_metadata"]["resume_token_hint"]
+            assert session["runtime_metadata"]["adapter_metadata"]["agent"] == "codex"
+            assert (
+                session["runtime_metadata"]["working_directory_source"]
+                == session["runtime_metadata"]["working_directory"]
+            )
 
             list_response = client.get(f"/api/v1/sessions?project_id={project_id}")
             assert list_response.status_code == 200
@@ -189,6 +205,18 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
             timeline = timeline_response.json()
             assert timeline["session"]["id"] == session["id"]
             assert timeline["runs"][0]["status"] == "running"
+            assert (
+                timeline["runs"][0]["runtime_metadata"]["agent_name"]
+                == session["runtime_metadata"]["agent_name"]
+            )
+            assert (
+                timeline["runs"][0]["runtime_metadata"]["launch_argv"]
+                == session["runtime_metadata"]["launch_argv"]
+            )
+            assert (
+                timeline["runs"][0]["runtime_metadata"]["adapter_metadata"]
+                == session["runtime_metadata"]["adapter_metadata"]
+            )
             assert timeline["messages"]
             assert any(
                 event["event_type"] == "session.spawned" for event in timeline["events"]
@@ -208,6 +236,8 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
                 == session["id"]
             )
             assert follow_up["runtime_metadata"]["follow_up_type"] == "verify"
+            assert follow_up["runtime_metadata"]["agent_name"] == "codex"
+            assert follow_up["runtime_metadata"]["task_kind"] == "verify"
 
             follow_up_timeline_response = client.get(
                 f"/api/v1/sessions/{follow_up['id']}/timeline"

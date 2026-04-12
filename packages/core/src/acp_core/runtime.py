@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from shlex import quote
+from typing import Any
 
 from libtmux import Server
 
@@ -39,6 +40,8 @@ class RuntimeLaunchSpec:
     display_command: str
     working_directory: str
     legacy_shell_command: str | None = None
+    resume_token_hint: str | None = None
+    adapter_metadata: dict[str, Any] | None = None
 
 
 class TmuxRuntimeAdapter:
