@@ -34,8 +34,8 @@ export function DataTable<TRow>({
   state,
 }: DataTableProps<TRow>) {
   return (
-    <div className="overflow-x-auto rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)]">
-      <table className="w-full min-w-[1080px] border-collapse">
+    <div className="min-w-0 overflow-x-auto rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)]">
+      <table className="w-full min-w-full border-collapse">
         <thead>
           <tr className="border-b border-[color:var(--border)] bg-[color:var(--surface-2)] text-left">
             {columns.map((column) => (

@@ -5,10 +5,10 @@ import { toDisplay } from "@/utils/display";
 
 function Signal({ label, ready, icon: Icon }: { label: string; ready: boolean; icon: typeof Activity }) {
   return (
-    <div className="flex items-center justify-between rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-3">
-      <div className="flex items-center gap-3">
+    <div className="flex min-w-0 items-center justify-between gap-3 rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-3">
+      <div className="flex min-w-0 items-center gap-3">
         <Icon className="h-4 w-4 text-[color:var(--text-muted)]" />
-        <span className="text-sm text-[color:var(--text)]">{toDisplay(label)}</span>
+        <span className="truncate text-sm text-[color:var(--text)]">{toDisplay(label)}</span>
       </div>
       <Pill className={ready ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}>{ready ? "Ready" : "Pending"}</Pill>
     </div>
@@ -17,9 +17,9 @@ function Signal({ label, ready, icon: Icon }: { label: string; ready: boolean; i
 
 function DiagRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-3">
+    <div className="flex flex-col gap-2 rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <div className="text-sm text-[color:var(--text-muted)]">{label}</div>
-      <div className="max-w-[60%] break-all text-right text-sm text-[color:var(--text)]">{value}</div>
+      <div className="min-w-0 break-all text-left text-sm text-[color:var(--text)] sm:max-w-[70%] sm:text-right">{value}</div>
     </div>
   );
 }

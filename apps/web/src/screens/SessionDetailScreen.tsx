@@ -48,18 +48,18 @@ export function SessionDetailScreen({
       </header>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[1.3fr,1fr]">
-        <section className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
+        <section className="min-w-0 rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
           <div className="text-xs text-[color:var(--text-muted)]">
             Output + runtime logs
           </div>
           <div className="mt-3">{outputPanel}</div>
         </section>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           {structuredPanels.map((panel) => (
             <section
               key={panel.id}
-              className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4"
+              className="min-w-0 rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-4"
             >
               <div className="text-xs text-[color:var(--text-muted)]">
                 {panel.label}

@@ -594,13 +594,7 @@ export function App() {
           ) : null}
           {activeSection !== "home" && activeSection !== "search" && activeSection !== "activity" ? (
             <ProjectOverviewScreen>
-              <div
-                className={
-                  activeSection === "projects"
-                    ? "min-w-0"
-                    : "grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]"
-                }
-              >
+              <div className="min-w-0">
                 <ProjectsSectionContainer active={activeSection === "projects"}>
                   {activeSection === "projects" ? (
                     <div className="project-workspace">
@@ -710,7 +704,7 @@ export function App() {
                   ) : null}
                 </ProjectsSectionContainer>
 
-                <div className="flex flex-col gap-6">
+                <div className="flex min-w-0 flex-col gap-6">
 
                   <WorktreesSectionContainer
                     active={activeSection === "worktrees"}

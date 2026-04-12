@@ -446,9 +446,6 @@
   .max-w-56 {
     max-width: calc(var(--spacing) * 56);
   }
-  .max-w-\[60\%\] {
-    max-width: 60%;
-  }
   .max-w-\[260px\] {
     max-width: 260px;
   }
@@ -464,8 +461,8 @@
   .min-w-\[280px\] {
     min-width: 280px;
   }
-  .min-w-\[1080px\] {
-    min-width: 1080px;
+  .min-w-full {
+    min-width: 100%;
   }
   .flex-1 {
     flex: 1;
@@ -842,9 +839,6 @@
   .text-left {
     text-align: left;
   }
-  .text-right {
-    text-align: right;
-  }
   .align-top {
     vertical-align: top;
   }
@@ -1090,9 +1084,39 @@
       display: none;
     }
   }
+  .sm\:max-w-\[70\%\] {
+    @media (width >= 40rem) {
+      max-width: 70%;
+    }
+  }
   .sm\:grid-cols-2 {
     @media (width >= 40rem) {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  .sm\:flex-row {
+    @media (width >= 40rem) {
+      flex-direction: row;
+    }
+  }
+  .sm\:items-start {
+    @media (width >= 40rem) {
+      align-items: flex-start;
+    }
+  }
+  .sm\:justify-between {
+    @media (width >= 40rem) {
+      justify-content: space-between;
+    }
+  }
+  .sm\:gap-4 {
+    @media (width >= 40rem) {
+      gap: calc(var(--spacing) * 4);
+    }
+  }
+  .sm\:text-right {
+    @media (width >= 40rem) {
+      text-align: right;
     }
   }
   .md\:flex {
@@ -1143,11 +1167,6 @@
   .xl\:grid-cols-\[1\.3fr\,1fr\] {
     @media (width >= 80rem) {
       grid-template-columns: 1.3fr,1fr;
-    }
-  }
-  .xl\:grid-cols-\[minmax\(0\,1fr\)_360px\] {
-    @media (width >= 80rem) {
-      grid-template-columns: minmax(0,1fr) 360px;
     }
   }
 }
