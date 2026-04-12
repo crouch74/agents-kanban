@@ -1,5 +1,6 @@
 import { startTransition } from "react";
 import { type QueryClient } from "@tanstack/react-query";
+import { type NavSection } from "@/app-shell/types";
 import {
   useAddTaskArtifactMutation,
   useAddTaskCheckMutation,
@@ -25,6 +26,8 @@ type Params = {
   selectedProjectId: string | null;
   inspectedTaskId: string | null;
   setSelectedProjectId: (projectId: string | null) => void;
+  setActiveSection: (section: NavSection) => void;
+  setProjectDialogOpen: (open: boolean) => void;
   selectSession: (sessionId: string) => void;
   selectQuestion: (questionId: string) => void;
   setSelectedRepositoryId: (repositoryId: string | null) => void;
@@ -51,6 +54,8 @@ export function useControlPlaneMutations({
   selectedProjectId,
   inspectedTaskId,
   setSelectedProjectId,
+  setActiveSection,
+  setProjectDialogOpen,
   selectSession,
   selectQuestion,
   setSelectedRepositoryId,
@@ -85,7 +90,9 @@ export function useControlPlaneMutations({
         includeProjects: true,
       });
       startTransition(() => {
+        setActiveSection("projects");
         setSelectedProjectId(result.project.id);
+        setProjectDialogOpen(false);
       });
     },
   });

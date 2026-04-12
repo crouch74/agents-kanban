@@ -235,6 +235,8 @@ export function App() {
     selectedProjectId,
     inspectedTaskId,
     setSelectedProjectId,
+    setActiveSection,
+    setProjectDialogOpen,
     selectSession: (sessionId) => {
       setSelectedSessionId(sessionId);
       setDrawerSelection({ type: "session", id: sessionId });

@@ -300,7 +300,7 @@ class ProjectService:
 
         tasks_stmt = (
             select(Task)
-            .where(Task.project_id == project_id)
+            .where(Task.project_id == project_id, Task.workflow_state != "cancelled")
             .order_by(Task.parent_task_id.is_not(None), Task.created_at.asc())
         )
         tasks = list(self.context.db.scalars(tasks_stmt))

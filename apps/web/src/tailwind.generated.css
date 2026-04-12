@@ -386,6 +386,9 @@
   .h-px {
     height: 1px;
   }
+  .max-h-64 {
+    max-height: calc(var(--spacing) * 64);
+  }
   .max-h-72 {
     max-height: calc(var(--spacing) * 72);
   }
@@ -397,6 +400,12 @@
   }
   .max-h-\[calc\(100vh-15rem\)\] {
     max-height: calc(100vh - 15rem);
+  }
+  .max-h-\[calc\(100vh-32px\)\] {
+    max-height: calc(100vh - 32px);
+  }
+  .min-h-0 {
+    min-height: calc(var(--spacing) * 0);
   }
   .min-h-6 {
     min-height: calc(var(--spacing) * 6);
@@ -591,6 +600,9 @@
   }
   .overflow-x-auto {
     overflow-x: auto;
+  }
+  .overflow-y-auto {
+    overflow-y: auto;
   }
   .rounded {
     border-radius: 0.25rem;

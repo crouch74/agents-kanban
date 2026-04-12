@@ -4,10 +4,11 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy.sql.elements import BinaryExpression, BooleanClauseList
 
 from acp_core.models import AgentSession, Task, WaitingQuestion
 from acp_core.schemas import AgentSessionFollowUpCreate, HumanReplyCreate, TaskPatch, WaitingQuestionCreate
-from acp_core.services_legacy import ServiceContext, SessionService, TaskService, WaitingService
+from acp_core.services_legacy import ProjectService, ServiceContext, SessionService, TaskService, WaitingService
 
 
 @pytest.fixture
@@ -86,6 +87,37 @@ def test_patch_task_enforces_completion_gating(
 
     with pytest.raises(ValueError, match="Task cannot move to done"):
         service.patch_task(task_record.id, TaskPatch(workflow_state="done"))
+
+
+def test_get_board_view_excludes_cancelled_tasks(
+    service_context: ServiceContext,
+) -> None:
+    board = SimpleNamespace(id="board-1", name="Board", columns=[])
+    project = SimpleNamespace(id="proj-1", board=board)
+    service = ProjectService(service_context)
+    service.get_project = MagicMock(return_value=project)
+    service._repair_board_columns = MagicMock()
+
+    captured = {}
+
+    def _capture(stmt):
+        captured["stmt"] = stmt
+        return []
+
+    service_context.db.scalars.side_effect = _capture
+
+    result = service.get_board_view("proj-1")
+
+    assert result.tasks == []
+    where_clause = captured["stmt"].whereclause
+    assert isinstance(where_clause, BooleanClauseList)
+    clauses = tuple(where_clause.clauses)
+    assert any(
+        isinstance(clause, BinaryExpression)
+        and getattr(getattr(clause, "left", None), "name", None) == "workflow_state"
+        and getattr(getattr(clause, "right", None), "value", None) == "cancelled"
+        for clause in clauses
+    )
 
 
 def test_open_question_applies_waiting_overlay_to_task_and_session(

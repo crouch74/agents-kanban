@@ -1,5 +1,6 @@
-import { beforeEach, expect, test } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { beforeEach, expect, test, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { ProjectBootstrapWizard } from '@/components/project-bootstrap-wizard';
 import { resetUIStore } from '@/test/reset-ui-store';
 import { renderApp } from '@/test/render-app';
 
@@ -44,4 +45,54 @@ test('opens project bootstrap in a dialog from the project switcher', async () =
 
   expect(await screen.findByText('New Project')).toBeInTheDocument();
   expect(screen.getByPlaceholderText('Acme migration program')).toBeInTheDocument();
+});
+
+test('renders a scrollable preview region when confirmation is required', async () => {
+  const onPreview = vi.fn().mockResolvedValue({
+    repo_path: '/tmp/demo-repo',
+    stack_preset: 'nextjs',
+    stack_notes: null,
+    use_worktree: false,
+    repo_initialized_on_confirm: false,
+    scaffold_applied_on_confirm: false,
+    has_existing_commits: true,
+    confirmation_required: true,
+    execution_path: '/tmp/demo-repo',
+    execution_branch: 'main',
+    planned_changes: Array.from({ length: 8 }, (_, index) => ({
+      path: `.acp/file-${index}.md`,
+      action: 'create_or_update' as const,
+      description: `Planned change ${index}`,
+    })),
+  });
+
+  render(
+    <ProjectBootstrapWizard
+      isPreviewPending={false}
+      isConfirmPending={false}
+      onPreview={onPreview}
+      onConfirm={vi.fn().mockResolvedValue({}) as never}
+    />,
+  );
+
+  fireEvent.change(screen.getByPlaceholderText('Acme migration program'), {
+    target: { value: 'Bootstrap Demo' },
+  });
+  fireEvent.change(screen.getByPlaceholderText('/absolute/path/to/repo'), {
+    target: { value: '/tmp/demo-repo' },
+  });
+  fireEvent.change(
+    screen.getByPlaceholderText(
+      'Describe the work to kick off. ACP will ask the agent to clarify requirements and create tasks/subtasks.',
+    ),
+    {
+      target: { value: 'Plan the initial implementation and create tasks.' },
+    },
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: /review bootstrap/i }));
+
+  const scrollRegion = await screen.findByTestId('bootstrap-preview-scroll-region');
+  expect(scrollRegion.className).toContain('max-h-64');
+  expect(scrollRegion.className).toContain('overflow-y-auto');
 });

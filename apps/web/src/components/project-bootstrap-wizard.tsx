@@ -168,7 +168,10 @@ export function ProjectBootstrapWizard({
             {preview.repo_initialized_on_confirm ? <Badge variant="info">git init on confirm</Badge> : null}
             {preview.scaffold_applied_on_confirm ? <Badge variant="info">starter scaffold on confirm</Badge> : null}
           </div>
-          <div className="mt-3 space-y-2">
+          <div
+            data-testid="bootstrap-preview-scroll-region"
+            className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1"
+          >
             {preview.planned_changes.map((change) => (
               <div key={`${change.path}:${change.action}`} className="rounded-[4px] border border-amber-200 bg-white/70 px-3 py-2">
                 <div className="font-medium">{change.path}</div>

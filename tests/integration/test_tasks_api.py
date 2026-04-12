@@ -133,12 +133,20 @@ def test_task_board_column_moves_are_authoritative_and_cancelled_tasks_can_reope
         assert cancelled.status_code == 200
         assert cancelled.json()["workflow_state"] == "cancelled"
 
+        board_without_cancelled = client.get(f"/api/v1/projects/{project_id}/board")
+        assert board_without_cancelled.status_code == 200
+        assert all(candidate["id"] != task["id"] for candidate in board_without_cancelled.json()["tasks"])
+
         reopened = client.patch(
             f"/api/v1/tasks/{task['id']}",
             json={"workflow_state": "backlog"},
         )
         assert reopened.status_code == 200
         assert reopened.json()["workflow_state"] == "backlog"
+
+        board_with_reopened = client.get(f"/api/v1/projects/{project_id}/board")
+        assert board_with_reopened.status_code == 200
+        assert any(candidate["id"] == task["id"] for candidate in board_with_reopened.json()["tasks"])
 
 
 def test_create_subtask_under_parent_task() -> None:

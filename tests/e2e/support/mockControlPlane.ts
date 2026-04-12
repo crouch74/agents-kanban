@@ -364,7 +364,7 @@ export async function bootstrapProject(page: Page, name: string) {
     )
     .fill("Kick off a stable deterministic plan.");
   await page.getByRole("button", { name: "Review bootstrap" }).click();
-  await expect(page.getByText(`${name} is ready`)).toBeVisible();
-  await expect(page.getByText("Kickoff task: Kick off planning and board setup")).toBeVisible();
-  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "New Project" })).not.toBeVisible();
+  await expect(page.getByRole("heading", { name })).toBeVisible();
+  await expect(page.getByText("Kick off planning and board setup").first()).toBeVisible();
 }
