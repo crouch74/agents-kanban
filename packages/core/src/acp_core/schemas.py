@@ -73,11 +73,31 @@ class RuntimeLaunchSpecCreate(BaseModel):
     legacy_shell_command: str | None = None
 
 
+class SessionLaunchInputCreate(BaseModel):
+    task_kind: Literal["kickoff", "execute", "review", "verify", "research", "docs"] = "execute"
+    agent_name: str | None = None
+    prompt: str | None = None
+    working_directory: str | None = None
+    model: str | None = None
+    permission_mode: str | None = None
+    output_mode: str | None = None
+    max_turns: int | None = Field(default=None, ge=1)
+    resume_token: str | None = None
+    allowed_tools: list[str] = Field(default_factory=list)
+    disallowed_tools: list[str] = Field(default_factory=list)
+    extra_env: dict[str, str] = Field(default_factory=dict)
+    repository_id: str | None = None
+    worktree_id: str | None = None
+    session_family_id: str | None = None
+    follow_up_of_session_id: str | None = None
+
+
 class AgentSessionCreate(BaseModel):
     task_id: str
     profile: Literal["executor", "reviewer", "verifier", "research", "docs"] = "executor"
     repository_id: str | None = None
     worktree_id: str | None = None
+    launch_input: SessionLaunchInputCreate | None = None
     launch_spec: RuntimeLaunchSpecCreate | None = None
     # Deprecated compatibility bridge.
     command: str | None = None
@@ -88,6 +108,7 @@ class AgentSessionFollowUpCreate(BaseModel):
     follow_up_type: Literal["retry", "review", "verify", "handoff"] | None = None
     reuse_worktree: bool = True
     reuse_repository: bool = True
+    launch_input: SessionLaunchInputCreate | None = None
     launch_spec: RuntimeLaunchSpecCreate | None = None
     # Deprecated compatibility bridge.
     command: str | None = None

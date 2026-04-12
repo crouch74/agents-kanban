@@ -113,12 +113,30 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
 
             session_response = client.post(
                 "/api/v1/sessions",
-                json={"task_id": task_id, "profile": "executor", "worktree_id": worktree_id},
+                json={
+                    "task_id": task_id,
+                    "profile": "executor",
+                    "worktree_id": worktree_id,
+                    "launch_input": {
+                        "task_kind": "execute",
+                        "agent_name": "codex",
+                        "prompt": "Implement the task and summarize changes.",
+                        "permission_mode": "danger-full-access",
+                        "output_mode": "json",
+                        "max_turns": 3,
+                        "allowed_tools": ["bash"],
+                        "disallowed_tools": ["python"],
+                        "extra_env": {"ACP_SESSION_MODE": "test"},
+                    },
+                },
             )
             assert session_response.status_code == 201
             session = session_response.json()
             assert session["status"] == "running"
             assert session["worktree_id"] == worktree_id
+            assert session["runtime_metadata"]["launch_inputs"]["task_kind"] == "execute"
+            assert session["runtime_metadata"]["launch_inputs"]["agent_name"] == "codex"
+            assert session["runtime_metadata"]["launch_inputs"]["max_turns"] == 3
 
             list_response = client.get(f"/api/v1/sessions?project_id={project_id}")
             assert list_response.status_code == 200
@@ -234,5 +252,42 @@ def test_session_spawn_rejects_cross_project_repository(tmp_path: Path) -> None:
             )
             assert response.status_code == 400
             assert response.json()["detail"] == "Session repository must belong to the same project as the task"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_session_spawn_validates_agent_capabilities(tmp_path: Path) -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+    repo_path = create_git_repo(tmp_path / "capability-session-repo")
+
+    try:
+        with TestClient(app) as client:
+            project_id = client.post("/api/v1/projects", json={"name": "Capability Project"}).json()["id"]
+            repository_id = client.post(
+                "/api/v1/repositories",
+                json={"project_id": project_id, "local_path": str(repo_path)},
+            ).json()["id"]
+            task_id = client.post(
+                "/api/v1/tasks",
+                json={"project_id": project_id, "title": "Capability task"},
+            ).json()["id"]
+
+            response = client.post(
+                "/api/v1/sessions",
+                json={
+                    "task_id": task_id,
+                    "profile": "executor",
+                    "repository_id": repository_id,
+                    "launch_input": {
+                        "task_kind": "execute",
+                        "agent_name": "claude-code",
+                        "prompt": "Run review.",
+                        "permission_mode": "danger-full-access",
+                    },
+                },
+            )
+            assert response.status_code == 400
+            assert response.json()["detail"] == "Agent 'claude-code' does not support permission_mode"
     finally:
         app.dependency_overrides.clear()

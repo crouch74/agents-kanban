@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import String, cast, or_, select
 
+from acp_core.agents import AgentRequest, SessionLaunchInputs, resolve_coding_agent_adapter
 from acp_core.errors import build_runtime_service_error
 from acp_core.infrastructure.runtime_adapter import DefaultRuntimeAdapter, RuntimeAdapterProtocol
 from acp_core.logging import logger
@@ -140,6 +141,108 @@ class SessionService:
             return len(existing) + 1
         return 1
 
+    @staticmethod
+    def _task_kind_from_profile(profile: str) -> str:
+        mapping = {
+            "executor": "execute",
+            "reviewer": "review",
+            "verifier": "verify",
+            "research": "research",
+            "docs": "docs",
+        }
+        return mapping.get(profile, "execute")
+
+    def _build_launch_inputs(
+        self,
+        *,
+        profile: str,
+        working_directory: Path,
+        launch_input_payload: Any | None,
+        repository_id: str | None,
+        worktree_id: str | None,
+        session_family_id: str | None = None,
+        follow_up_of_session_id: str | None = None,
+    ) -> SessionLaunchInputs:
+        payload = launch_input_payload
+        return SessionLaunchInputs(
+            task_kind=(payload.task_kind if payload else self._task_kind_from_profile(profile)),
+            agent_name=payload.agent_name if payload else None,
+            prompt=payload.prompt if payload else None,
+            working_directory=Path(payload.working_directory) if payload and payload.working_directory else working_directory,
+            model=payload.model if payload else None,
+            permission_mode=payload.permission_mode if payload else None,
+            output_mode=payload.output_mode if payload else None,
+            max_turns=payload.max_turns if payload else None,
+            resume_token=payload.resume_token if payload else None,
+            allowed_tools=list(payload.allowed_tools) if payload else [],
+            disallowed_tools=list(payload.disallowed_tools) if payload else [],
+            extra_env=dict(payload.extra_env) if payload else {},
+            repository_id=(payload.repository_id if payload and payload.repository_id else repository_id),
+            worktree_id=(payload.worktree_id if payload and payload.worktree_id else worktree_id),
+            session_family_id=(payload.session_family_id if payload and payload.session_family_id else session_family_id),
+            follow_up_of_session_id=(
+                payload.follow_up_of_session_id if payload and payload.follow_up_of_session_id else follow_up_of_session_id
+            ),
+        )
+
+    def _build_launch_spec_from_inputs(self, *, launch_inputs: SessionLaunchInputs, task: Task) -> RuntimeLaunchSpec | None:
+        if not any(
+            [
+                launch_inputs.prompt,
+                launch_inputs.agent_name,
+                launch_inputs.model,
+                launch_inputs.permission_mode,
+                launch_inputs.output_mode,
+                launch_inputs.resume_token,
+                launch_inputs.allowed_tools,
+                launch_inputs.disallowed_tools,
+                launch_inputs.extra_env,
+            ]
+        ):
+            return None
+
+        adapter = resolve_coding_agent_adapter(launch_inputs.agent_name)
+        capabilities = adapter.capabilities()
+        if launch_inputs.model and not capabilities.supports_model:
+            raise ValueError(f"Agent '{adapter.name}' does not support model selection")
+        if launch_inputs.permission_mode and not capabilities.supports_permissions:
+            raise ValueError(f"Agent '{adapter.name}' does not support permission_mode")
+        if launch_inputs.output_mode and not capabilities.supports_output:
+            raise ValueError(f"Agent '{adapter.name}' does not support output_mode")
+        if launch_inputs.resume_token and not capabilities.supports_resume_hint:
+            raise ValueError(f"Agent '{adapter.name}' does not support resume_token")
+
+        prompt = (launch_inputs.prompt or f"Continue task '{task.title}' ({task.id}).").strip()
+        prompt_dir = settings.runtime_home / "prompts"
+        prompt_dir.mkdir(parents=True, exist_ok=True)
+        prompt_file = prompt_dir / f"session-{task.id}.md"
+        prompt_file.write_text(prompt + "\n", encoding="utf-8")
+
+        request = AgentRequest(
+            agent_name=adapter.name,
+            task_kind=launch_inputs.task_kind,
+            prompt_file=prompt_file,
+            execution_root=launch_inputs.working_directory,
+            model=launch_inputs.model,
+            permissions=launch_inputs.permission_mode,
+            output=launch_inputs.output_mode,
+            metadata={
+                "task_id": task.id,
+                "max_turns": launch_inputs.max_turns,
+                "resume_token": launch_inputs.resume_token,
+                "allowed_tools": launch_inputs.allowed_tools,
+                "disallowed_tools": launch_inputs.disallowed_tools,
+            },
+        )
+        launch_plan = adapter.build_launch_plan(request)
+        env = {**launch_plan.env, **launch_inputs.extra_env}
+        return RuntimeLaunchSpec(
+            argv=launch_plan.argv,
+            env=env,
+            display_command=launch_plan.display_command,
+            working_directory=str(launch_inputs.working_directory),
+        )
+
     def _spawn_session_record(
         self,
         *,
@@ -152,6 +255,7 @@ class SessionService:
         runtime_metadata_extra: dict[str, Any] | None = None,
         run_summary: str | None = None,
         message_body: str | None = None,
+        launch_inputs: SessionLaunchInputs | None = None,
     ) -> AgentSession:
         repository_id, worktree, working_directory = self._resolve_session_target(
             repository_id=repository_id,
@@ -165,12 +269,15 @@ class SessionService:
                 raise ValueError("Session repository must belong to the same project as the task")
         attempt_number = self._next_attempt_number(task.id)
         session_name = safe_tmux_name(f"acp-{task.project_id[:6]}-{task.id[:8]}-{profile}-{attempt_number}")
+        resolved_launch_spec = launch_spec or (
+            self._build_launch_spec_from_inputs(launch_inputs=launch_inputs, task=task) if launch_inputs else None
+        )
         try:
             runtime_info = self.runtime.spawn_session(
                 session_name=session_name,
                 working_directory=working_directory,
                 profile=profile,
-                launch_spec=launch_spec,
+                launch_spec=resolved_launch_spec,
                 command=command,
             )
         except Exception as exc:
@@ -188,6 +295,24 @@ class SessionService:
         }
         if runtime_metadata_extra:
             runtime_metadata.update(runtime_metadata_extra)
+        if launch_inputs is not None:
+            runtime_metadata["launch_inputs"] = {
+                "task_kind": launch_inputs.task_kind,
+                "agent_name": launch_inputs.agent_name,
+                "working_directory": str(launch_inputs.working_directory),
+                "model": launch_inputs.model,
+                "permission_mode": launch_inputs.permission_mode,
+                "output_mode": launch_inputs.output_mode,
+                "max_turns": launch_inputs.max_turns,
+                "resume_token": launch_inputs.resume_token,
+                "allowed_tools": launch_inputs.allowed_tools,
+                "disallowed_tools": launch_inputs.disallowed_tools,
+                "extra_env": launch_inputs.extra_env,
+                "repository_id": launch_inputs.repository_id,
+                "worktree_id": launch_inputs.worktree_id,
+                "session_family_id": launch_inputs.session_family_id,
+                "follow_up_of_session_id": launch_inputs.follow_up_of_session_id,
+            }
 
         session = AgentSession(
             project_id=task.project_id,
@@ -242,14 +367,25 @@ class SessionService:
         if task is None:
             raise ValueError("Task not found")
 
+        repository_id = payload.launch_input.repository_id if payload.launch_input and payload.launch_input.repository_id else payload.repository_id
+        worktree_id = payload.launch_input.worktree_id if payload.launch_input and payload.launch_input.worktree_id else payload.worktree_id
+        _, _, working_directory = self._resolve_session_target(repository_id=repository_id, worktree_id=worktree_id)
+        launch_inputs = self._build_launch_inputs(
+            profile=payload.profile,
+            working_directory=working_directory,
+            launch_input_payload=payload.launch_input,
+            repository_id=repository_id,
+            worktree_id=worktree_id,
+        )
         session = self._spawn_session_record(
             task=task,
             profile=payload.profile,
-            repository_id=payload.repository_id,
-            worktree_id=payload.worktree_id,
+            repository_id=repository_id,
+            worktree_id=worktree_id,
             launch_spec=RuntimeLaunchSpec(**payload.launch_spec.model_dump()) if payload.launch_spec else None,
             command=payload.command,
             runtime_metadata_extra={"session_family_id": None},
+            launch_inputs=launch_inputs,
         )
         session.runtime_metadata = {**session.runtime_metadata, "session_family_id": session.id}
 
@@ -302,6 +438,20 @@ class SessionService:
         repository_id = source.repository_id if payload.reuse_repository else None
         worktree_id = source.worktree_id if payload.reuse_worktree else None
         family_id = self._session_family_id(source)
+        if payload.launch_input and payload.launch_input.repository_id:
+            repository_id = payload.launch_input.repository_id
+        if payload.launch_input and payload.launch_input.worktree_id:
+            worktree_id = payload.launch_input.worktree_id
+        _, _, working_directory = self._resolve_session_target(repository_id=repository_id, worktree_id=worktree_id)
+        launch_inputs = self._build_launch_inputs(
+            profile=payload.profile,
+            working_directory=working_directory,
+            launch_input_payload=payload.launch_input,
+            repository_id=repository_id,
+            worktree_id=worktree_id,
+            session_family_id=family_id,
+            follow_up_of_session_id=source.id,
+        )
         session = self._spawn_session_record(
             task=task,
             profile=payload.profile,
@@ -319,6 +469,7 @@ class SessionService:
             message_body=(
                 f"🧭 Spawned {payload.profile} {follow_up_type} session from {source.session_name}"
             ),
+            launch_inputs=launch_inputs,
         )
 
         self.context.db.add(
@@ -565,4 +716,3 @@ class SessionService:
 
         logger.info("⚠️ session cancelled", session_id=session.id, session_name=session.session_name)
         return session
-
