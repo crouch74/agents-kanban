@@ -291,6 +291,8 @@ class SessionService:
             env=env,
             display_command=launch_plan.display_command,
             working_directory=str(launch_inputs.working_directory),
+            resume_token_hint=launch_plan.resume_hint,
+            adapter_metadata=launch_plan.metadata,
         )
 
     def _spawn_session_record(
@@ -343,14 +345,36 @@ class SessionService:
                 details={"session_name": session_name, "task_id": task.id},
             ) from exc
 
-        runtime_metadata = {
+        core_observability_metadata = {
             "pane_id": runtime_info.pane_id,
             "window_name": runtime_info.window_name,
             "working_directory": runtime_info.working_directory,
             "command": runtime_info.command,
+            "agent_name": launch_inputs.agent_name if launch_inputs else None,
+            "task_kind": launch_inputs.task_kind if launch_inputs else None,
+            "model": launch_inputs.model if launch_inputs else None,
+            "permission_mode": launch_inputs.permission_mode if launch_inputs else None,
+            "output_mode": launch_inputs.output_mode if launch_inputs else None,
+            "launch_argv": resolved_launch_spec.argv if resolved_launch_spec else None,
+            "display_command": (
+                resolved_launch_spec.display_command if resolved_launch_spec else None
+            ),
+            "resume_token": launch_inputs.resume_token if launch_inputs else None,
+            "resume_token_hint": (
+                resolved_launch_spec.resume_token_hint if resolved_launch_spec else None
+            ),
+            "adapter_metadata": (
+                resolved_launch_spec.adapter_metadata if resolved_launch_spec else None
+            ),
+            "working_directory_source": (
+                str(launch_inputs.working_directory) if launch_inputs else None
+            ),
         }
+        runtime_metadata = dict(core_observability_metadata)
         if runtime_metadata_extra:
-            runtime_metadata.update(runtime_metadata_extra)
+            for key, value in runtime_metadata_extra.items():
+                if key not in runtime_metadata:
+                    runtime_metadata[key] = value
         if launch_inputs is not None:
             runtime_metadata["launch_inputs"] = {
                 "task_kind": launch_inputs.task_kind,
@@ -369,6 +393,28 @@ class SessionService:
                 "session_family_id": launch_inputs.session_family_id,
                 "follow_up_of_session_id": launch_inputs.follow_up_of_session_id,
             }
+            runtime_metadata["launch_inputs"]["resume_token_hint"] = (
+                resolved_launch_spec.resume_token_hint if resolved_launch_spec else None
+            )
+            runtime_metadata["launch_inputs"]["adapter_metadata"] = (
+                resolved_launch_spec.adapter_metadata if resolved_launch_spec else None
+            )
+            runtime_metadata["launch_inputs"]["display_command"] = (
+                resolved_launch_spec.display_command if resolved_launch_spec else None
+            )
+            runtime_metadata["launch_inputs"]["launch_argv"] = (
+                resolved_launch_spec.argv if resolved_launch_spec else None
+            )
+
+        if runtime_metadata_extra:
+            for lineage_key in (
+                "session_family_id",
+                "follow_up_of_session_id",
+                "follow_up_type",
+                "source_profile",
+            ):
+                if lineage_key in runtime_metadata_extra:
+                    runtime_metadata[lineage_key] = runtime_metadata_extra[lineage_key]
 
         session = AgentSession(
             project_id=task.project_id,
@@ -389,7 +435,7 @@ class SessionService:
                 attempt_number=attempt_number,
                 status="running",
                 summary=run_summary or f"{profile} session launched",
-                runtime_metadata=runtime_metadata,
+                runtime_metadata=dict(runtime_metadata),
             )
         )
         self.context.db.add(
