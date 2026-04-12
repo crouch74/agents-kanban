@@ -1,3 +1,6 @@
+## [Unreleased] 
+- Fixed ACP_RUNTIME_HOME environment missing for bootstrap MCP connection.
+- Reverted to -a never flag for properly pipelined stdin sandbox mode.
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -11,9 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🤖 Bootstrap command used interactive `codex` CLI piped via stdin, which errors
   with "stdin is not a terminal" inside a non-interactive tmux session. Switched to
   `codex exec` — the explicit non-interactive subcommand that accepts piped stdin.
-- 🤖 Bootstrap command did not use `--full-auto`, so MCP tool calls inside
-  non-interactive `codex exec` sessions were auto-cancelled. Added `--full-auto`
-  to enable automatic tool call approval.
+- 🤖 Bootstrap command used `codex exec --full-auto`, which still maps to
+  `-a on-request` and can leave non-interactive kickoff MCP calls stuck behind
+  approval prompts. Switched the default bootstrap command to
+  `codex -a never exec -s workspace-write`.
 - 🌿 `bootstrap_project` raised a `ValueError` when the repo path did not yet
   exist, even when `initialize_repo=true` was set. Directory is now created
   automatically before git init when the flag is enabled.

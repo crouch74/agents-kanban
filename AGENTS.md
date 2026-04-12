@@ -272,4 +272,5 @@ TODO/FIXME/HACK scan results:
 ## 12. Changelog
 | Date | Author | Change |
 |------|--------|--------|
+| 2026-04-12 | Antigravity | Resolved MCP transport failures by silencing SDK stdout pollution and enabling autonomous write approval for bootstrap agents. |
 | 2026-04-11 | Codex (generated) | Replaced AGENTS.md with repository-wide cross-agent governance based on full repo scan; marked non-established conventions explicitly. |

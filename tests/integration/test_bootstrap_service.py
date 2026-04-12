@@ -123,7 +123,7 @@ def test_bootstrap_project_nonexistent_path_with_initialize_repo_creates_repo_an
             kickoff_command = payload["kickoff_session"]["runtime_metadata"]["command"]
             assert "codex mcp get" in kickoff_command
             assert "codex mcp add" in kickoff_command
-            assert "codex exec --full-auto" in kickoff_command
+            assert "codex --dangerously-bypass-approvals-and-sandbox exec" in kickoff_command
             assert " - < " in kickoff_command
     finally:
         app.dependency_overrides.clear()

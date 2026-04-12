@@ -198,5 +198,7 @@ class ScaffoldWriter:
             "mcp_pythonpath": shell_join([mcp_pythonpath]),
             "python_executable": shell_join([sys.executable]),
             "prompt_file": shell_join([str(prompt_file)]),
+            "acp_runtime_home": shell_join([str(settings.runtime_home)]),
+            "execution_path": str(execution_root),
         }
         return settings.bootstrap_agent_command_template.format(**template_values)

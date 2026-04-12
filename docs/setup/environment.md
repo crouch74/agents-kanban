@@ -19,7 +19,7 @@ Agent Control Plane loads environment variables through `packages/core/src/acp_c
 | `ACP_RUNTIME_HOME` | `path` | `.acp` under current working directory | Root runtime folder for DB, logs, and artifacts. | Usually keep `.acp` in repo root for easy cleanup. | CI commonly leaves default; override only when isolating artifacts per step. |
 | `ACP_DATABASE_NAME` | `str` | `acp.sqlite3` | SQLite database filename inside `ACP_RUNTIME_HOME`. | Change only if you need multiple side-by-side local databases. | Optional; can be overridden for matrix/isolation scenarios. |
 | `ACP_BOOTSTRAP_AGENT_MCP_NAME` | `str` | `agent-control-plane` | MCP server name used by bootstrap agent setup commands. | Usually unchanged. | Usually unchanged. |
-| `ACP_BOOTSTRAP_AGENT_COMMAND_TEMPLATE` | `str` | `codex mcp get {mcp_name} >/dev/null 2>&1 || codex mcp add {mcp_name} --env PYTHONPATH={mcp_pythonpath} -- {python_executable} -m acp_mcp_server.server && codex exec --full-auto - < {prompt_file}` | Command template used for bootstrap agent execution. | Keep default unless you intentionally customize Codex bootstrap behavior. | Usually unchanged; only override in specialized CI bootstrap experiments. |
+| `ACP_BOOTSTRAP_AGENT_COMMAND_TEMPLATE` | `str` | `codex mcp get {mcp_name} >/dev/null 2>&1 || codex mcp add {mcp_name} --env PYTHONPATH={mcp_pythonpath} -- {python_executable} -m acp_mcp_server.server && codex -a never exec -s workspace-write - < {prompt_file}` | Command template used for bootstrap agent execution. | Keep default unless you intentionally customize Codex bootstrap behavior. | Usually unchanged; only override in specialized CI bootstrap experiments. |
 
 ## Local setup flow
 
