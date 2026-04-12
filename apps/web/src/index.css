@@ -97,13 +97,16 @@ a {
 
 .board-region {
   min-width: 0;
+  overflow: hidden;
   padding: 16px;
 }
 
 .board-scroll {
   display: flex;
   gap: 12px;
+  max-width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
   padding-bottom: 8px;
   scroll-snap-type: x mandatory;
 }

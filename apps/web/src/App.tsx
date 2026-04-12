@@ -594,7 +594,13 @@ export function App() {
           ) : null}
           {activeSection !== "home" && activeSection !== "search" && activeSection !== "activity" ? (
             <ProjectOverviewScreen>
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+              <div
+                className={
+                  activeSection === "projects"
+                    ? "min-w-0"
+                    : "grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]"
+                }
+              >
                 <ProjectsSectionContainer active={activeSection === "projects"}>
                   {activeSection === "projects" ? (
                     <div className="project-workspace">
