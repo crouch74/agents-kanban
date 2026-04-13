@@ -43,6 +43,7 @@ from acp_core.schemas import (
     WaitingQuestionRead,
 )
 from acp_core.services.base_service import ServiceContext
+from acp_core.services.agent_selection import resolve_agent_name
 from acp_core.settings import settings
 
 
@@ -182,36 +183,13 @@ class SessionService:
         }
         return mapping.get(profile, "execute")
 
-    def _default_agent_for_flow(
-        self,
-        *,
-        profile: str,
-        follow_up_type: str | None = None,
-    ) -> str:
-        configured_agent = None
-        if follow_up_type == "review":
-            configured_agent = settings.review_agent
-        elif follow_up_type == "verify":
-            configured_agent = settings.verify_agent
-        elif profile == "executor":
-            configured_agent = settings.execution_agent
-        elif profile == "reviewer":
-            configured_agent = settings.review_agent
-        elif profile == "verifier":
-            configured_agent = settings.verify_agent
-        elif profile == "research":
-            configured_agent = settings.research_agent
-        elif profile == "docs":
-            configured_agent = settings.docs_agent
-
-        return configured_agent or settings.default_agent
-
     def _build_launch_inputs(
         self,
         *,
         profile: str,
         working_directory: Path,
         launch_input_payload: Any | None,
+        requested_agent_name: str | None,
         repository_id: str | None,
         worktree_id: str | None,
         follow_up_type: str | None = None,
@@ -255,11 +233,11 @@ class SessionService:
                 else follow_up_of_session_id
             ),
         )
-        fallback_agent = self._default_agent_for_flow(
-            profile=profile, follow_up_type=follow_up_type
-        )
-        resolved_agent = self.agent_registry.canonical_key(
-            launch_inputs.agent_name or fallback_agent
+        resolved_agent = resolve_agent_name(
+            launch_inputs.task_kind,
+            requested_agent_name or launch_inputs.agent_name,
+            settings,
+            registry=self.agent_registry,
         )
         return replace(launch_inputs, agent_name=resolved_agent)
 
@@ -525,6 +503,7 @@ class SessionService:
             profile=payload.profile,
             working_directory=working_directory,
             launch_input_payload=payload.launch_input,
+            requested_agent_name=payload.agent_name,
             repository_id=repository_id,
             worktree_id=worktree_id,
         )
@@ -611,6 +590,7 @@ class SessionService:
             profile=payload.profile,
             working_directory=working_directory,
             launch_input_payload=payload.launch_input,
+            requested_agent_name=payload.agent_name,
             repository_id=repository_id,
             worktree_id=worktree_id,
             follow_up_type=follow_up_type,

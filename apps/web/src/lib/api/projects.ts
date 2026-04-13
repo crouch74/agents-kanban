@@ -38,6 +38,7 @@ export function bootstrapProject(payload: {
   initial_prompt: string;
   use_worktree?: boolean;
   confirm_existing_repo?: boolean;
+  agent_name?: string;
 }) {
   return postJson<ProjectBootstrapResult>("/projects/bootstrap", payload);
 }
@@ -51,6 +52,7 @@ export function previewBootstrapProject(payload: {
   stack_notes?: string;
   initial_prompt: string;
   use_worktree?: boolean;
+  agent_name?: string;
 }) {
   return postJson<ProjectBootstrapPreview>("/projects/bootstrap/preview", payload);
 }

@@ -12,6 +12,7 @@ import type { SessionTail, SessionTimeline } from "./types";
 export function createSession(payload: {
   task_id: string;
   profile: string;
+  agent_name?: string;
   repository_id?: string;
   worktree_id?: string;
   command?: string;
@@ -30,6 +31,7 @@ export function createFollowUpSession(
   sessionId: string,
   payload: {
     profile: string;
+    agent_name?: string;
     follow_up_type?: "retry" | "review" | "verify" | "handoff";
     reuse_worktree?: boolean;
     reuse_repository?: boolean;

@@ -150,10 +150,10 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
                 json={
                     "task_id": task_id,
                     "profile": "executor",
+                    "agent_name": "codex",
                     "worktree_id": worktree_id,
                     "launch_input": {
                         "task_kind": "execute",
-                        "agent_name": "codex",
                         "prompt": "Implement the task and summarize changes.",
                         "permission_mode": "danger-full-access",
                         "output_mode": "json",
@@ -225,7 +225,11 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
 
             follow_up_response = client.post(
                 f"/api/v1/sessions/{session['id']}/follow-up",
-                json={"profile": "verifier", "follow_up_type": "verify"},
+                json={
+                    "profile": "verifier",
+                    "follow_up_type": "verify",
+                    "agent_name": "codex",
+                },
             )
             assert follow_up_response.status_code == 201
             follow_up = follow_up_response.json()

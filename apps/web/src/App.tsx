@@ -122,6 +122,7 @@ export function App() {
   const [selectedSessionWorktreeId, setSelectedSessionWorktreeId] =
     useState<string>("");
   const [sessionProfile, setSessionProfile] = useState("executor");
+  const [sessionAgentName, setSessionAgentName] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     null,
   );
@@ -192,6 +193,7 @@ export function App() {
     setSelectedTaskId("");
     setSelectedSessionTaskId("");
     setSelectedSessionWorktreeId("");
+    setSessionAgentName("");
     setSelectedSessionId(null);
     setSelectedQuestionId(null);
     setInspectedTaskId(null);
@@ -952,6 +954,18 @@ export function App() {
                                     ))}
                                 </select>
                                 <select
+                                  value={sessionAgentName}
+                                  onChange={(event) =>
+                                    setSessionAgentName(event.target.value)
+                                  }
+                                  className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
+                                >
+                                  <option value="">Default (from settings)</option>
+                                  <option value="codex">Codex</option>
+                                  <option value="claude-code">Claude Code</option>
+                                  <option value="aider">Aider</option>
+                                </select>
+                                <select
                                   value={sessionProfile}
                                   onChange={(event) =>
                                     setSessionProfile(event.target.value)
@@ -969,6 +983,7 @@ export function App() {
                                     createSessionMutation.mutate({
                                       task_id: selectedSessionTaskId,
                                       profile: sessionProfile,
+                                      agent_name: sessionAgentName || undefined,
                                       worktree_id:
                                         selectedSessionWorktreeId || undefined,
                                     })

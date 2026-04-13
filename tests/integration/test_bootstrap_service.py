@@ -76,6 +76,7 @@ def test_bootstrap_project_existing_repo_uses_repo_execution_path(tmp_path: Path
                     "repo_path": str(repo_path),
                     "stack_preset": "node-library",
                     "initial_prompt": "Plan and create bootstrap tasks.",
+                    "agent_name": "claude-code",
                     "confirm_existing_repo": True,
                 },
             )
@@ -85,6 +86,10 @@ def test_bootstrap_project_existing_repo_uses_repo_execution_path(tmp_path: Path
             assert payload["execution_path"] == str(repo_path)
             assert payload["kickoff_worktree"] is None
             assert payload["kickoff_session"]["repository_id"] == payload["repository"]["id"]
+            assert (
+                payload["kickoff_session"]["runtime_metadata"]["agent_request"]["agent_name"]
+                == "claude_code"
+            )
     finally:
         app.dependency_overrides.clear()
 

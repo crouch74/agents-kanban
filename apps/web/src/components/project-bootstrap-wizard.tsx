@@ -20,6 +20,7 @@ type BootstrapPayload = {
   stack_notes?: string;
   initial_prompt: string;
   use_worktree?: boolean;
+  agent_name?: string;
 };
 
 export function ProjectBootstrapWizard({
@@ -45,6 +46,7 @@ export function ProjectBootstrapWizard({
   const [stackNotes, setStackNotes] = useState("");
   const [initialPrompt, setInitialPrompt] = useState("");
   const [useWorktree, setUseWorktree] = useState(false);
+  const [agentName, setAgentName] = useState("");
   const [preview, setPreview] = useState<ProjectBootstrapPreview | null>(null);
   const [previewSignature, setPreviewSignature] = useState<string | null>(null);
 
@@ -58,8 +60,9 @@ export function ProjectBootstrapWizard({
       stack_notes: stackNotes || undefined,
       initial_prompt: initialPrompt,
       use_worktree: useWorktree,
+      agent_name: agentName || undefined,
     }),
-    [description, initialPrompt, initializeRepo, name, repoPath, stackNotes, stackPreset, useWorktree],
+    [agentName, description, initialPrompt, initializeRepo, name, repoPath, stackNotes, stackPreset, useWorktree],
   );
   const payloadSignature = useMemo(() => JSON.stringify(payload), [payload]);
   const awaitingConfirmation = Boolean(preview?.confirmation_required && previewSignature === payloadSignature);
@@ -118,6 +121,12 @@ export function ProjectBootstrapWizard({
             {option.label}
           </option>
         ))}
+      </Select>
+      <Select value={agentName} onChange={(event) => setAgentName(event.target.value)}>
+        <option value="">Default (from settings)</option>
+        <option value="codex">Codex</option>
+        <option value="claude-code">Claude Code</option>
+        <option value="aider">Aider</option>
       </Select>
       <Textarea
         value={stackNotes}
