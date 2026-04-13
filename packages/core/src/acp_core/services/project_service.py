@@ -1,5 +1,5 @@
 from __future__ import annotations
-from acp_core.enums import WorkflowState
+from acp_core.enums import SessionStatus, WaitingQuestionStatus, WorkflowState
 
 from sqlalchemy import select
 
@@ -197,7 +197,10 @@ class ProjectService:
         waiting_questions = list(
             self.context.db.scalars(
                 select(WaitingQuestion)
-                .where(WaitingQuestion.project_id == project_id, WaitingQuestion.status == "open")
+                .where(
+                    WaitingQuestion.project_id == project_id,
+                    WaitingQuestion.status == WaitingQuestionStatus.OPEN.value,
+                )
                 .order_by(WaitingQuestion.created_at.desc())
             )
         )
@@ -230,7 +233,13 @@ class ProjectService:
         project_sessions = self.context.db.scalars(
             select(AgentSession).where(
                 AgentSession.project_id == project_id,
-                AgentSession.status.not_in([WorkflowState.DONE.value, "failed", WorkflowState.CANCELLED.value]),
+                AgentSession.status.not_in(
+                    [
+                        SessionStatus.DONE.value,
+                        SessionStatus.FAILED.value,
+                        SessionStatus.CANCELLED.value,
+                    ]
+                ),
             )
         )
         for session in list(project_sessions):

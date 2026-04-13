@@ -1,5 +1,5 @@
 from __future__ import annotations
-from acp_core.enums import WorkflowState
+from acp_core.enums import SessionStatus, WorktreeRecommendation, WorktreeStatus, WorkflowState
 
 from pathlib import Path
 
@@ -145,7 +145,7 @@ class WorktreeService:
             task_id=task.id if task else None,
             branch_name=branch_name,
             path=str(worktree_path),
-            status="active",
+            status=WorktreeStatus.ACTIVE.value,
             metadata_json={
                 "project_slug": project.slug,
                 "source_ref": source_ref,
@@ -200,9 +200,12 @@ class WorktreeService:
             raise ValueError("No worktree change requested")
 
         allowed = {
-            "active": {"locked", "archived"},
-            "locked": {"archived"},
-            "archived": {"pruned"},
+            WorktreeStatus.ACTIVE.value: {
+                WorktreeStatus.LOCKED.value,
+                WorktreeStatus.ARCHIVED.value,
+            },
+            WorktreeStatus.LOCKED.value: {WorktreeStatus.ARCHIVED.value},
+            WorktreeStatus.ARCHIVED.value: {WorktreeStatus.PRUNED.value},
         }
         if next_status not in allowed.get(worktree.status, set()):
             raise ValueError(
@@ -212,14 +215,14 @@ class WorktreeService:
         repo_path = Path(repository.local_path)
         worktree_path = Path(worktree.path)
 
-        if next_status == "locked":
-            worktree.status = "locked"
+        if next_status == WorktreeStatus.LOCKED.value:
+            worktree.status = WorktreeStatus.LOCKED.value
             worktree.lock_reason = payload.lock_reason or "Locked by operator"
-        elif next_status == "archived":
-            worktree.status = "archived"
-        elif next_status == "pruned":
+        elif next_status == WorktreeStatus.ARCHIVED.value:
+            worktree.status = WorktreeStatus.ARCHIVED.value
+        elif next_status == WorktreeStatus.PRUNED.value:
             self.git.remove_worktree(repo_path, worktree_path)
-            worktree.status = "pruned"
+            worktree.status = WorktreeStatus.PRUNED.value
 
         self.context.record_event(
             entity_type="worktree",
@@ -269,7 +272,7 @@ class WorktreeHygieneService:
 
         issues: list[WorktreeHygieneIssueRead] = []
         for worktree in self.context.db.scalars(stmt):
-            if worktree.status == "pruned":
+            if worktree.status == WorktreeStatus.PRUNED.value:
                 continue
 
             repository = self.context.db.get(Repository, worktree.repository_id)
@@ -292,20 +295,26 @@ class WorktreeHygieneService:
 
             if session is not None and session.status in {
                 WorkflowState.DONE.value,
-                "failed",
+                SessionStatus.FAILED.value,
                 WorkflowState.CANCELLED.value,
             }:
                 reasons.append(f"session_{session.status}")
-                recommendation = "archive" if worktree.status == "active" else "prune"
+                recommendation = (
+                    WorktreeRecommendation.ARCHIVE.value
+                    if worktree.status == WorktreeStatus.ACTIVE.value
+                    else WorktreeRecommendation.PRUNE.value
+                )
 
             if task is not None and task.workflow_state in {WorkflowState.DONE.value, WorkflowState.CANCELLED.value}:
                 reasons.append(f"task_{task.workflow_state}")
                 if recommendation is None:
                     recommendation = (
-                        "archive" if worktree.status == "active" else "prune"
+                        WorktreeRecommendation.ARCHIVE.value
+                        if worktree.status == WorktreeStatus.ACTIVE.value
+                        else WorktreeRecommendation.PRUNE.value
                     )
 
-            if worktree.status == "archived" and not reasons:
+            if worktree.status == WorktreeStatus.ARCHIVED.value and not reasons:
                 continue
 
             if reasons and recommendation is not None:

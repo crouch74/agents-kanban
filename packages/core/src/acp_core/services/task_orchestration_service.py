@@ -1,5 +1,11 @@
 from __future__ import annotations
-from acp_core.enums import AgentProfile, SessionStatus, WorkflowState
+from acp_core.enums import (
+    AgentProfile,
+    SessionStatus,
+    WorktreeStatus,
+    WaitingQuestionStatus,
+    WorkflowState,
+)
 
 from typing import Any
 
@@ -154,10 +160,10 @@ class TaskOrchestrationService:
 
             if active_session_id:
                 active_session = self.context.db.get(AgentSession, active_session_id)
-            if active_session is not None and active_session.status in ACTIVE_SESSION_STATUSES:
+                if active_session is not None and active_session.status in ACTIVE_SESSION_STATUSES:
                     self._save_state(parent, state)
                     return
-                if active_session is not None and active_session.status == WorkflowState.DONE.value:
+                if active_session is not None and active_session.status == SessionStatus.DONE.value:
                     self._pause_parent(
                         parent,
                         state,
@@ -169,7 +175,7 @@ class TaskOrchestrationService:
                     return
                 if active_session is not None and active_session.status in {
                     SessionStatus.FAILED.value,
-                    WorkflowState.CANCELLED.value,
+                    SessionStatus.CANCELLED.value,
                 }:
                     self._pause_parent(
                         parent,
@@ -223,7 +229,7 @@ class TaskOrchestrationService:
             if session is not None and session.status in ACTIVE_SESSION_STATUSES:
                 self._save_state(parent, state)
                 return
-            if session is not None and session.status == WorkflowState.DONE.value:
+            if session is not None and session.status == SessionStatus.DONE.value:
                 state["mode"] = "completed"
                 state["phase"] = "finished"
                 state["active_session_id"] = None
@@ -237,10 +243,10 @@ class TaskOrchestrationService:
                 )
                 self._save_state(parent, state)
                 return
-                if session is not None and session.status in {
-                    SessionStatus.FAILED.value,
-                    WorkflowState.CANCELLED.value,
-                }:
+            if session is not None and session.status in {
+                SessionStatus.FAILED.value,
+                SessionStatus.CANCELLED.value,
+            }:
                 self._pause_parent(
                     parent,
                     state,
@@ -399,7 +405,7 @@ class TaskOrchestrationService:
         active_worktrees = [
             worktree
             for worktree in task.worktrees
-            if worktree.status in {"active", "locked"}
+            if worktree.status in {WorktreeStatus.ACTIVE.value, WorktreeStatus.LOCKED.value}
         ]
         if not active_worktrees:
             return None
@@ -449,7 +455,7 @@ class TaskOrchestrationService:
         open_question_count = self.context.db.scalar(
             select(func.count(WaitingQuestion.id)).where(
                 WaitingQuestion.task_id == task.id,
-                WaitingQuestion.status == "open",
+                WaitingQuestion.status == WaitingQuestionStatus.OPEN.value,
             )
         ) or 0
         return open_question_count > 0

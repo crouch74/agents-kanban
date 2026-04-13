@@ -1,5 +1,5 @@
 from __future__ import annotations
-from acp_core.enums import WorkflowState
+from acp_core.enums import SessionStatus, WaitingQuestionStatus, WorkflowState
 
 from sqlalchemy import func, select
 
@@ -88,7 +88,7 @@ class WaitingService:
             project_id=task.project_id,
             task_id=task.id,
             session_id=session.id if session else None,
-            status="open",
+            status=WaitingQuestionStatus.OPEN.value,
             prompt=payload.prompt,
             blocked_reason=payload.blocked_reason,
             urgency=payload.urgency,
@@ -96,7 +96,7 @@ class WaitingService:
         )
         task.waiting_for_human = True
         if session is not None:
-            session.status = "waiting_human"
+            session.status = SessionStatus.WAITING_HUMAN.value
             self.context.db.add(
                 SessionMessage(
                     session_id=session.id,
@@ -140,7 +140,7 @@ class WaitingService:
             Enforces canonical gating/event/reconciliation semantics in the service layer.
         """
         question = self.get_question(question_id)
-        if question.status != "open":
+        if question.status != WaitingQuestionStatus.OPEN.value:
             raise ValueError("Question is not open")
 
         reply = HumanReply(
@@ -152,14 +152,14 @@ class WaitingService:
         self.context.db.add(reply)
 
         task = self.context.db.get(Task, question.task_id)
-        question.status = "closed"
+        question.status = WaitingQuestionStatus.CLOSED.value
         self.context.db.flush()
 
         remaining_task_questions = self.context.db.scalar(
-            select(func.count(WaitingQuestion.id)).where(
-                WaitingQuestion.task_id == question.task_id,
-                WaitingQuestion.status == "open",
-            )
+                select(func.count(WaitingQuestion.id)).where(
+                    WaitingQuestion.task_id == question.task_id,
+                    WaitingQuestion.status == WaitingQuestionStatus.OPEN.value,
+                )
         ) or 0
         if task is not None:
             task.waiting_for_human = remaining_task_questions > 0
@@ -170,13 +170,13 @@ class WaitingService:
             session = self.context.db.get(AgentSession, question.session_id)
             if session is not None:
                 remaining_session_questions = self.context.db.scalar(
-                    select(func.count(WaitingQuestion.id)).where(
-                        WaitingQuestion.session_id == question.session_id,
-                        WaitingQuestion.status == "open",
-                    )
+                select(func.count(WaitingQuestion.id)).where(
+                    WaitingQuestion.session_id == question.session_id,
+                    WaitingQuestion.status == WaitingQuestionStatus.OPEN.value,
+                )
                 ) or 0
                 if remaining_session_questions > 0:
-                    session.status = "waiting_human"
+                    session.status = SessionStatus.WAITING_HUMAN.value
                 else:
                     # No more open questions for this session
                     try:
@@ -196,9 +196,11 @@ class WaitingService:
                         ) from exc
 
                     if session_exists:
-                        session.status = "running" if is_active else WorkflowState.DONE.value
+                        session.status = (
+                            SessionStatus.RUNNING.value if is_active else WorkflowState.DONE.value
+                        )
                     else:
-                        session.status = "failed"
+                        session.status = SessionStatus.FAILED.value
                 self.context.db.add(
                     SessionMessage(
                         session_id=session.id,
@@ -242,4 +244,3 @@ class WaitingService:
         detail = WaitingQuestionDetail.model_validate(question)
         detail.replies = [HumanReplyRead.model_validate(item) for item in replies]
         return detail
-

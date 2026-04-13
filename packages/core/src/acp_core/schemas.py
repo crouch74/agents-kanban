@@ -8,7 +8,6 @@ from acp_core.enums import (
     CheckStatus,
     DependencyRelationshipType,
     FollowUpType,
-    OutputMode,
     Permission,
     SessionRuntimeStatus,
     SessionStatus,
@@ -99,7 +98,7 @@ class SessionLaunchInputCreate(BaseModel):
     working_directory: str | None = None
     model: str | None = None
     permission_mode: Permission | None = None
-    output_mode: OutputMode | None = None
+    output_mode: str | None = None
     max_turns: int | None = Field(default=None, ge=1)
     resume_token: str | None = None
     allowed_tools: list[str] = Field(default_factory=list)

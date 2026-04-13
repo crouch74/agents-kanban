@@ -1,5 +1,5 @@
 from __future__ import annotations
-from acp_core.enums import WorkflowState
+from acp_core.enums import FollowUpType, SessionStatus, WorkflowState
 
 from dataclasses import replace
 from pathlib import Path
@@ -88,7 +88,11 @@ class SessionService:
         sessions = list(self.context.db.scalars(stmt))
         refreshed_sessions: list[AgentSession] = []
         for session in sessions:
-            if session.status in {"running", "waiting_human", "blocked"}:
+            if session.status in {
+                SessionStatus.RUNNING.value,
+                SessionStatus.WAITING_HUMAN.value,
+                SessionStatus.BLOCKED.value,
+            }:
                 refreshed_sessions.append(self.refresh_session_status(session.id))
             else:
                 refreshed_sessions.append(session)
@@ -161,21 +165,21 @@ class SessionService:
 
             session_age_seconds = (now - created_at).total_seconds()
             if session_age_seconds < 10:
-                if session.status == "waiting_human":
-                    return "waiting_human"
-                if session.status == "blocked":
-                    return "blocked"
-                return "running"
+                if session.status == SessionStatus.WAITING_HUMAN.value:
+                    return SessionStatus.WAITING_HUMAN.value
+                if session.status == SessionStatus.BLOCKED.value:
+                    return SessionStatus.BLOCKED.value
+                return SessionStatus.RUNNING.value
 
-            if not is_active and session.status == "running":
-                return WorkflowState.DONE.value
+            if not is_active and session.status == SessionStatus.RUNNING.value:
+                return SessionStatus.DONE.value
 
-            if session.status == "waiting_human":
-                return "waiting_human"
-            if session.status == "blocked":
-                return "blocked"
-            return "running" if is_active else WorkflowState.DONE.value
-        return "failed"
+            if session.status == SessionStatus.WAITING_HUMAN.value:
+                return SessionStatus.WAITING_HUMAN.value
+            if session.status == SessionStatus.BLOCKED.value:
+                return SessionStatus.BLOCKED.value
+            return SessionStatus.RUNNING.value if is_active else SessionStatus.DONE.value
+        return SessionStatus.FAILED.value
 
     def _next_attempt_number(self, task_id: str) -> int:
         existing = self.list_sessions(task_id=task_id)
@@ -211,9 +215,9 @@ class SessionService:
     ) -> str:
         if follow_up_type == WorkflowState.REVIEW.value:
             return WorkflowState.REVIEW.value
-        if follow_up_type == "verify":
+        if follow_up_type == FollowUpType.VERIFY.value:
             return "verify"
-        if follow_up_type in {"retry", "handoff"}:
+        if follow_up_type in {FollowUpType.RETRY.value, FollowUpType.HANDOFF.value}:
             return "execution"
 
         normalized_task_kind = self._normalize_task_kind_for_agent_resolution(
@@ -490,7 +494,7 @@ class SessionService:
             repository_id=repository_id,
             worktree_id=worktree_id,
             profile=profile,
-            status="running",
+            status=SessionStatus.RUNNING.value,
             session_name=runtime_info.session_name,
             runtime_metadata=runtime_metadata,
         )
@@ -501,7 +505,7 @@ class SessionService:
             AgentRun(
                 session_id=session.id,
                 attempt_number=attempt_number,
-                status="running",
+                status=SessionStatus.RUNNING.value,
                 summary=run_summary or f"{profile} session launched",
                 runtime_metadata=dict(runtime_metadata),
             )
@@ -623,13 +627,13 @@ class SessionService:
         follow_up_type = payload.follow_up_type
         if follow_up_type is None:
             if payload.profile == source.profile:
-                follow_up_type = "retry"
+                follow_up_type = FollowUpType.RETRY.value
             elif payload.profile == "reviewer":
                 follow_up_type = WorkflowState.REVIEW.value
             elif payload.profile == "verifier":
-                follow_up_type = "verify"
+                follow_up_type = FollowUpType.VERIFY.value
             else:
-                follow_up_type = "handoff"
+                follow_up_type = FollowUpType.HANDOFF.value
 
         repository_id = source.repository_id if payload.reuse_repository else None
         worktree_id = source.worktree_id if payload.reuse_worktree else None
@@ -741,7 +745,7 @@ class SessionService:
             Enforces canonical gating/event/reconciliation semantics in the service layer.
         """
         session = self.get_session(session_id)
-        if session.status in {WorkflowState.CANCELLED.value, "failed"}:
+        if session.status in {SessionStatus.CANCELLED.value, SessionStatus.FAILED.value}:
             return session
         try:
             exists = self.runtime.session_exists(session.session_name)
@@ -786,7 +790,7 @@ class SessionService:
         """
         session = self.refresh_session_status(session_id)
         capture_lines: list[str]
-        if session.status == "running":
+        if session.status == SessionStatus.RUNNING.value:
             try:
                 capture_lines = self.runtime.capture_tail(
                     session.session_name, lines=lines
@@ -908,7 +912,11 @@ class SessionService:
             ValueError: When validation or lookup constraints fail.
         """
         session = self.get_session(session_id)
-        if session.status in {WorkflowState.DONE.value, "failed", WorkflowState.CANCELLED.value}:
+        if session.status in {
+            SessionStatus.DONE.value,
+            SessionStatus.FAILED.value,
+            SessionStatus.CANCELLED.value,
+        }:
             return session
 
         try:
@@ -922,7 +930,7 @@ class SessionService:
                     "session_name": session.session_name,
                 },
             ) from exc
-        session.status = WorkflowState.CANCELLED.value
+        session.status = SessionStatus.CANCELLED.value
 
         latest_run = self.context.db.scalar(
             select(AgentRun)

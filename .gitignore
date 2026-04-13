@@ -26,4 +26,6 @@ scratch/
 
 .coverage
 coverage.xml
+acp.sqlite3
+*.sqlite3
 .playwright-cli/

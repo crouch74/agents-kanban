@@ -1,5 +1,11 @@
 from __future__ import annotations
-from acp_core.enums import WorkflowState
+from acp_core.enums import (
+    SessionStatus,
+    WaitingQuestionStatus,
+    WorktreeRecommendation,
+    WorktreeStatus,
+    WorkflowState,
+)
 
 from pathlib import Path
 from shutil import which
@@ -123,7 +129,13 @@ class RecoveryService:
             session.session_name: session
             for session in self.context.db.scalars(
                 select(AgentSession).where(
-                    AgentSession.status.in_(["running", "waiting_human", "blocked"])
+                    AgentSession.status.in_(
+                        [
+                            SessionStatus.RUNNING.value,
+                            SessionStatus.WAITING_HUMAN.value,
+                            SessionStatus.BLOCKED.value,
+                        ]
+                    )
                 )
             )
         }
@@ -146,8 +158,8 @@ class RecoveryService:
                     session,
                     exists=True,
                 )
-            elif session.status != WorkflowState.CANCELLED.value:
-                next_status = "failed"
+            elif session.status != SessionStatus.CANCELLED.value:
+                next_status = SessionStatus.FAILED.value
 
             if next_status is not None and session.status != next_status:
                 session.status = next_status
@@ -199,7 +211,13 @@ class RecoveryService:
             session.session_name: session
             for session in self.context.db.scalars(
                 select(AgentSession).where(
-                    AgentSession.status.in_(["running", "waiting_human", "blocked"])
+                    AgentSession.status.in_(
+                        [
+                            SessionStatus.RUNNING.value,
+                            SessionStatus.WAITING_HUMAN.value,
+                            SessionStatus.BLOCKED.value,
+                        ]
+                    )
                 )
             )
         }
@@ -264,7 +282,7 @@ class WorktreeHygieneService:
 
         issues: list[WorktreeHygieneIssueRead] = []
         for worktree in self.context.db.scalars(stmt):
-            if worktree.status == "pruned":
+            if worktree.status == WorktreeStatus.PRUNED.value:
                 continue
 
             repository = self.context.db.get(Repository, worktree.repository_id)
@@ -286,21 +304,27 @@ class WorktreeHygieneService:
                 recommendation = "inspect"
 
             if session is not None and session.status in {
-                WorkflowState.DONE.value,
-                "failed",
-                WorkflowState.CANCELLED.value,
+                SessionStatus.DONE.value,
+                SessionStatus.FAILED.value,
+                SessionStatus.CANCELLED.value,
             }:
                 reasons.append(f"session_{session.status}")
-                recommendation = "archive" if worktree.status == "active" else "prune"
+                recommendation = (
+                    WorktreeRecommendation.ARCHIVE.value
+                    if worktree.status == WorktreeStatus.ACTIVE.value
+                    else WorktreeRecommendation.PRUNE.value
+                )
 
             if task is not None and task.workflow_state in {WorkflowState.DONE.value, WorkflowState.CANCELLED.value}:
-                reasons.append(f"task_{task.workflow_state}")
-                if recommendation is None:
-                    recommendation = (
-                        "archive" if worktree.status == "active" else "prune"
-                    )
+                    reasons.append(f"task_{task.workflow_state}")
+                    if recommendation is None:
+                        recommendation = (
+                            WorktreeRecommendation.ARCHIVE.value
+                            if worktree.status == WorktreeStatus.ACTIVE.value
+                            else WorktreeRecommendation.PRUNE.value
+                        )
 
-            if worktree.status == "archived" and not reasons:
+            if worktree.status == WorktreeStatus.ARCHIVED.value and not reasons:
                 continue
 
             if reasons and recommendation is not None:
@@ -357,7 +381,7 @@ class DiagnosticsService:
         open_question_count = (
             self.context.db.scalar(
                 select(func.count(WaitingQuestion.id)).where(
-                    WaitingQuestion.status == "open"
+                    WaitingQuestion.status == WaitingQuestionStatus.OPEN.value
                 )
             )
             or 0
@@ -514,7 +538,7 @@ class DashboardService:
             self.context.db.scalars(
                 select(WaitingQuestion)
                 .where(
-                    WaitingQuestion.status == "open",
+                    WaitingQuestion.status == WaitingQuestionStatus.OPEN.value,
                     WaitingQuestion.project_id.in_(active_project_ids),
                 )
                 .order_by(WaitingQuestion.created_at.desc())
@@ -536,7 +560,7 @@ class DashboardService:
             self.context.db.scalars(
                 select(AgentSession)
                 .where(
-                    AgentSession.status == "running",
+                    AgentSession.status == SessionStatus.RUNNING.value,
                     AgentSession.project_id.in_(active_project_ids),
                 )
                 .order_by(AgentSession.updated_at.desc())
