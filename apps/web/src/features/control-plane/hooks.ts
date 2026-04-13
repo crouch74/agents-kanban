@@ -5,6 +5,7 @@ import {
   getProject,
   getProjects,
   previewBootstrapProject,
+  archiveProject,
 } from "@/lib/api/projects";
 import { answerQuestion, createQuestion, getQuestion, getQuestions } from "@/lib/api/questions";
 import { createRepository } from "@/lib/api/repositories";
@@ -116,6 +117,8 @@ export const useBootstrapProjectMutation = (options?: MutationHookOptions<Awaite
 export const useBootstrapProjectPreviewMutation = (
   options?: MutationHookOptions<Awaited<ReturnType<typeof previewBootstrapProject>>, Parameters<typeof previewBootstrapProject>[0]>,
 ) => useMutation({ mutationFn: previewBootstrapProject, ...options });
+export const useArchiveProjectMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof archiveProject>>, string>) =>
+  useMutation({ mutationFn: archiveProject, ...options });
 export const useCreateTaskMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof createTask>>, Parameters<typeof createTask>[0]>) =>
   useMutation({ mutationFn: createTask, ...options });
 export const usePatchTaskMutation = (

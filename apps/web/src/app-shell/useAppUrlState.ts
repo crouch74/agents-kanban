@@ -42,36 +42,59 @@ export function useAppUrlState({
 
     if (section && validSections.has(section as NavSection)) {
       setActiveSection(section as NavSection);
+    } else {
+      setActiveSection("home");
     }
-    if (projectId) {
-      setSelectedProjectId(projectId);
-    }
-    if (taskId) {
-      setInspectedTaskId(taskId);
-    }
-    if (sessionId) {
-      setSelectedSessionId(sessionId);
-    }
-    if (questionId) {
-      setSelectedQuestionId(questionId);
-    }
-    if (drawerId && isDetailEntityType(drawerType)) {
-      setDrawerSelection({ type: drawerType, id: drawerId });
-    }
-  }, [setActiveSection, setDrawerSelection, setInspectedTaskId, setSelectedProjectId, setSelectedQuestionId, setSelectedSessionId]);
+    setSelectedProjectId(projectId);
+    setInspectedTaskId(taskId);
+    setSelectedSessionId(sessionId);
+    setSelectedQuestionId(questionId);
+    setDrawerSelection(
+      drawerId && isDetailEntityType(drawerType) ? { type: drawerType, id: drawerId } : null,
+    );
+  }, [
+    setActiveSection,
+    setDrawerSelection,
+    setInspectedTaskId,
+    setSelectedProjectId,
+    setSelectedQuestionId,
+    setSelectedSessionId,
+  ]);
 
   useEffect(() => {
     const params = new URLSearchParams();
     params.set("section", activeSection);
-    if (selectedProjectId) params.set("project", selectedProjectId);
-    if (inspectedTaskId) params.set("task", inspectedTaskId);
-    if (selectedSessionId) params.set("session", selectedSessionId);
-    if (selectedQuestionId) params.set("question", selectedQuestionId);
+    if (selectedProjectId) {
+      params.set("project", selectedProjectId);
+    }
+    if (inspectedTaskId) {
+      params.set("task", inspectedTaskId);
+    }
+    if (selectedSessionId) {
+      params.set("session", selectedSessionId);
+    }
+    if (selectedQuestionId) {
+      params.set("question", selectedQuestionId);
+    }
     if (drawerSelection) {
       params.set("drawer", drawerSelection.type);
       params.set("drawer_id", drawerSelection.id);
     }
-    const next = `${window.location.pathname}?${params.toString()}`;
-    window.history.replaceState(null, "", next);
-  }, [activeSection, drawerSelection, inspectedTaskId, selectedProjectId, selectedQuestionId, selectedSessionId]);
+    const query = params.toString();
+    const href = query ? `${window.location.pathname}?${query}` : `${window.location.pathname}`;
+    window.history.replaceState(null, "", href);
+  }, [
+    activeSection,
+    drawerSelection,
+    inspectedTaskId,
+    selectedProjectId,
+    selectedQuestionId,
+    selectedSessionId,
+    setActiveSection,
+    setDrawerSelection,
+    setInspectedTaskId,
+    setSelectedProjectId,
+    setSelectedQuestionId,
+    setSelectedSessionId,
+  ]);
 }

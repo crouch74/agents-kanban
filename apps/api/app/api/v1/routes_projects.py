@@ -123,3 +123,38 @@ def get_project(project_id: str, service=Depends(get_project_service)) -> Projec
         return service.get_project_overview(project_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/{project_id}/archive", response_model=ProjectSummary)
+def archive_project(
+    project_id: str,
+    request: Request,
+    service=Depends(get_project_service),
+) -> ProjectSummary:
+    """Handle archive project requests.
+
+    Args:
+        project_id: Input parameter.
+        request: from request/signature.
+        service: from request/signature.
+
+    Returns:
+        Response model declared by the route decorator.
+
+    Raises:
+        HTTPException: Mirrors service-layer ValueError as 4xx responses.
+    """
+    try:
+        project = service.archive_project(project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    response = ProjectSummary.model_validate(project)
+    broadcast_change(
+        request,
+        event_type="project.archived",
+        entity_type="project",
+        entity_id=response.id,
+        project_id=response.id,
+        detail={"archived": response.archived},
+    )
+    return response

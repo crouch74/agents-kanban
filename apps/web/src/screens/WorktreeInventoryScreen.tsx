@@ -18,6 +18,8 @@ type WorktreeInventoryScreenProps = {
   error?: string | null;
   selectedWorktreeId?: string | null;
   onSelectWorktree?: (worktreeId: string) => void;
+  onOpenTask?: (taskId: string) => void;
+  onOpenSession?: (sessionId: string) => void;
   onLock: (worktreeId: string) => void;
   onArchive: (worktreeId: string) => void;
   onPrune: (worktreeId: string) => void;
@@ -29,6 +31,8 @@ type WorktreeRow = {
   repository: string;
   branch: string;
   owner: string;
+  ownerType: "task" | "session" | null;
+  ownerId: string | null;
   lifecycle: string;
   path: string;
   recentActivity: string;
@@ -46,6 +50,8 @@ export function WorktreeInventoryScreen({
   error,
   selectedWorktreeId,
   onSelectWorktree,
+  onOpenTask,
+  onOpenSession,
   onLock,
   onArchive,
   onPrune,
@@ -71,11 +77,13 @@ export function WorktreeInventoryScreen({
         id: worktree.id,
         repository: repositoryById.get(worktree.repository_id)?.name ?? "unknown",
         branch: worktree.branch_name,
+        ownerType: owningTask ? "task" : owningSession ? "session" : null,
         owner: owningTask
-          ? `task: ${owningTask.title}`
+          ? owningTask.title
           : owningSession
-            ? `session: ${owningSession.session_name}`
+            ? owningSession.session_name
             : "unassigned",
+        ownerId: owningTask?.id ?? owningSession?.id ?? null,
         lifecycle: worktree.status,
         path: worktree.path,
         recentActivity: recent
@@ -103,7 +111,43 @@ export function WorktreeInventoryScreen({
   const columns: DataTableColumn<WorktreeRow>[] = [
     { key: "repo", header: "Repo", render: (row) => row.repository },
     { key: "branch", header: "Branch", render: (row) => <span className="font-medium">{row.branch}</span> },
-    { key: "owner", header: "Owner task/session", render: (row) => <span className="text-[color:var(--text-muted)]">{row.owner}</span> },
+    {
+      key: "owner",
+      header: "Owner task/session",
+      render: (row) => {
+        if (row.ownerType === "task" && row.ownerId && onOpenTask) {
+          return (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenTask(row.ownerId!);
+              }}
+              className="text-left text-sm text-[color:var(--accent)] underline"
+            >
+              task: {row.owner}
+            </button>
+          );
+        }
+
+        if (row.ownerType === "session" && row.ownerId && onOpenSession) {
+          return (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenSession(row.ownerId!);
+              }}
+              className="text-left text-sm text-[color:var(--accent)] underline"
+            >
+              session: {row.owner}
+            </button>
+          );
+        }
+
+        return <span className="text-[color:var(--text-muted)]">{row.owner}</span>;
+      },
+    },
     {
       key: "lifecycle",
       header: "Lifecycle",

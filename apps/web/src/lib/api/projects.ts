@@ -22,6 +22,10 @@ export function createProject(payload: { name: string; description?: string }) {
   return postJson<ProjectSummary>("/projects", payload);
 }
 
+export function archiveProject(projectId: string) {
+  return postJson<ProjectSummary>(`/projects/${projectId}/archive`, {});
+}
+
 /**
  * Purpose: Call `bootstrapProject` API endpoint.
  * Parameters: See function signature payload/query fields.

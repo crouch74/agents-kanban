@@ -208,4 +208,32 @@ class ProjectService:
             waiting_questions=[WaitingQuestionRead.model_validate(item) for item in waiting_questions],
         )
 
+    def archive_project(self, project_id: str) -> Project:
+        """Purpose: archive a project.
+
+        Args:
+            project_id: Input parameter.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
+        project = self.get_project(project_id)
+        if project.archived:
+            return project
+
+        project.archived = True
+        self.context.record_event(
+            entity_type="project",
+            entity_id=project.id,
+            event_type="project.archived",
+            payload_json={"archived": True},
+        )
+        self.context.db.commit()
+        self.context.db.refresh(project)
+
+        logger.info("🗂️ project archived", project_id=project.id)
+        return project
 

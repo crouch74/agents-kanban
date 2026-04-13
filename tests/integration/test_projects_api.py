@@ -94,3 +94,45 @@ def test_project_board_load_repairs_missing_canonical_columns() -> None:
             assert repaired_task.board_column_id == original_column_id
         finally:
             db.close()
+
+
+def test_archive_project_marks_archived_and_hides_from_project_list() -> None:
+    with TestClient(app) as client:
+        project = client.post("/api/v1/projects", json={"name": "Archive Candidate"}).json()
+        project_id = project["id"]
+
+        projects_before = client.get("/api/v1/projects").json()
+        assert any(item["id"] == project_id for item in projects_before)
+
+        archive_response = client.post(f"/api/v1/projects/{project_id}/archive")
+        assert archive_response.status_code == 200
+        archived = archive_response.json()
+        assert archived["id"] == project_id
+        assert archived["archived"] is True
+
+        projects_after = client.get("/api/v1/projects").json()
+        assert all(item["id"] != project_id for item in projects_after)
+
+        overview = client.get(f"/api/v1/projects/{project_id}")
+        assert overview.status_code == 200
+        assert overview.json()["project"]["archived"] is True
+
+
+def test_archive_project_is_idempotent() -> None:
+    with TestClient(app) as client:
+        project_id = client.post("/api/v1/projects", json={"name": "Archive Again"}).json()["id"]
+
+        first_archive = client.post(f"/api/v1/projects/{project_id}/archive")
+        second_archive = client.post(f"/api/v1/projects/{project_id}/archive")
+
+        assert first_archive.status_code == 200
+        assert second_archive.status_code == 200
+        assert first_archive.json()["archived"] is True
+        assert second_archive.json()["archived"] is True
+
+
+def test_archive_project_returns_not_found_for_missing_project() -> None:
+    with TestClient(app) as client:
+        response = client.post("/api/v1/projects/no-such-project/archive")
+        assert response.status_code == 404
+        assert response.json() == {"detail": "Project not found"}

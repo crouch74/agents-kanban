@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,6 +25,7 @@ async def lifespan(_app: FastAPI):
     settings.ensure_directories()
     configure_logging()
     init_db()
+    prune_expired_session_logs(settings.logs_dir, retention_days=3)
     _app.state.ws_hub = WebSocketHub()
     _app.state.ws_hub.bind_loop()
     db = SessionLocal()
@@ -43,6 +46,40 @@ async def lifespan(_app: FastAPI):
     logger.info("🧭 api booted", database=str(settings.database_path))
     logger.info("🧭 runtime reconciliation complete", **report)
     yield
+
+
+def prune_expired_session_logs(log_dir: Path, retention_days: int = 3, *, now: datetime | None = None) -> int:
+    """Remove stale files from the logs directory.
+
+    Args:
+        log_dir: Directory where session and runtime logs are stored.
+        retention_days: Number of days to keep.
+        now: Optional timestamp used for deterministic tests.
+
+    Returns:
+        Number of removed files.
+    """
+    if retention_days <= 0:
+        return 0
+
+    now_utc = now if now is not None else datetime.now(UTC)
+    cutoff = now_utc - timedelta(days=retention_days)
+    cutoff_timestamp = cutoff.timestamp()
+    removed = 0
+    if not log_dir.exists():
+        return 0
+
+    for file_path in log_dir.rglob("*"):
+        if not file_path.is_file():
+            continue
+        try:
+            if file_path.stat().st_mtime < cutoff_timestamp:
+                file_path.unlink()
+                removed += 1
+        except OSError:
+            continue
+
+    return removed
 
 
 app = FastAPI(

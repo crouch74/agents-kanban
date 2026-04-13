@@ -7,7 +7,10 @@ export function AppHeader({
   setSearch,
   onSearchActivate,
 }: {
-  breadcrumbs: string[];
+  breadcrumbs: Array<{
+    label: string;
+    onActivate?: () => void;
+  }>;
   search: string;
   setSearch: (value: string) => void;
   onSearchActivate: () => void;
@@ -20,9 +23,22 @@ export function AppHeader({
         </div>
         <div className="hidden min-w-0 items-center gap-2 text-sm text-[color:var(--text-muted)] md:flex">
           {breadcrumbs.map((crumb, index) => (
-            <span key={`${crumb}-${index}`} className="inline-flex items-center gap-2 truncate">
+            <span
+              key={`${crumb.label}-${index}`}
+              className="inline-flex items-center gap-2 truncate"
+            >
               {index ? <ChevronRight className="h-3.5 w-3.5 text-[color:var(--text-faint)]" /> : null}
-              <span className="truncate">{crumb}</span>
+              {crumb.onActivate ? (
+                <button
+                  type="button"
+                  onClick={crumb.onActivate}
+                  className="truncate text-left text-[color:var(--accent)] hover:underline"
+                >
+                  {crumb.label}
+                </button>
+              ) : (
+                <span className="truncate">{crumb.label}</span>
+              )}
             </span>
           ))}
         </div>

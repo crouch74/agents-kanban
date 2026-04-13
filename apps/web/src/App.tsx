@@ -14,7 +14,7 @@ import {
 } from "@dnd-kit/core";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Drawer from "vaul";
-import { GitFork, MoreHorizontal, Play, Terminal, X } from "lucide-react";
+import { Archive, GitFork, MoreHorizontal, Play, Terminal, X } from "lucide-react";
 import type { TaskSummary } from "@acp/sdk";
 import { Button } from "@/components/primitives";
 import {
@@ -238,6 +238,7 @@ export function App() {
     addTaskCheckMutation,
     addTaskArtifactMutation,
     addTaskDependencyMutation,
+    archiveProjectMutation,
     cancelSessionMutation,
   } = useControlPlaneMutations({
     queryClient,
@@ -439,25 +440,69 @@ export function App() {
     selectedSession?.task_id ?? null,
   );
 
+  const selectedSessionWorktree = projectDetailQuery.data?.worktrees.find(
+    (worktree) => worktree.id === selectedSession?.worktree_id,
+  );
+
   const sectionTitle = sectionTitleByKey[activeSection];
 
+  const selectProject = (projectId: string) => {
+    setSelectedProjectId(projectId);
+    setActiveSection("projects");
+    setInspectedTaskId(null);
+    setSelectedSessionId(null);
+    setDrawerSelection(null);
+    setMobileTaskPanelOpen(false);
+  };
+
   const breadcrumbs = useMemo(() => {
-    const crumbs = [sectionTitle];
-    if (!["home", "search", "activity"].includes(activeSection) && projectDetailQuery.data?.project.name) {
-      crumbs.push(projectDetailQuery.data.project.name);
+    const crumbs = [
+      {
+        label: sectionTitle,
+        onActivate: () => setActiveSection(activeSection),
+      },
+    ];
+
+    if (projectDetailQuery.data?.project) {
+      crumbs.push({
+        label: projectDetailQuery.data.project.name,
+        onActivate: () => {
+          setSelectedProjectId(projectDetailQuery.data!.project.id);
+          setActiveSection("projects");
+          setDrawerSelection(null);
+          setMobileTaskPanelOpen(false);
+        },
+      });
     }
-    if (activeSection === "projects" && taskDetailQuery.data?.title) {
-      crumbs.push(taskDetailQuery.data.title);
+
+    if (activeSection === "projects" && taskDetailQuery.data?.id) {
+      crumbs.push({
+        label: taskDetailQuery.data.title,
+        onActivate: () => {
+          setInspectedTaskId(taskDetailQuery.data!.id);
+          setDrawerSelection({ type: "task", id: taskDetailQuery.data!.id });
+          setMobileTaskPanelOpen(true);
+        },
+      });
     }
-    if (activeSection === "sessions" && sessionTimelineQuery.data?.session.session_name) {
-      crumbs.push(sessionTimelineQuery.data.session.session_name);
+
+    if (activeSection === "sessions" && sessionTimelineQuery.data?.session.id) {
+      crumbs.push({
+        label: sessionTimelineQuery.data.session.session_name,
+        onActivate: () => {
+          setSelectedSessionId(sessionTimelineQuery.data!.session.id);
+          setDrawerSelection({ type: "session", id: sessionTimelineQuery.data!.session.id });
+          setActiveSection("sessions");
+        },
+      });
     }
     return crumbs;
   }, [
     activeSection,
-    projectDetailQuery.data?.project.name,
+    projectDetailQuery.data?.project,
     sectionTitle,
-    sessionTimelineQuery.data?.session.session_name,
+    sessionTimelineQuery.data?.session,
+    taskDetailQuery.data?.id,
     taskDetailQuery.data?.title,
   ]);
 
@@ -470,6 +515,7 @@ export function App() {
   const selectSession = (sessionId: string) => {
     setSelectedSessionId(sessionId);
     setDrawerSelection({ type: "session", id: sessionId });
+    setActiveSection("sessions");
   };
 
   const selectQuestion = (questionId: string) => {
@@ -662,23 +708,46 @@ export function App() {
                       </div>
                       <div className="mt-3 space-y-1">
                         {filteredProjects.map((project) => (
-                          <button
+                          <div
                             key={project.id}
-                            type="button"
+                            role="button"
+                            tabIndex={0}
                             onClick={() => {
                               setSelectedProjectId(project.id);
                               setActiveSection("projects");
                             }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setSelectedProjectId(project.id);
+                                setActiveSection("projects");
+                              }
+                            }}
                             className={[
-                              "flex h-9 w-full items-center gap-2 rounded px-3 text-left text-sm",
+                              "flex h-9 w-full items-center justify-between gap-2 rounded px-3 text-left text-sm",
                               selectedProjectId === project.id
                                 ? "bg-[rgba(37,99,235,0.08)] text-[color:var(--accent)]"
                                 : "text-[color:var(--text)] hover:bg-black/4",
                             ].join(" ")}
                           >
-                            <StatusDot status={selectedProjectId === project.id ? "ready" : "backlog"} />
-                            <span className="truncate">{project.name}</span>
-                          </button>
+                            <div className="flex min-w-0 items-center gap-2">
+                              <StatusDot status={selectedProjectId === project.id ? "ready" : "backlog"} />
+                              <span className="truncate">{project.name}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                archiveProjectMutation.mutate(project.id);
+                              }}
+                              disabled={archiveProjectMutation.isPending}
+                              className="inline-flex items-center gap-1 rounded-[4px] px-2 py-1 text-xs text-rose-600"
+                              aria-label={`Archive ${project.name}`}
+                            >
+                              <Archive className="h-3.5 w-3.5" />
+                              Archive
+                            </button>
+                          </div>
                         ))}
                       </div>
                     </aside>
@@ -778,6 +847,11 @@ export function App() {
                             events={eventsQuery.data ?? []}
                             selectedWorktreeId={drawerSelection?.type === "worktree" ? drawerSelection.id : null}
                             onSelectWorktree={selectWorktree}
+                            onOpenTask={selectTask}
+                            onOpenSession={(sessionId) => {
+                              selectSession(sessionId);
+                              setActiveSection("sessions");
+                            }}
                             loading={projectDetailQuery.isLoading || eventsQuery.isLoading}
                             error={
                               projectDetailQuery.error instanceof Error
@@ -1020,21 +1094,51 @@ export function App() {
                                   status={selectedSession.status}
                                   summary={
                                     <div className="grid gap-1 text-xs sm:grid-cols-2">
-                                      <span>Task: {selectedSession.task_id}</span>
                                       <span>
-                                        Project: {selectedSession.project_id}
+                                        Project: {" "}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            selectProject(selectedSession.project_id);
+                                          }}
+                                          className="text-[color:var(--accent)] underline"
+                                        >
+                                          {selectedSession.project_id}
+                                        </button>
                                       </span>
                                       <span>
-                                        Worktree:{" "}
-                                        {selectedSession.worktree_id ?? "none"}
+                                        Task: {" "}
+                                        {selectedSession.task_id ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => selectTask(selectedSession.task_id)}
+                                            className="text-[color:var(--accent)] underline"
+                                          >
+                                            {selectedSession.task_id}
+                                          </button>
+                                        ) : (
+                                          <span className="text-[color:var(--text-muted)]">unlinked</span>
+                                        )}
                                       </span>
                                       <span>
-                                        Branch:{" "}
-                                        {projectDetailQuery.data?.worktrees.find(
-                                          (worktree) =>
-                                            worktree.id ===
-                                            selectedSession.worktree_id,
-                                        )?.branch_name ?? "detached"}
+                                        Worktree: {" "}
+                                        {selectedSession.worktree_id ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setActiveSection("worktrees");
+                                              selectWorktree(selectedSession.worktree_id);
+                                            }}
+                                            className="text-[color:var(--accent)] underline"
+                                          >
+                                            {selectedSession.worktree_id}
+                                          </button>
+                                        ) : (
+                                          <span className="text-[color:var(--text-muted)]">none</span>
+                                        )}
+                                      </span>
+                                      <span>
+                                        Branch: {selectedSessionWorktree?.branch_name ?? "detached"}
                                       </span>
                                     </div>
                                   }

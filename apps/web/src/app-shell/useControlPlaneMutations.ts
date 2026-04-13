@@ -16,6 +16,7 @@ import {
   useCreateSessionMutation,
   useCreateTaskMutation,
   useCreateWorktreeMutation,
+  useArchiveProjectMutation,
   usePatchTaskMutation,
   usePatchWorktreeMutation,
 } from "@/features/control-plane/hooks";
@@ -97,6 +98,25 @@ export function useControlPlaneMutations({
     },
   });
   const bootstrapPreviewMutation = useBootstrapProjectPreviewMutation();
+
+  const archiveProjectMutation = useArchiveProjectMutation({
+    onSuccess: (project) => {
+      const isCurrentProject = project.id === selectedProjectId;
+      invalidation.invalidateProjectMutation({
+        projectId: project.id,
+        includeDashboard: true,
+        includeProjects: true,
+      });
+      if (isCurrentProject) {
+        setInspectedTaskId(null);
+        setSelectedSessionId(null);
+        setSelectedProjectId(null);
+      }
+      startTransition(() => {
+        setActiveSection("projects");
+      });
+    },
+  });
 
   const createTaskMutation = useCreateTaskMutation({
     onSuccess: () => {
@@ -228,6 +248,7 @@ export function useControlPlaneMutations({
     addTaskCheckMutation,
     addTaskArtifactMutation,
     addTaskDependencyMutation,
+    archiveProjectMutation,
     cancelSessionMutation,
   };
 }
