@@ -334,8 +334,8 @@ export function WaitingInboxScreen({
                 </>
               ) : (
                 <div className="mt-4 flex flex-col gap-3">
-                  <div className="rounded-[6px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                    This question is closed and the blocker is resolved.
+                <div className="rounded-[6px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                    This question is closed. Switch the queue filter to Open to continue triage.
                   </div>
                   
                   <div className="mt-2">

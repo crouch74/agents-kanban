@@ -450,6 +450,12 @@ export function App() {
 
   const questionDetailQuery = useQuestionDetailQuery(selectedQuestionId);
 
+  type BreadCrumb = {
+    label: string;
+    ariaLabel?: string;
+    onActivate?: () => void;
+  };
+
   const taskDetailQuery = useTaskDetailQuery(inspectedTaskId);
   const selectedSession = useMemo(
     () =>
@@ -478,7 +484,7 @@ export function App() {
   };
 
   const breadcrumbs = useMemo(() => {
-    const crumbs = [
+    const crumbs: BreadCrumb[] = [
       {
         label: sectionTitle,
         onActivate: () => setActiveSection(activeSection),
@@ -488,6 +494,7 @@ export function App() {
     if (projectDetailQuery.data?.project) {
       crumbs.push({
         label: projectDetailQuery.data.project.name,
+        ariaLabel: "Open selected project",
         onActivate: () => {
           setSelectedProjectId(projectDetailQuery.data!.project.id);
           setActiveSection("projects");
@@ -759,19 +766,19 @@ export function App() {
                               <StatusDot status={selectedProjectId === project.id ? WorkflowState.READY : WorkflowState.BACKLOG} />
                               <span className="truncate">{project.name}</span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                archiveProjectMutation.mutate(project.id);
-                              }}
-                              disabled={archiveProjectMutation.isPending}
-                              className="inline-flex items-center gap-1 rounded-[4px] px-2 py-1 text-xs text-rose-600"
-                              aria-label={`Archive ${project.name}`}
-                            >
-                              <Archive className="h-3.5 w-3.5" />
-                              Archive
-                            </button>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    archiveProjectMutation.mutate(project.id);
+                                  }}
+                                  disabled={archiveProjectMutation.isPending}
+                                  className="inline-flex items-center gap-1 rounded-[4px] px-2 py-1 text-xs text-rose-600"
+                                  aria-label="Archive project"
+                                >
+                                  <Archive className="h-3.5 w-3.5" />
+                                  Archive
+                                </button>
                           </div>
                         ))}
                       </div>

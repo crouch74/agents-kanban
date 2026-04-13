@@ -9,6 +9,30 @@ export default defineConfig({
       "@": resolve(__dirname, "./src"),
     },
   },
+  build: {
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          if (id.includes("node_modules")) {
+            if (id.includes("react") || id.includes("react-dom")) {
+              return "vendor-react";
+            }
+            if (id.includes("@acp")) {
+              return "vendor-acp";
+            }
+            if (id.includes("dnd-kit")) {
+              return "vendor-dnd";
+            }
+            if (id.includes("lucide-react")) {
+              return "vendor-icons";
+            }
+            return "vendor";
+          }
+        },
+      },
+    },
+  },
   server: {
     host: "127.0.0.1",
     port: 5173,

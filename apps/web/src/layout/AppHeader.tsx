@@ -9,6 +9,7 @@ export function AppHeader({
 }: {
   breadcrumbs: Array<{
     label: string;
+    ariaLabel?: string;
     onActivate?: () => void;
   }>;
   search: string;
@@ -31,6 +32,7 @@ export function AppHeader({
               {crumb.onActivate ? (
                 <button
                   type="button"
+                  aria-label={crumb.ariaLabel ?? crumb.label}
                   onClick={crumb.onActivate}
                   className="truncate text-left text-[color:var(--accent)] hover:underline"
                 >
