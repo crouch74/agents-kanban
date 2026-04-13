@@ -21,6 +21,8 @@ apps/web/vite.config.d.ts
 
 .acp/
 tmp/
+.npm/
+scratch/
 
 .coverage
 coverage.xml
