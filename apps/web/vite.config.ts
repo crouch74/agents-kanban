@@ -14,8 +14,13 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          if (id.includes("node_modules")) {
-            if (id.includes("react") || id.includes("react-dom")) {
+          const isNodeModule = /[/\\]node_modules[/\\]/.test(id);
+          const isReactGraph = /[/\\]react([-/]|$)|[/\\]scheduler[/\\]|[/\\]@radix-ui[/\\]|[/\\]react-refresh[/\\]|[/\\]react-is[/\\]/.test(
+            id,
+          );
+
+          if (isNodeModule) {
+            if (isReactGraph || id.includes("react") || id.includes("react-dom")) {
               return "vendor-react";
             }
             if (id.includes("@acp")) {
