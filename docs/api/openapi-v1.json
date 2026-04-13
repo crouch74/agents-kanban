@@ -55,6 +55,17 @@
       },
       "AgentSessionCreate": {
         "properties": {
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
           "command": {
             "anyOf": [
               {
@@ -113,6 +124,17 @@
       },
       "AgentSessionFollowUpCreate": {
         "properties": {
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
           "command": {
             "anyOf": [
               {
@@ -723,6 +745,17 @@
       },
       "ProjectBootstrapCreate": {
         "properties": {
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
           "confirm_existing_repo": {
             "default": false,
             "title": "Confirm Existing Repo",
