@@ -175,13 +175,13 @@ def test_spawn_session_and_tail_runtime(tmp_path: Path) -> None:
             assert session["runtime_metadata"]["launch_inputs"]["max_turns"] == 3
             assert session["runtime_metadata"]["agent_name"] == "codex"
             assert session["runtime_metadata"]["task_kind"] == "execute"
-            assert session["runtime_metadata"]["permission_mode"] == "danger-full-access"
+            assert (
+                session["runtime_metadata"]["permission_mode"] == "danger-full-access"
+            )
             assert session["runtime_metadata"]["output_mode"] == "json"
             assert session["runtime_metadata"]["model"] is None
             assert session["runtime_metadata"]["launch_argv"][0] == "codex"
-            assert (
-                session["runtime_metadata"]["display_command"].startswith("codex ")
-            )
+            assert session["runtime_metadata"]["display_command"].startswith("codex ")
             assert session["runtime_metadata"]["resume_token"] is None
             assert session["runtime_metadata"]["resume_token_hint"]
             assert session["runtime_metadata"]["adapter_metadata"]["agent"] == "codex"
@@ -393,7 +393,7 @@ def test_session_spawn_validates_agent_capabilities(tmp_path: Path) -> None:
             assert response.status_code == 400
             assert (
                 response.json()["detail"]
-                == "Agent 'claude-code' does not support permission_mode='danger-full-access'. Supported values: none"
+                == "Agent 'claude_code' does not support permission_mode='danger-full-access'. Supported values: none"
             )
     finally:
         app.dependency_overrides.clear()

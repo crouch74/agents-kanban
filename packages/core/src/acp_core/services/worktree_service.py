@@ -4,7 +4,10 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from acp_core.infrastructure.git_repository_adapter import GitRepositoryAdapter, GitRepositoryAdapterProtocol, GitRepositoryMetadata
+from acp_core.infrastructure.git_repository_adapter import (
+    GitRepositoryAdapter,
+    GitRepositoryAdapterProtocol,
+)
 from acp_core.logging import logger
 from acp_core.models import Project, Repository, Task, Worktree
 from acp_core.schemas import WorktreeCreate, WorktreeHygieneIssueRead, WorktreePatch
@@ -19,7 +22,10 @@ class WorktreeService:
         Branch naming, path allocation, transition gating, and event recording
         are centralized to avoid hidden state or unsafe worktree drift.
     """
-    def __init__(self, context: ServiceContext, git: GitRepositoryAdapterProtocol | None = None) -> None:
+
+    def __init__(
+        self, context: ServiceContext, git: GitRepositoryAdapterProtocol | None = None
+    ) -> None:
         self.context = context
         self.git = git or GitRepositoryAdapter()
 
@@ -37,7 +43,9 @@ class WorktreeService:
         """
         stmt = select(Worktree).order_by(Worktree.created_at.desc())
         if project_id is not None:
-            stmt = stmt.join(Repository, Repository.id == Worktree.repository_id).where(Repository.project_id == project_id)
+            stmt = stmt.join(Repository, Repository.id == Worktree.repository_id).where(
+                Repository.project_id == project_id
+            )
         return list(self.context.db.scalars(stmt))
 
     def get_worktree(self, worktree_id: str) -> Worktree:
@@ -82,7 +90,9 @@ class WorktreeService:
             if task is None:
                 raise ValueError("Task not found")
             if task.project_id != repository.project_id:
-                raise ValueError("Task must belong to the same project as the repository")
+                raise ValueError(
+                    "Task must belong to the same project as the repository"
+                )
             branch_suffix = f"{task_slug(task.title)}-{task.id[:8]}"
         elif payload.label:
             branch_suffix = task_slug(payload.label)
@@ -97,7 +107,12 @@ class WorktreeService:
         root_path.mkdir(parents=True, exist_ok=True)
         worktree_path = root_path / branch_suffix
 
-        if self.context.db.scalar(select(Worktree.id).where(Worktree.path == str(worktree_path))) is not None:
+        if (
+            self.context.db.scalar(
+                select(Worktree.id).where(Worktree.path == str(worktree_path))
+            )
+            is not None
+        ):
             raise ValueError("Worktree path already allocated")
 
         if worktree_path.exists():
@@ -152,7 +167,12 @@ class WorktreeService:
         self.context.db.commit()
         self.context.db.refresh(worktree)
 
-        logger.info("🌿 worktree allocated", worktree_id=worktree.id, branch=worktree.branch_name, path=worktree.path)
+        logger.info(
+            "🌿 worktree allocated",
+            worktree_id=worktree.id,
+            branch=worktree.branch_name,
+            path=worktree.path,
+        )
         return worktree
 
     def patch_worktree(self, worktree_id: str, payload: WorktreePatch) -> Worktree:
@@ -184,7 +204,9 @@ class WorktreeService:
             "archived": {"pruned"},
         }
         if next_status not in allowed.get(worktree.status, set()):
-            raise ValueError(f"Invalid worktree transition from {worktree.status} to {next_status}")
+            raise ValueError(
+                f"Invalid worktree transition from {worktree.status} to {next_status}"
+            )
 
         repo_path = Path(repository.local_path)
         worktree_path = Path(worktree.path)
@@ -202,22 +224,29 @@ class WorktreeService:
             entity_type="worktree",
             entity_id=worktree.id,
             event_type="worktree.updated",
-            payload_json={"status": worktree.status, "lock_reason": worktree.lock_reason},
+            payload_json={
+                "status": worktree.status,
+                "lock_reason": worktree.lock_reason,
+            },
         )
         self.context.db.commit()
         self.context.db.refresh(worktree)
 
-        logger.info("🌿 worktree updated", worktree_id=worktree.id, status=worktree.status)
+        logger.info(
+            "🌿 worktree updated", worktree_id=worktree.id, status=worktree.status
+        )
         return worktree
-
 
 
 class WorktreeHygieneService:
     """Detect stale or drifted worktrees and suggest recovery actions."""
+
     def __init__(self, context: ServiceContext) -> None:
         self.context = context
 
-    def list_issues(self, *, project_id: str | None = None, task_id: str | None = None) -> list[WorktreeHygieneIssueRead]:
+    def list_issues(
+        self, *, project_id: str | None = None, task_id: str | None = None
+    ) -> list[WorktreeHygieneIssueRead]:
         """Purpose: list issues.
 
         Args:
@@ -231,7 +260,9 @@ class WorktreeHygieneService:
         """
         stmt = select(Worktree).order_by(Worktree.updated_at.desc())
         if project_id is not None:
-            stmt = stmt.join(Repository, Repository.id == Worktree.repository_id).where(Repository.project_id == project_id)
+            stmt = stmt.join(Repository, Repository.id == Worktree.repository_id).where(
+                Repository.project_id == project_id
+            )
         if task_id is not None:
             stmt = stmt.where(Worktree.task_id == task_id)
 
@@ -241,8 +272,16 @@ class WorktreeHygieneService:
                 continue
 
             repository = self.context.db.get(Repository, worktree.repository_id)
-            task = self.context.db.get(Task, worktree.task_id) if worktree.task_id else None
-            session = self.context.db.get(AgentSession, worktree.session_id) if worktree.session_id else None
+            task = (
+                self.context.db.get(Task, worktree.task_id)
+                if worktree.task_id
+                else None
+            )
+            session = (
+                self.context.db.get(AgentSession, worktree.session_id)
+                if worktree.session_id
+                else None
+            )
             reasons: list[str] = []
             recommendation: str | None = None
 
@@ -250,14 +289,20 @@ class WorktreeHygieneService:
                 reasons.append("worktree_path_missing")
                 recommendation = "inspect"
 
-            if session is not None and session.status in {"done", "failed", "cancelled"}:
+            if session is not None and session.status in {
+                "done",
+                "failed",
+                "cancelled",
+            }:
                 reasons.append(f"session_{session.status}")
                 recommendation = "archive" if worktree.status == "active" else "prune"
 
             if task is not None and task.workflow_state in {"done", "cancelled"}:
                 reasons.append(f"task_{task.workflow_state}")
                 if recommendation is None:
-                    recommendation = "archive" if worktree.status == "active" else "prune"
+                    recommendation = (
+                        "archive" if worktree.status == "active" else "prune"
+                    )
 
             if worktree.status == "archived" and not reasons:
                 continue
@@ -278,5 +323,3 @@ class WorktreeHygieneService:
                 )
 
         return issues
-
-

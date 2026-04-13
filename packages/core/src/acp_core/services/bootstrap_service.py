@@ -6,14 +6,25 @@ import textwrap
 
 from git import InvalidGitRepositoryError, NoSuchPathError
 
-from acp_core.agents import AgentRequest, render_launch_plan_command, resolve_coding_agent_adapter
+from acp_core.agents import (
+    AgentRegistry,
+    AgentRequest,
+    render_launch_plan_command,
+    resolve_coding_agent_adapter,
+)
 from acp_core.infrastructure.git_repository_adapter import (
     GitRepositoryAdapter,
     GitRepositoryAdapterProtocol,
     GitRepositoryMetadata,
 )
-from acp_core.infrastructure.scaffold_writer import ScaffoldWriter, ScaffoldWriterProtocol
-from acp_core.infrastructure.runtime_adapter import DefaultRuntimeAdapter, RuntimeAdapterProtocol
+from acp_core.infrastructure.scaffold_writer import (
+    ScaffoldWriter,
+    ScaffoldWriterProtocol,
+)
+from acp_core.infrastructure.runtime_adapter import (
+    DefaultRuntimeAdapter,
+    RuntimeAdapterProtocol,
+)
 from acp_core.logging import logger
 from acp_core.models import AgentSession, Project, Repository, Task, Worktree
 from acp_core.schemas import (
@@ -51,17 +62,20 @@ class BootstrapService:
         event logging as one transaction-shaped flow to keep kickoff idempotent
         and recoverable.
     """
+
     def __init__(
         self,
         context: ServiceContext,
         runtime: RuntimeAdapterProtocol | None = None,
         git: GitRepositoryAdapterProtocol | None = None,
         scaffold_writer: ScaffoldWriterProtocol | None = None,
+        agent_registry: AgentRegistry | None = None,
     ) -> None:
         self.context = context
         self.runtime = runtime or DefaultRuntimeAdapter()
         self.git = git or GitRepositoryAdapter()
         self.scaffold_writer = scaffold_writer or ScaffoldWriter()
+        self.agent_registry = agent_registry or AgentRegistry.default()
 
     @staticmethod
     def _repo_has_user_files(repo_path: Path) -> bool:
@@ -103,7 +117,9 @@ class BootstrapService:
         branch_name = self.git.current_branch_name(repo_path)
         if branch_name:
             return branch_name
-        raise ValueError("Repository is in detached HEAD; check out a branch or enable worktree kickoff")
+        raise ValueError(
+            "Repository is in detached HEAD; check out a branch or enable worktree kickoff"
+        )
 
     def _write_project_local_files(
         self,
@@ -125,8 +141,9 @@ class BootstrapService:
             "use_worktree": payload.use_worktree,
             "execution_path": str(execution_root),
         }
-        prompt_body = textwrap.dedent(
-            f"""
+        prompt_body = (
+            textwrap.dedent(
+                f"""
             You are the kickoff coding agent for the project "{project.name}".
 
             Start by reading `AGENTS.md`, `.acp/project.local.json`, and `skills/agent-control-plane-api/SKILL.md`.
@@ -152,7 +169,9 @@ class BootstrapService:
             Stack notes: {payload.stack_notes or "None"}
             Kickoff task id: {kickoff_task.id}
             """
-        ).strip() + "\n"
+            ).strip()
+            + "\n"
+        )
 
         targets = {repository_root}
         if execution_root != repository_root:
@@ -167,13 +186,18 @@ class BootstrapService:
         if state.execution_path is None:
             raise ValueError("Bootstrap state is missing execution path")
         prompt_file = state.execution_path / ".acp" / "bootstrap-prompt.md"
+        kickoff_agent = (
+            state.payload.agent_name or settings.kickoff_agent or settings.default_agent
+        )
+        resolved_agent = self.agent_registry.canonical_key(kickoff_agent)
         return AgentRequest(
-            agent_name=state.payload.agent_name or settings.bootstrap_agent_name,
+            agent_name=resolved_agent,
             task_kind="kickoff",
             prompt_file=prompt_file,
             execution_root=state.execution_path,
             model=state.payload.agent_model or settings.bootstrap_agent_model,
-            permissions=state.payload.agent_permissions or settings.bootstrap_agent_permissions,
+            permissions=state.payload.agent_permissions
+            or settings.bootstrap_agent_permissions,
             output=state.payload.agent_output or settings.bootstrap_agent_output,
             metadata={
                 "project_id": state.project.id if state.project else None,
@@ -207,7 +231,9 @@ class BootstrapService:
         repo_path = Path(payload.repo_path).expanduser().resolve()
         if not repo_path.exists():
             if not payload.initialize_repo:
-                raise ValueError("Repo path must point to an existing directory or enable Initialize repo with git")
+                raise ValueError(
+                    "Repo path must point to an existing directory or enable Initialize repo with git"
+                )
             return self.BootstrapInspection(
                 repo_path=repo_path,
                 repo_details=None,
@@ -222,9 +248,13 @@ class BootstrapService:
             repo_details = self.git.inspect_repository(repo_path)
         except (InvalidGitRepositoryError, NoSuchPathError):
             if not payload.initialize_repo:
-                raise ValueError("Repo path must already be a git repository or enable Initialize repo with git")
+                raise ValueError(
+                    "Repo path must already be a git repository or enable Initialize repo with git"
+                )
             if any(repo_path.iterdir()):
-                raise ValueError("Initialize repo with git is only available for an empty directory")
+                raise ValueError(
+                    "Initialize repo with git is only available for an empty directory"
+                )
             return self.BootstrapInspection(
                 repo_path=repo_path,
                 repo_details=None,
@@ -240,24 +270,46 @@ class BootstrapService:
             is_detached=bool(repo_details.metadata_json.get("is_detached")),
         )
 
-    def _materialize_repo(self, inspection: BootstrapInspection) -> tuple[Path, GitRepositoryMetadata, bool]:
+    def _materialize_repo(
+        self, inspection: BootstrapInspection
+    ) -> tuple[Path, GitRepositoryMetadata, bool]:
         if inspection.repo_details is not None:
-            return inspection.repo_path, inspection.repo_details, inspection.repo_initialized_on_confirm
+            return (
+                inspection.repo_path,
+                inspection.repo_details,
+                inspection.repo_initialized_on_confirm,
+            )
 
         inspection.repo_path.mkdir(parents=True, exist_ok=True)
         self.git.init_repository(inspection.repo_path)
-        return inspection.repo_path, self.git.inspect_repository(inspection.repo_path), True
+        return (
+            inspection.repo_path,
+            self.git.inspect_repository(inspection.repo_path),
+            True,
+        )
 
-    def _build_bootstrap_preview(self, payload: ProjectBootstrapCreate, inspection: BootstrapInspection) -> ProjectBootstrapPreviewRead:
-        if inspection.has_commits and not payload.use_worktree and inspection.is_detached:
-            raise ValueError("Repository is in detached HEAD; check out a branch or enable worktree kickoff")
+    def _build_bootstrap_preview(
+        self, payload: ProjectBootstrapCreate, inspection: BootstrapInspection
+    ) -> ProjectBootstrapPreviewRead:
+        if (
+            inspection.has_commits
+            and not payload.use_worktree
+            and inspection.is_detached
+        ):
+            raise ValueError(
+                "Repository is in detached HEAD; check out a branch or enable worktree kickoff"
+            )
 
         project_slug = slugify(payload.name)
         execution_path = str(inspection.repo_path)
-        execution_branch = inspection.repo_details.default_branch if inspection.repo_details else ""
+        execution_branch = (
+            inspection.repo_details.default_branch if inspection.repo_details else ""
+        )
         if payload.use_worktree:
             branch_suffix = task_slug("Kick off planning and board setup")
-            execution_path = str(settings.runtime_home / "worktrees" / project_slug / branch_suffix)
+            execution_path = str(
+                settings.runtime_home / "worktrees" / project_slug / branch_suffix
+            )
             execution_branch = f"acp/{project_slug}/{branch_suffix}-<task-id>"
         elif not execution_branch:
             execution_branch = "(resolved on confirm)"
@@ -311,7 +363,9 @@ class BootstrapService:
             planned_changes=planned_changes,
         )
 
-    def _prepare_repository_files(self, state: BootstrapState, *, has_commits: bool) -> None:
+    def _prepare_repository_files(
+        self, state: BootstrapState, *, has_commits: bool
+    ) -> None:
         if not has_commits:
             state.scaffold_applied = self._scaffold_repo(
                 state.repo_path,
@@ -329,10 +383,16 @@ class BootstrapService:
 
     def _create_project_entities(self, state: BootstrapState) -> None:
         project = ProjectService(self.context).create_project(
-            ProjectCreate(name=state.payload.name, description=state.payload.description)
+            ProjectCreate(
+                name=state.payload.name, description=state.payload.description
+            )
         )
         repository = RepositoryService(self.context).create_repository(
-            RepositoryCreate(project_id=project.id, local_path=str(state.repo_path), name=state.repo_path.name)
+            RepositoryCreate(
+                project_id=project.id,
+                local_path=str(state.repo_path),
+                name=state.repo_path.name,
+            )
         )
         task_description = textwrap.dedent(
             f"""
@@ -362,7 +422,9 @@ class BootstrapService:
 
         if state.payload.use_worktree:
             kickoff_worktree = WorktreeService(self.context).create_worktree(
-                WorktreeCreate(repository_id=state.repository.id, task_id=state.kickoff_task.id)
+                WorktreeCreate(
+                    repository_id=state.repository.id, task_id=state.kickoff_task.id
+                )
             )
             state.kickoff_worktree = kickoff_worktree
             state.execution_path = Path(kickoff_worktree.path)
@@ -390,14 +452,22 @@ class BootstrapService:
             payload=state.payload,
         )
         request = self._build_agent_request(state)
-        adapter = resolve_coding_agent_adapter(request.agent_name)
+        adapter = resolve_coding_agent_adapter(
+            request.agent_name, registry=self.agent_registry
+        )
         launch_plan = adapter.build_launch_plan(request)
-        state.session = SessionService(self.context, runtime=self.runtime).spawn_session(
+        state.session = SessionService(
+            self.context, runtime=self.runtime, agent_registry=self.agent_registry
+        ).spawn_session(
             AgentSessionCreate(
                 task_id=state.kickoff_task.id,
                 profile="executor",
-                repository_id=state.repository.id if not state.payload.use_worktree else None,
-                worktree_id=state.kickoff_worktree.id if state.kickoff_worktree else None,
+                repository_id=state.repository.id
+                if not state.payload.use_worktree
+                else None,
+                worktree_id=state.kickoff_worktree.id
+                if state.kickoff_worktree
+                else None,
                 launch_spec=RuntimeLaunchSpecCreate(
                     argv=launch_plan.argv,
                     env=launch_plan.env,
@@ -427,7 +497,12 @@ class BootstrapService:
         }
 
     def _record_bootstrap_event(self, state: BootstrapState) -> None:
-        if state.project is None or state.repository is None or state.kickoff_task is None or state.session is None:
+        if (
+            state.project is None
+            or state.repository is None
+            or state.kickoff_task is None
+            or state.session is None
+        ):
             raise ValueError("Bootstrap state is missing persisted entities")
         if state.execution_path is None:
             raise ValueError("Bootstrap state is missing execution path")
@@ -440,7 +515,9 @@ class BootstrapService:
                 "repository_id": state.repository.id,
                 "kickoff_task_id": state.kickoff_task.id,
                 "kickoff_session_id": state.session.id,
-                "kickoff_worktree_id": state.kickoff_worktree.id if state.kickoff_worktree else None,
+                "kickoff_worktree_id": state.kickoff_worktree.id
+                if state.kickoff_worktree
+                else None,
                 "use_worktree": state.payload.use_worktree,
                 "execution_path": str(state.execution_path),
             },
@@ -453,7 +530,9 @@ class BootstrapService:
                 "repository_id": state.repository.id,
                 "kickoff_task_id": state.kickoff_task.id,
                 "kickoff_session_id": state.session.id,
-                "kickoff_worktree_id": state.kickoff_worktree.id if state.kickoff_worktree else None,
+                "kickoff_worktree_id": state.kickoff_worktree.id
+                if state.kickoff_worktree
+                else None,
                 "execution_path": str(state.execution_path),
                 "execution_branch": state.execution_branch,
                 "stack_preset": state.payload.stack_preset.value,
@@ -471,7 +550,9 @@ class BootstrapService:
         if state.kickoff_worktree is not None:
             self.context.db.refresh(state.kickoff_worktree)
 
-    def _build_bootstrap_read_model(self, state: BootstrapState) -> ProjectBootstrapRead:
+    def _build_bootstrap_read_model(
+        self, state: BootstrapState
+    ) -> ProjectBootstrapRead:
         if (
             state.project is None
             or state.repository is None
@@ -486,7 +567,9 @@ class BootstrapService:
             repository=RepositoryRead.model_validate(state.repository),
             kickoff_task=TaskRead.model_validate(state.kickoff_task),
             kickoff_session=AgentSessionRead.model_validate(state.session),
-            kickoff_worktree=WorktreeRead.model_validate(state.kickoff_worktree) if state.kickoff_worktree else None,
+            kickoff_worktree=WorktreeRead.model_validate(state.kickoff_worktree)
+            if state.kickoff_worktree
+            else None,
             execution_path=str(state.execution_path),
             execution_branch=state.execution_branch,
             stack_preset=state.payload.stack_preset,
@@ -496,11 +579,15 @@ class BootstrapService:
             scaffold_applied=state.scaffold_applied,
         )
 
-    def preview_bootstrap_project(self, payload: ProjectBootstrapCreate) -> ProjectBootstrapPreviewRead:
+    def preview_bootstrap_project(
+        self, payload: ProjectBootstrapCreate
+    ) -> ProjectBootstrapPreviewRead:
         inspection = self._inspect_repo(payload)
         return self._build_bootstrap_preview(payload, inspection)
 
-    def bootstrap_project(self, payload: ProjectBootstrapCreate) -> ProjectBootstrapRead:
+    def bootstrap_project(
+        self, payload: ProjectBootstrapCreate
+    ) -> ProjectBootstrapRead:
         """Purpose: bootstrap project.
 
         Args:
@@ -516,13 +603,19 @@ class BootstrapService:
         """
         inspection = self._inspect_repo(payload)
         if inspection.has_commits and not payload.confirm_existing_repo:
-            raise ValueError("Existing repositories require preview confirmation before bootstrap can modify ACP-managed files")
+            raise ValueError(
+                "Existing repositories require preview confirmation before bootstrap can modify ACP-managed files"
+            )
         repo_path, repo_details, repo_initialized = self._materialize_repo(inspection)
-        state = self.BootstrapState(payload=payload, repo_path=repo_path, repo_initialized=repo_initialized)
+        state = self.BootstrapState(
+            payload=payload, repo_path=repo_path, repo_initialized=repo_initialized
+        )
         has_commits = bool(repo_details.metadata_json.get("has_commits"))
         is_detached = bool(repo_details.metadata_json.get("is_detached"))
         if has_commits and not payload.use_worktree and is_detached:
-            raise ValueError("Repository is in detached HEAD; check out a branch or enable worktree kickoff")
+            raise ValueError(
+                "Repository is in detached HEAD; check out a branch or enable worktree kickoff"
+            )
 
         self._prepare_repository_files(state, has_commits=has_commits)
         self._create_project_entities(state)
