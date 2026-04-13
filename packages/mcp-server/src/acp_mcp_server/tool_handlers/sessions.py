@@ -20,6 +20,7 @@ from acp_mcp_server.idempotency import (
 def session_spawn(
     task_id: str,
     profile: str = "executor",
+    agent_name: str | None = None,
     repository_id: str | None = None,
     worktree_id: str | None = None,
     launch_input: dict[str, Any] | None = None,
@@ -34,6 +35,7 @@ def session_spawn(
             AgentSessionCreate(
                 task_id=task_id,
                 profile=profile,
+                agent_name=agent_name,
                 repository_id=repository_id,
                 worktree_id=worktree_id,
                 launch_input=launch_input,
@@ -50,6 +52,7 @@ def session_spawn(
 def session_follow_up(
     session_id: str,
     profile: str = "verifier",
+    agent_name: str | None = None,
     follow_up_type: str | None = None,
     reuse_worktree: bool = True,
     reuse_repository: bool = True,
@@ -65,6 +68,7 @@ def session_follow_up(
             session_id,
             AgentSessionFollowUpCreate(
                 profile=profile,
+                agent_name=agent_name,
                 follow_up_type=follow_up_type,
                 reuse_worktree=reuse_worktree,
                 reuse_repository=reuse_repository,

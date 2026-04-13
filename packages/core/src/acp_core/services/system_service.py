@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from shutil import which
 from pathlib import Path
 
 from sqlalchemy import String, cast, func, or_, select
@@ -13,6 +14,7 @@ from acp_core.models import (
     Event,
     Project,
     Repository,
+    TaskComment,
     Task,
     WaitingQuestion,
     Worktree,
@@ -21,9 +23,15 @@ from acp_core.schemas import (
     DashboardRead,
     DiagnosticsRead,
     EventRecord,
+    WaitingQuestionRead,
+    ProjectSummary,
     SearchHit,
     SearchResults,
+    TaskRead,
+    AgentSessionRead,
+    WorktreeHygieneIssueRead,
 )
+from acp_core.settings import settings
 from acp_core.services.base_service import ServiceContext
 from acp_core.services.session_service import SessionService
 

@@ -48,6 +48,7 @@ from acp_core.schemas import (
 from acp_core.services.base_service import ServiceContext, slugify, task_slug
 from acp_core.services.project_service import ProjectService
 from acp_core.services.repository_service import RepositoryService
+from acp_core.services.agent_selection import resolve_agent_name
 from acp_core.services.session_service import SessionService
 from acp_core.services.task_service import TaskService
 from acp_core.services.worktree_service import WorktreeService
@@ -186,10 +187,12 @@ class BootstrapService:
         if state.execution_path is None:
             raise ValueError("Bootstrap state is missing execution path")
         prompt_file = state.execution_path / ".acp" / "bootstrap-prompt.md"
-        kickoff_agent = (
-            state.payload.agent_name or settings.kickoff_agent or settings.default_agent
+        resolved_agent = resolve_agent_name(
+            task_kind="kickoff",
+            requested_agent_name=state.payload.agent_name,
+            settings=settings,
+            agent_registry=self.agent_registry,
         )
-        resolved_agent = self.agent_registry.canonical_key(kickoff_agent)
         return AgentRequest(
             agent_name=resolved_agent,
             task_kind="kickoff",
@@ -468,6 +471,11 @@ class BootstrapService:
                 worktree_id=state.kickoff_worktree.id
                 if state.kickoff_worktree
                 else None,
+                launch_input={
+                    "task_kind": request.task_kind,
+                    "agent_name": request.agent_name,
+                    "working_directory": str(state.execution_path),
+                },
                 launch_spec=RuntimeLaunchSpecCreate(
                     argv=launch_plan.argv,
                     env=launch_plan.env,

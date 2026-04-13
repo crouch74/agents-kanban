@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 
 from acp_core.infrastructure.runtime_adapter import DefaultRuntimeAdapter, RuntimeAdapterProtocol
+from acp_core.errors import build_runtime_service_error
 from acp_core.logging import logger
 from acp_core.models import AgentSession, HumanReply, SessionMessage, Task, WaitingQuestion
 from acp_core.schemas import HumanReplyCreate, HumanReplyRead, WaitingQuestionCreate, WaitingQuestionDetail
@@ -179,10 +180,19 @@ class WaitingService:
                     # No more open questions for this session
                     try:
                         session_exists = self.runtime.session_exists(session.session_name)
-                        is_active = self.runtime.is_session_active(session.session_name) if session_exists else False
-                    except Exception:
-                        session_exists = False
-                        is_active = False
+                        if session_exists and hasattr(self.runtime, "is_session_active"):
+                            is_active = self.runtime.is_session_active(session.session_name)
+                        else:
+                            is_active = bool(session_exists)
+                    except Exception as exc:
+                        raise build_runtime_service_error(
+                            operation="session_status",
+                            exc=exc,
+                            details={
+                                "session_id": session.id,
+                                "session_name": session.session_name,
+                            },
+                        ) from exc
 
                     if session_exists:
                         session.status = "running" if is_active else "done"
@@ -231,5 +241,4 @@ class WaitingService:
         detail = WaitingQuestionDetail.model_validate(question)
         detail.replies = [HumanReplyRead.model_validate(item) for item in replies]
         return detail
-
 

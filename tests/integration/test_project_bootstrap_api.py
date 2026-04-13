@@ -123,6 +123,45 @@ def test_bootstrap_existing_repo_in_repo_mode(tmp_path: Path) -> None:
         app.dependency_overrides.clear()
 
 
+def test_bootstrap_records_resolved_agent_in_session_metadata(tmp_path: Path) -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+    repo_path = create_git_repo(tmp_path / "agent-bootstrap", with_agents=True)
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/projects/bootstrap",
+                json={
+                    "name": "Bootstrap Agent Metadata",
+                    "repo_path": str(repo_path),
+                    "stack_preset": "node-library",
+                    "initial_prompt": "Plan the execution and assign tasks.",
+                    "agent_name": "claude-code",
+                    "confirm_existing_repo": True,
+                },
+            )
+            assert response.status_code == 201
+            payload = response.json()
+
+            assert payload["kickoff_session"]["runtime_metadata"]["agent_name"] == "claude_code"
+            assert (
+                payload["kickoff_session"]["runtime_metadata"]["launch_inputs"][
+                    "agent_name"
+                ]
+                == "claude_code"
+            )
+            assert (
+                payload["kickoff_session"]["runtime_metadata"]["agent_request"][
+                    "agent_name"
+                ]
+                == "claude_code"
+            )
+            assert payload["kickoff_session"]["runtime_metadata"]["task_kind"] == "kickoff"
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_bootstrap_existing_repo_with_worktree(tmp_path: Path) -> None:
     fake_runtime = FakeRuntime()
     app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime

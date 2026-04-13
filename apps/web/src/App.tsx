@@ -97,6 +97,13 @@ function summarizeEvent(event: EventRecord) {
   return `${event.actor_name || "system"} updated ${event.entity_type}.`;
 }
 
+const SESSION_AGENT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "", label: "Default (from settings)" },
+  { value: "codex", label: "Codex" },
+  { value: "claude-code", label: "Claude Code" },
+  { value: "aider", label: "Aider" },
+];
+
 function formatSearchSnippet(hit: SearchHit) {
   if (hit.entity_type === "event") {
     return `Audit event matched the query. ${formatEvent(hit.title)} · ${hit.secondary ?? "system"}`;
@@ -122,6 +129,7 @@ export function App() {
   const [selectedSessionWorktreeId, setSelectedSessionWorktreeId] =
     useState<string>("");
   const [sessionProfile, setSessionProfile] = useState("executor");
+  const [sessionAgentName, setSessionAgentName] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     null,
   );
@@ -964,11 +972,31 @@ export function App() {
                                     </option>
                                   ))}
                                 </select>
+                                <select
+                                  value={sessionAgentName}
+                                  onChange={(event) =>
+                                    setSessionAgentName(event.target.value)
+                                  }
+                                  className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
+                                >
+                                  {SESSION_AGENT_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
                                 <button
                                   onClick={() =>
                                     createSessionMutation.mutate({
                                       task_id: selectedSessionTaskId,
                                       profile: sessionProfile,
+                                      ...(sessionAgentName
+                                        ? {
+                                            launch_input: {
+                                              agent_name: sessionAgentName,
+                                            },
+                                          }
+                                        : {}),
                                       worktree_id:
                                         selectedSessionWorktreeId || undefined,
                                     })

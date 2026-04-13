@@ -7,6 +7,7 @@ from git import Repo
 
 from app.bootstrap.dependencies import get_runtime_adapter
 from app.main import app
+from acp_core.settings import settings
 from acp_core.runtime import RuntimeSessionInfo
 
 
@@ -42,6 +43,9 @@ class FakeRuntime:
         )
 
     def session_exists(self, session_name: str) -> bool:
+        return session_name in self.sessions
+
+    def is_session_active(self, session_name: str) -> bool:
         return session_name in self.sessions
 
     def capture_tail(self, session_name: str, *, lines: int = 120) -> str:
@@ -396,4 +400,58 @@ def test_session_spawn_validates_agent_capabilities(tmp_path: Path) -> None:
                 == "Agent 'claude_code' does not support permission_mode='danger-full-access'. Supported values: none"
             )
     finally:
+        app.dependency_overrides.clear()
+
+
+def test_follow_up_session_uses_default_agent_when_no_override(tmp_path: Path) -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+    repo_path = create_git_repo(tmp_path / "session-followup-default-agent")
+
+    original_verify_agent = settings.verify_agent
+    original_default_agent = settings.default_agent
+    try:
+        settings.verify_agent = None
+        settings.default_agent = "codex"
+
+        with TestClient(app) as client:
+            project_id = client.post(
+                "/api/v1/projects", json={"name": "Follow-up Defaults"}
+            ).json()["id"]
+            repository_id = client.post(
+                "/api/v1/repositories",
+                json={"project_id": project_id, "local_path": str(repo_path)},
+            ).json()["id"]
+            task_id = client.post(
+                "/api/v1/tasks",
+                json={
+                    "project_id": project_id,
+                    "title": "Run follow-up default test",
+                },
+            ).json()["id"]
+
+            session_response = client.post(
+                "/api/v1/sessions",
+                json={
+                    "task_id": task_id,
+                    "profile": "executor",
+                    "repository_id": repository_id,
+                },
+            )
+            assert session_response.status_code == 201
+            session = session_response.json()
+
+            follow_up_response = client.post(
+                f"/api/v1/sessions/{session['id']}/follow-up",
+                json={"profile": "verifier", "follow_up_type": "verify"},
+            )
+            assert follow_up_response.status_code == 201
+            follow_up = follow_up_response.json()
+
+            assert follow_up["runtime_metadata"]["agent_name"] == "codex"
+            assert follow_up["runtime_metadata"]["task_kind"] == "verify"
+            assert follow_up["runtime_metadata"]["follow_up_of_session_id"] == session["id"]
+    finally:
+        settings.verify_agent = original_verify_agent
+        settings.default_agent = original_default_agent
         app.dependency_overrides.clear()

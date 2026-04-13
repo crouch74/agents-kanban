@@ -4,6 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from acp_core.agents.types import AgentCapabilities, AgentLaunchPlan, AgentRequest
 from acp_core.services.base_service import ServiceContext
 from acp_core.services.bootstrap_service import BootstrapService
@@ -11,10 +13,9 @@ from acp_core.schemas import ProjectBootstrapCreate, StackPreset
 
 
 class FakeAdapter:
-    name = "codex"
-
     def __init__(self) -> None:
         self.requests: list[AgentRequest] = []
+        self.name = "codex"
 
     def capabilities(self) -> AgentCapabilities:
         return AgentCapabilities(supports_model=True, native_resume=True)
@@ -37,7 +38,12 @@ class FakeRegistry:
         return agent_name.replace("-", "_").lower()
 
     def resolve(self, agent_name: str) -> FakeAdapter:
-        return self.adapter
+        if self.canonical_key(agent_name) not in {"codex", "claude_code", "aider"}:
+            raise ValueError(f"Unsupported agent: {agent_name}")
+        adapter = self.adapter
+        adapter.name = self.canonical_key(agent_name)
+        return adapter
+
 
 
 class FakeSessionService:
@@ -81,6 +87,23 @@ def test_build_agent_request_uses_configured_kickoff_agent() -> None:
     assert request.metadata == {"project_id": "proj-1", "task_id": "task-1"}
 
 
+def test_build_agent_request_falls_back_to_settings_default_when_no_override() -> None:
+    context = ServiceContext(db=MagicMock(), actor_type="human", actor_name="tester")
+    adapter = FakeAdapter()
+    service = BootstrapService(context=context, runtime=MagicMock(), agent_registry=FakeRegistry(adapter))
+
+    state = service.BootstrapState(
+        payload=_payload(agent_name=None),
+        repo_path=Path("/tmp/repo"),
+    )
+    state.execution_path = Path("/tmp/repo")
+    state.project = SimpleNamespace(id="proj-1")
+    state.kickoff_task = SimpleNamespace(id="task-1")
+
+    request = service._build_agent_request(state)
+    assert request.agent_name == "codex"
+
+
 def test_launch_kickoff_session_passes_launch_plan_and_sets_agent_metadata(monkeypatch) -> None:
     context = ServiceContext(db=MagicMock(), actor_type="human", actor_name="tester")
     adapter = FakeAdapter()
@@ -106,3 +129,17 @@ def test_launch_kickoff_session_passes_launch_plan_and_sets_agent_metadata(monke
         "agent": "codex",
         "task_kind": "kickoff",
     }
+
+
+def test_build_agent_request_rejects_unknown_agent() -> None:
+    context = ServiceContext(db=MagicMock(), actor_type="human", actor_name="tester")
+    adapter = FakeAdapter()
+    service = BootstrapService(context=context, runtime=MagicMock(), agent_registry=FakeRegistry(adapter))
+
+    state = service.BootstrapState(payload=_payload(agent_name="ghost"), repo_path=Path("/tmp/repo"))
+    state.execution_path = Path("/tmp/repo")
+    state.project = SimpleNamespace(id="proj-1")
+    state.kickoff_task = SimpleNamespace(id="task-1")
+
+    with pytest.raises(ValueError, match="^Unknown agent: ghost$"):
+        service._build_agent_request(state)

@@ -14,6 +14,24 @@ export function createSession(payload: {
   profile: string;
   repository_id?: string;
   worktree_id?: string;
+  launch_input?: {
+    task_kind?: "kickoff" | "execute" | "review" | "verify" | "research" | "docs";
+    agent_name?: string;
+    prompt?: string;
+    working_directory?: string;
+    model?: string;
+    permission_mode?: string;
+    output_mode?: string;
+    max_turns?: number;
+    resume_token?: string;
+    allowed_tools?: string[];
+    disallowed_tools?: string[];
+    extra_env?: Record<string, string>;
+    repository_id?: string;
+    worktree_id?: string;
+    session_family_id?: string;
+    follow_up_of_session_id?: string;
+  };
   command?: string;
 }) {
   return postJson<SessionSummary>("/sessions", payload);
@@ -31,8 +49,27 @@ export function createFollowUpSession(
   payload: {
     profile: string;
     follow_up_type?: "retry" | "review" | "verify" | "handoff";
+    agent_name?: string;
     reuse_worktree?: boolean;
     reuse_repository?: boolean;
+    launch_input?: {
+      task_kind?: "kickoff" | "execute" | "review" | "verify" | "research" | "docs";
+      agent_name?: string;
+      prompt?: string;
+      working_directory?: string;
+      model?: string;
+      permission_mode?: string;
+      output_mode?: string;
+      max_turns?: number;
+      resume_token?: string;
+      allowed_tools?: string[];
+      disallowed_tools?: string[];
+      extra_env?: Record<string, string>;
+      repository_id?: string;
+      worktree_id?: string;
+      session_family_id?: string;
+      follow_up_of_session_id?: string;
+    };
     command?: string;
   },
 ) {

@@ -13,6 +13,7 @@ from acp_core.agents import (
     resolve_adapter_and_validate_request,
     validate_launch_plan_shape,
 )
+from acp_core.services.agent_selection import resolve_agent_name
 from acp_core.errors import build_runtime_service_error
 from acp_core.infrastructure.runtime_adapter import (
     DefaultRuntimeAdapter,
@@ -135,7 +136,10 @@ class SessionService:
 
     def _runtime_session_status(self, session: AgentSession, *, exists: bool) -> str:
         if exists:
-            is_active = self.runtime.is_session_active(session.session_name)
+            if hasattr(self.runtime, "is_session_active"):
+                is_active = self.runtime.is_session_active(session.session_name)
+            else:
+                is_active = True
 
             # Grace period for new sessions to avoid early completion reconciliation
             # if the command hasn't fully registered in tmux pane_current_command yet.
@@ -182,29 +186,39 @@ class SessionService:
         }
         return mapping.get(profile, "execute")
 
-    def _default_agent_for_flow(
+    @staticmethod
+    def _normalize_task_kind_for_agent_resolution(task_kind: str | None) -> str:
+        if task_kind == "execute":
+            return "execution"
+        if task_kind in {"execution", "kickoff", "review", "verify", "research", "docs"}:
+            return task_kind
+        return "execution"
+
+    def _resolve_agent_task_kind(
         self,
         *,
         profile: str,
+        launch_task_kind: str | None,
         follow_up_type: str | None = None,
     ) -> str:
-        configured_agent = None
         if follow_up_type == "review":
-            configured_agent = settings.review_agent
-        elif follow_up_type == "verify":
-            configured_agent = settings.verify_agent
-        elif profile == "executor":
-            configured_agent = settings.execution_agent
-        elif profile == "reviewer":
-            configured_agent = settings.review_agent
-        elif profile == "verifier":
-            configured_agent = settings.verify_agent
-        elif profile == "research":
-            configured_agent = settings.research_agent
-        elif profile == "docs":
-            configured_agent = settings.docs_agent
+            return "review"
+        if follow_up_type == "verify":
+            return "verify"
+        if follow_up_type in {"retry", "handoff"}:
+            return "execution"
 
-        return configured_agent or settings.default_agent
+        normalized_task_kind = self._normalize_task_kind_for_agent_resolution(
+            launch_task_kind
+        )
+        if normalized_task_kind in {"kickoff", "review", "verify", "execution"}:
+            return normalized_task_kind
+        if profile == "reviewer":
+            return "review"
+        if profile == "verifier":
+            return "verify"
+
+        return "execution"
 
     def _build_launch_inputs(
         self,
@@ -212,6 +226,7 @@ class SessionService:
         profile: str,
         working_directory: Path,
         launch_input_payload: Any | None,
+        requested_agent_name: str | None = None,
         repository_id: str | None,
         worktree_id: str | None,
         follow_up_type: str | None = None,
@@ -219,11 +234,13 @@ class SessionService:
         follow_up_of_session_id: str | None = None,
     ) -> SessionLaunchInputs:
         payload = launch_input_payload
+        if requested_agent_name is None:
+            requested_agent_name = payload.agent_name if payload else None
         launch_inputs = SessionLaunchInputs(
             task_kind=(
                 payload.task_kind if payload else self._task_kind_from_profile(profile)
             ),
-            agent_name=payload.agent_name if payload else None,
+            agent_name=requested_agent_name,
             prompt=payload.prompt if payload else None,
             working_directory=Path(payload.working_directory)
             if payload and payload.working_directory
@@ -255,11 +272,16 @@ class SessionService:
                 else follow_up_of_session_id
             ),
         )
-        fallback_agent = self._default_agent_for_flow(
-            profile=profile, follow_up_type=follow_up_type
+        agent_task_kind = self._resolve_agent_task_kind(
+            profile=profile,
+            launch_task_kind=launch_inputs.task_kind,
+            follow_up_type=follow_up_type,
         )
-        resolved_agent = self.agent_registry.canonical_key(
-            launch_inputs.agent_name or fallback_agent
+        resolved_agent = resolve_agent_name(
+            task_kind=agent_task_kind,
+            requested_agent_name=requested_agent_name,
+            settings=settings,
+            agent_registry=self.agent_registry,
         )
         return replace(launch_inputs, agent_name=resolved_agent)
 
@@ -521,10 +543,14 @@ class SessionService:
         _, _, working_directory = self._resolve_session_target(
             repository_id=repository_id, worktree_id=worktree_id
         )
+        requested_agent_name = (
+            payload.agent_name if payload and payload.agent_name is not None else None
+        )
         launch_inputs = self._build_launch_inputs(
             profile=payload.profile,
             working_directory=working_directory,
             launch_input_payload=payload.launch_input,
+            requested_agent_name=requested_agent_name,
             repository_id=repository_id,
             worktree_id=worktree_id,
         )
@@ -607,10 +633,18 @@ class SessionService:
         _, _, working_directory = self._resolve_session_target(
             repository_id=repository_id, worktree_id=worktree_id
         )
+        requested_agent_name = (
+            payload.agent_name
+            if payload.agent_name is not None
+            else payload.launch_input.agent_name
+            if payload.launch_input is not None and payload.launch_input.agent_name is not None
+            else None
+        )
         launch_inputs = self._build_launch_inputs(
             profile=payload.profile,
             working_directory=working_directory,
             launch_input_payload=payload.launch_input,
+            requested_agent_name=requested_agent_name,
             repository_id=repository_id,
             worktree_id=worktree_id,
             follow_up_type=follow_up_type,

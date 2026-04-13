@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from acp_core.agents.types import SessionLaunchInputs
-from acp_core.models import AgentSession, Task
+from acp_core.models import AgentSession, Repository, Task, Worktree
 from acp_core.runtime import RuntimeLaunchSpec
-from acp_core.schemas import AgentSessionFollowUpCreate
+from acp_core.schemas import AgentSessionFollowUpCreate, SessionLaunchInputCreate
 from acp_core.services.base_service import ServiceContext
 from acp_core.services.session_service import SessionService
 from acp_core.settings import settings
@@ -31,6 +31,31 @@ def db_session_mock() -> MagicMock:
 @pytest.fixture
 def service_context(db_session_mock: MagicMock) -> ServiceContext:
     return ServiceContext(db=db_session_mock, actor_type="human", actor_name="tester")
+
+
+def _follow_up_get_side_effect(task: Task):
+    source_repository = Repository(
+        id="repo-1",
+        project_id=task.project_id,
+        name="test-repo",
+        local_path="/tmp/repo",
+    )
+    source_worktree = Worktree(
+        id="wt-1",
+        repository_id=source_repository.id,
+        task_id=task.id,
+        branch_name="test",
+        path="/tmp/work",
+    )
+
+    def _side_effect(model: type[object], key: str) -> object | None:
+        return {
+            (Task, task.id): task,
+            (Repository, source_repository.id): source_repository,
+            (Worktree, source_worktree.id): source_worktree,
+        }.get((model, key))
+
+    return _side_effect
 
 
 def test_spawn_follow_up_session_keeps_session_lineage_and_sets_default_follow_up_type(
@@ -69,9 +94,7 @@ def test_spawn_follow_up_session_keeps_session_lineage_and_sets_default_follow_u
         runtime_metadata={},
     )
 
-    service_context.db.get.side_effect = lambda model, key: {(Task, task.id): task}.get(
-        (model, key)
-    )
+    service_context.db.get.side_effect = _follow_up_get_side_effect(task)
 
     service = SessionService(service_context, runtime=MagicMock())
     service.get_session = MagicMock(return_value=source)
@@ -90,6 +113,62 @@ def test_spawn_follow_up_session_keeps_session_lineage_and_sets_default_follow_u
     assert kwargs["runtime_metadata_extra"]["follow_up_type"] == "review"
     assert kwargs["launch_inputs"].agent_name == "codex"
     service_context.db.commit.assert_called_once()
+
+
+def test_spawn_follow_up_session_prefers_top_level_agent_override(
+    service_context: ServiceContext,
+) -> None:
+    task = Task(
+        id="task-1",
+        project_id="proj-1",
+        board_column_id="col-1",
+        title="Review me",
+        workflow_state="review",
+        priority="medium",
+        waiting_for_human=False,
+        metadata_json={},
+    )
+    source = AgentSession(
+        id="sess-source",
+        project_id=task.project_id,
+        task_id=task.id,
+        repository_id="repo-1",
+        worktree_id="wt-1",
+        profile="executor",
+        status="running",
+        session_name="sess-source-name",
+        runtime_metadata={"session_family_id": "family-1"},
+    )
+    spawned = AgentSession(
+        id="sess-follow-up",
+        project_id=task.project_id,
+        task_id=task.id,
+        repository_id="repo-1",
+        worktree_id="wt-1",
+        profile="reviewer",
+        status="running",
+        session_name="sess-review",
+        runtime_metadata={},
+    )
+
+    service_context.db.get.side_effect = _follow_up_get_side_effect(task)
+
+    service = SessionService(service_context, runtime=MagicMock())
+    service.get_session = MagicMock(return_value=source)
+    service._spawn_session_record = MagicMock(return_value=spawned)
+
+    service.spawn_follow_up_session(
+        source.id,
+        AgentSessionFollowUpCreate(
+            profile="reviewer",
+            follow_up_type=None,
+            agent_name="aider",
+            launch_input=SessionLaunchInputCreate(agent_name="codex"),
+        ),
+    )
+
+    kwargs = service._spawn_session_record.call_args.kwargs
+    assert kwargs["launch_inputs"].agent_name == "aider"
 
 
 @pytest.mark.parametrize("reuse_flags", [(False, True), (True, False), (False, False)])
@@ -129,9 +208,7 @@ def test_spawn_follow_up_session_respects_reuse_policy_flags(
         runtime_metadata={},
     )
 
-    service_context.db.get.side_effect = lambda model, key: {(Task, task.id): task}.get(
-        (model, key)
-    )
+    service_context.db.get.side_effect = _follow_up_get_side_effect(task)
 
     service = SessionService(service_context, runtime=MagicMock())
     service.get_session = MagicMock(return_value=source)
@@ -186,9 +263,7 @@ def test_spawn_follow_up_session_uses_flow_specific_agent_defaults(
         runtime_metadata={},
     )
 
-    service_context.db.get.side_effect = lambda model, key: {(Task, task.id): task}.get(
-        (model, key)
-    )
+    service_context.db.get.side_effect = _follow_up_get_side_effect(task)
 
     original_default_agent = settings.default_agent
     original_review_agent = settings.review_agent
@@ -316,9 +391,7 @@ def test_spawn_follow_up_session_preserves_family_lineage_across_flow_types(
         runtime_metadata={},
     )
 
-    service_context.db.get.side_effect = lambda model, key: {(Task, task.id): task}.get(
-        (model, key)
-    )
+    service_context.db.get.side_effect = _follow_up_get_side_effect(task)
 
     service = SessionService(service_context, runtime=MagicMock())
     service.get_session = MagicMock(return_value=source)
@@ -333,4 +406,3 @@ def test_spawn_follow_up_session_preserves_family_lineage_across_flow_types(
     assert kwargs["runtime_metadata_extra"]["session_family_id"] == "family-1"
     assert kwargs["runtime_metadata_extra"]["follow_up_of_session_id"] == "sess-source"
     assert kwargs["runtime_metadata_extra"]["follow_up_type"] == follow_up_type
-

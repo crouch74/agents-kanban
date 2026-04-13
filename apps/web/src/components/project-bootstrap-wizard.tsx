@@ -11,6 +11,13 @@ const STACK_OPTIONS: Array<{ value: StackPreset; label: string }> = [
   { value: "fastapi-service", label: "FastAPI service" },
 ];
 
+const AGENT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "", label: "Default (from settings)" },
+  { value: "codex", label: "Codex" },
+  { value: "claude-code", label: "Claude Code" },
+  { value: "aider", label: "Aider" },
+];
+
 type BootstrapPayload = {
   name: string;
   description?: string;
@@ -19,6 +26,7 @@ type BootstrapPayload = {
   stack_preset: StackPreset;
   stack_notes?: string;
   initial_prompt: string;
+  agent_name?: string;
   use_worktree?: boolean;
 };
 
@@ -44,6 +52,7 @@ export function ProjectBootstrapWizard({
   const [stackPreset, setStackPreset] = useState<StackPreset>("nextjs");
   const [stackNotes, setStackNotes] = useState("");
   const [initialPrompt, setInitialPrompt] = useState("");
+  const [agentName, setAgentName] = useState("");
   const [useWorktree, setUseWorktree] = useState(false);
   const [preview, setPreview] = useState<ProjectBootstrapPreview | null>(null);
   const [previewSignature, setPreviewSignature] = useState<string | null>(null);
@@ -57,9 +66,20 @@ export function ProjectBootstrapWizard({
       stack_preset: stackPreset,
       stack_notes: stackNotes || undefined,
       initial_prompt: initialPrompt,
+      agent_name: agentName || undefined,
       use_worktree: useWorktree,
     }),
-    [description, initialPrompt, initializeRepo, name, repoPath, stackNotes, stackPreset, useWorktree],
+    [
+      description,
+      initialPrompt,
+      initializeRepo,
+      name,
+      repoPath,
+      stackNotes,
+      stackPreset,
+      useWorktree,
+      agentName,
+    ],
   );
   const payloadSignature = useMemo(() => JSON.stringify(payload), [payload]);
   const awaitingConfirmation = Boolean(preview?.confirmation_required && previewSignature === payloadSignature);
@@ -125,6 +145,16 @@ export function ProjectBootstrapWizard({
         placeholder="Optional stack notes or constraints"
         className="min-h-20"
       />
+      <Select
+        value={agentName}
+        onChange={(event) => setAgentName(event.target.value)}
+      >
+        {AGENT_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </Select>
       <Textarea
         value={initialPrompt}
         onChange={(event) => setInitialPrompt(event.target.value)}

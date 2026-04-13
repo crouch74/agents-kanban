@@ -95,6 +95,7 @@ class SessionLaunchInputCreate(BaseModel):
 class AgentSessionCreate(BaseModel):
     task_id: str
     profile: Literal["executor", "reviewer", "verifier", "research", "docs"] = "executor"
+    agent_name: str | None = None
     repository_id: str | None = None
     worktree_id: str | None = None
     launch_input: SessionLaunchInputCreate | None = None
@@ -106,6 +107,7 @@ class AgentSessionCreate(BaseModel):
 class AgentSessionFollowUpCreate(BaseModel):
     profile: Literal["executor", "reviewer", "verifier", "research", "docs"] = "verifier"
     follow_up_type: Literal["retry", "review", "verify", "handoff"] | None = None
+    agent_name: str | None = None
     reuse_worktree: bool = True
     reuse_repository: bool = True
     launch_input: SessionLaunchInputCreate | None = None
