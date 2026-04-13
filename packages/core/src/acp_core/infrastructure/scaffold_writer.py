@@ -53,6 +53,9 @@ class ScaffoldWriter:
             - Load the live OpenAPI document from `${{api_base_url}}/openapi.json`; never hardcode host or port.
             - Use `/api/v1` REST endpoints for project, board, task, session, question, worktree, search, and diagnostics operations.
             - Create top-level tasks with `task_create` and one-level subtasks with `parent_task_id`.
+            - Write every task `description` as the full handoff prompt for the future agent session that will execute or verify that task.
+            - For parent tasks with subtasks, use the description to define final integration, glue work, and end-to-end verification responsibilities.
+            - For subtasks, use the description to define the concrete implementation slice, constraints, deliverables, and required evidence.
             - Keep task progress current with comments, checks, artifacts, task patching, and question replies as the API exposes them.
             - Ask operators for missing requirements through the ACP question flow instead of leaving ambiguity in local notes.
             - Do not mark tasks done until ACP readiness is satisfied.

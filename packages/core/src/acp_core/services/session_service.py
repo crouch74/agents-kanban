@@ -62,7 +62,7 @@ class SessionService:
         agent_registry: AgentRegistry | None = None,
     ) -> None:
         self.context = context
-        self.runtime = runtime or DefaultRuntimeAdapter()
+        self.runtime = runtime or context.runtime or DefaultRuntimeAdapter()
         self.agent_registry = agent_registry or AgentRegistry.default()
 
     def list_sessions(
@@ -84,7 +84,14 @@ class SessionService:
             stmt = stmt.where(AgentSession.project_id == project_id)
         if task_id is not None:
             stmt = stmt.where(AgentSession.task_id == task_id)
-        return list(self.context.db.scalars(stmt))
+        sessions = list(self.context.db.scalars(stmt))
+        refreshed_sessions: list[AgentSession] = []
+        for session in sessions:
+            if session.status in {"running", "waiting_human", "blocked"}:
+                refreshed_sessions.append(self.refresh_session_status(session.id))
+            else:
+                refreshed_sessions.append(session)
+        return refreshed_sessions
 
     def get_session(self, session_id: str) -> AgentSession:
         """Purpose: get session.
@@ -757,6 +764,11 @@ class SessionService:
             )
             self.context.db.commit()
             self.context.db.refresh(session)
+            from acp_core.services.task_orchestration_service import (
+                TaskOrchestrationService,
+            )
+
+            TaskOrchestrationService(self.context).handle_session_updated(session.id)
         return session
 
     def tail_session(self, session_id: str, *, lines: int = 80) -> SessionTailRead:

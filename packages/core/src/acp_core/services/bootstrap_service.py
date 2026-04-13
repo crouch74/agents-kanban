@@ -153,6 +153,7 @@ class BootstrapService:
             Use it to:
             - inspect project and board state
             - create top-level tasks and one-level subtasks
+            - write each task description as the future execution prompt for the operator-triggered agent session
             - open waiting questions when requirements are unclear
             - add comments, checks, and artifacts as planning evidence
             - keep the kickoff task updated while you break down the work
@@ -161,6 +162,9 @@ class BootstrapService:
             - inspect the repository and scaffold
             - clarify missing requirements with the operator through ACP waiting questions
             - create or refine the ACP task tree for the initial scope
+            - make every created task and subtask description comprehensive enough to hand directly to an executor or verifier agent later
+            - for parent tasks with subtasks, make the parent description describe final integration, glue work, and end-to-end verification expectations
+            - for subtasks, make the description describe the concrete implementation slice, constraints, deliverables, and evidence expectations
             - keep the board aligned with the real work
 
             Operator kickoff prompt:

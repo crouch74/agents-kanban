@@ -52,6 +52,7 @@ class ServiceContext:
     actor_type: str = "human"
     actor_name: str = "operator"
     correlation_id: str | None = None
+    runtime: Any | None = None
 
     def record_event(
         self,

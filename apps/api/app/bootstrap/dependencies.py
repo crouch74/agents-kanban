@@ -33,14 +33,16 @@ def get_project_service(
     return ProjectService(context)
 
 
-def get_task_service(
-    context: ServiceContext = Depends(get_service_context),
-) -> TaskService:
-    return TaskService(context)
-
-
 def get_runtime_adapter() -> TmuxRuntimeAdapter:
     return TmuxRuntimeAdapter()
+
+
+def get_task_service(
+    context: ServiceContext = Depends(get_service_context),
+    runtime: TmuxRuntimeAdapter = Depends(get_runtime_adapter),
+) -> TaskService:
+    context.runtime = runtime
+    return TaskService(context)
 
 
 def get_agent_registry() -> AgentRegistry:
@@ -59,6 +61,7 @@ def get_diagnostics_service(
     context: ServiceContext = Depends(get_service_context),
     runtime: TmuxRuntimeAdapter = Depends(get_runtime_adapter),
 ) -> DiagnosticsService:
+    context.runtime = runtime
     return DiagnosticsService(context, runtime=runtime)
 
 
@@ -85,6 +88,7 @@ def get_session_service(
     runtime: TmuxRuntimeAdapter = Depends(get_runtime_adapter),
     agent_registry: AgentRegistry = Depends(get_agent_registry),
 ) -> SessionService:
+    context.runtime = runtime
     return SessionService(context, runtime=runtime, agent_registry=agent_registry)
 
 
@@ -92,6 +96,7 @@ def get_waiting_service(
     context: ServiceContext = Depends(get_service_context),
     runtime: TmuxRuntimeAdapter = Depends(get_runtime_adapter),
 ) -> WaitingService:
+    context.runtime = runtime
     return WaitingService(context, runtime=runtime)
 
 
@@ -111,4 +116,5 @@ def get_recovery_service(
     context: ServiceContext = Depends(get_service_context),
     runtime: TmuxRuntimeAdapter = Depends(get_runtime_adapter),
 ) -> RecoveryService:
+    context.runtime = runtime
     return RecoveryService(context, runtime=runtime)

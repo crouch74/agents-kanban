@@ -134,6 +134,7 @@ class RecoveryService:
             ) from exc
         runtime_session_names = {item.session_name for item in runtime_sessions}
         reconciled = 0
+        changed_session_ids: list[str] = []
 
         for session_name, session in tracked_runtime_sessions.items():
             next_status = None
@@ -159,9 +160,17 @@ class RecoveryService:
                     },
                 )
                 reconciled += 1
+                changed_session_ids.append(session.id)
 
         if reconciled:
             self.context.db.commit()
+            from acp_core.services.task_orchestration_service import (
+                TaskOrchestrationService,
+            )
+
+            orchestrator = TaskOrchestrationService(self.context)
+            for session_id in changed_session_ids:
+                orchestrator.handle_session_updated(session_id)
 
         orphan_runtime_sessions = sorted(
             runtime_session_names.difference(tracked_runtime_sessions.keys())

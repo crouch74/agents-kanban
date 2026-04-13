@@ -1,8 +1,57 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
+from acp_core.runtime import RuntimeSessionInfo
+from app.bootstrap.dependencies import get_runtime_adapter
 from app.main import app
+
+
+class FakeRuntime:
+    def __init__(self) -> None:
+        self.sessions: dict[str, dict[str, str]] = {}
+
+    def spawn_session(
+        self,
+        *,
+        session_name: str,
+        working_directory: Path,
+        profile: str,
+        launch_spec=None,
+        command: str | None = None,
+    ) -> RuntimeSessionInfo:
+        self.sessions[session_name] = {
+            "working_directory": str(working_directory),
+            "command": launch_spec.display_command if launch_spec else (command or profile),
+        }
+        return RuntimeSessionInfo(
+            session_name=session_name,
+            pane_id="%1",
+            window_name="main",
+            working_directory=str(launch_spec.working_directory) if launch_spec else str(working_directory),
+            command=launch_spec.display_command if launch_spec else (command or profile),
+        )
+
+    def session_exists(self, session_name: str) -> bool:
+        return session_name in self.sessions
+
+    def is_session_active(self, session_name: str) -> bool:
+        return session_name in self.sessions
+
+    def list_sessions(self, *, prefix: str | None = None):
+        names = sorted(self.sessions)
+        if prefix is not None:
+            names = [name for name in names if name.startswith(prefix)]
+        return [
+            type(
+                "RuntimeSessionSummary",
+                (),
+                {"session_name": name, "window_name": "main"},
+            )()
+            for name in names
+        ]
 
 
 def test_task_write_routes_reject_malformed_payloads_and_missing_foreign_keys() -> None:
@@ -207,3 +256,163 @@ def test_create_subtask_rejects_nested_subtask() -> None:
             nested_response.json()["detail"]
             == "Nested subtasks beyond one level are not supported in v1"
         )
+
+
+def test_parent_ready_runs_subtasks_in_sequence_then_starts_parent_verifier() -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+
+    try:
+        with TestClient(app) as client:
+            project_id = client.post(
+                "/api/v1/projects",
+                json={"name": "Subtree Orchestration"},
+            ).json()["id"]
+            parent = client.post(
+                "/api/v1/tasks",
+                json={
+                    "project_id": project_id,
+                    "title": "Build calculator feature",
+                    "board_column_key": "backlog",
+                },
+            ).json()
+            subtask_one = client.post(
+                "/api/v1/tasks",
+                json={
+                    "project_id": project_id,
+                    "title": "Implement parser",
+                    "parent_task_id": parent["id"],
+                    "board_column_key": "backlog",
+                },
+            ).json()
+            subtask_two = client.post(
+                "/api/v1/tasks",
+                json={
+                    "project_id": project_id,
+                    "title": "Implement evaluator",
+                    "parent_task_id": parent["id"],
+                    "board_column_key": "backlog",
+                },
+            ).json()
+
+            ready_parent = client.patch(
+                f"/api/v1/tasks/{parent['id']}",
+                json={"workflow_state": "ready"},
+            )
+            assert ready_parent.status_code == 200
+
+            sessions = client.get(f"/api/v1/sessions?project_id={project_id}").json()
+            assert len(sessions) == 1
+            assert sessions[0]["task_id"] == subtask_one["id"]
+            assert sessions[0]["profile"] == "executor"
+
+            assert (
+                client.patch(
+                    f"/api/v1/tasks/{subtask_one['id']}",
+                    json={"workflow_state": "in_progress"},
+                ).status_code
+                == 200
+            )
+            assert (
+                client.patch(
+                    f"/api/v1/tasks/{subtask_one['id']}",
+                    json={"workflow_state": "review"},
+                ).status_code
+                == 200
+            )
+            assert (
+                client.post(
+                    f"/api/v1/tasks/{subtask_one['id']}/checks",
+                    json={
+                        "check_type": "verification",
+                        "status": "passed",
+                        "summary": "Parser implemented.",
+                    },
+                ).status_code
+                == 201
+            )
+            assert (
+                client.patch(
+                    f"/api/v1/tasks/{subtask_one['id']}",
+                    json={"workflow_state": "done"},
+                ).status_code
+                == 200
+            )
+
+            sessions = client.get(f"/api/v1/sessions?project_id={project_id}").json()
+            assert len(sessions) == 2
+            assert sessions[0]["task_id"] == subtask_two["id"]
+            assert sessions[0]["profile"] == "executor"
+
+            assert (
+                client.patch(
+                    f"/api/v1/tasks/{subtask_two['id']}",
+                    json={"workflow_state": "in_progress"},
+                ).status_code
+                == 200
+            )
+            assert (
+                client.patch(
+                    f"/api/v1/tasks/{subtask_two['id']}",
+                    json={"workflow_state": "review"},
+                ).status_code
+                == 200
+            )
+            assert (
+                client.post(
+                    f"/api/v1/tasks/{subtask_two['id']}/checks",
+                    json={
+                        "check_type": "verification",
+                        "status": "passed",
+                        "summary": "Evaluator implemented.",
+                    },
+                ).status_code
+                == 201
+            )
+            assert (
+                client.patch(
+                    f"/api/v1/tasks/{subtask_two['id']}",
+                    json={"workflow_state": "done"},
+                ).status_code
+                == 200
+            )
+
+            sessions = client.get(f"/api/v1/sessions?project_id={project_id}").json()
+            assert len(sessions) == 3
+            assert sessions[0]["task_id"] == parent["id"]
+            assert sessions[0]["profile"] == "verifier"
+    finally:
+        app.dependency_overrides.pop(get_runtime_adapter, None)
+
+
+def test_parent_without_subtasks_still_starts_single_executor_session() -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+
+    try:
+        with TestClient(app) as client:
+            project_id = client.post(
+                "/api/v1/projects",
+                json={"name": "Single Task Trigger"},
+            ).json()["id"]
+            task = client.post(
+                "/api/v1/tasks",
+                json={
+                    "project_id": project_id,
+                    "title": "Standalone task",
+                    "board_column_key": "backlog",
+                },
+            ).json()
+
+            response = client.patch(
+                f"/api/v1/tasks/{task['id']}",
+                json={"workflow_state": "ready"},
+            )
+            assert response.status_code == 200
+
+            sessions = client.get(f"/api/v1/sessions?project_id={project_id}").json()
+            assert len(sessions) == 1
+            assert sessions[0]["task_id"] == task["id"]
+            assert sessions[0]["profile"] == "executor"
+    finally:
+        app.dependency_overrides.pop(get_runtime_adapter, None)
