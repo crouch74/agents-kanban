@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from acp_core.constants import DEFAULT_BOARD_COLUMNS
-from acp_core.models import AgentSession, Base, Board, BoardColumn, Project
+from acp_core.models import AgentSession, Base, Board, BoardColumn, Project, Repository
 from acp_core.runtime import RuntimeSessionInfo
 from acp_core.schemas import TaskCheckCreate, TaskCreate, TaskPatch
 from acp_core.services.base_service import ServiceContext
@@ -72,6 +72,13 @@ def service_context(monkeypatch: pytest.MonkeyPatch) -> ServiceContext:
     session.flush()
     for column_data in DEFAULT_BOARD_COLUMNS:
         session.add(BoardColumn(board_id=board.id, **column_data))
+    session.add(
+        Repository(
+            project_id=project.id,
+            name="Functional Task Repo",
+            local_path="/tmp/acp-functional-task-flow",
+        )
+    )
     session.commit()
 
     fake_runtime = FakeRuntime()
@@ -140,7 +147,8 @@ def test_task_service_facade_runs_parent_subtree_sequence(service_context: Servi
     assert sessions[0].task_id == subtask_one.id
     assert sessions[0].profile == "executor"
 
-    service.patch_task(subtask_one.id, TaskPatch(workflow_state="in_progress"))
+    assert service.get_task(subtask_one.id).workflow_state == "in_progress"
+
     service.patch_task(subtask_one.id, TaskPatch(workflow_state="review"))
     service.add_check(
         subtask_one.id,
@@ -160,6 +168,8 @@ def test_task_service_facade_runs_parent_subtree_sequence(service_context: Servi
     assert len(sessions) == 2
     assert sessions[1].task_id == subtask_two.id
     assert sessions[1].profile == "executor"
+    assert service.get_task(parent.id).workflow_state == "in_progress"
+    assert service.get_task(subtask_one.id).workflow_state == "done"
 
 
 def test_task_service_facade_keeps_single_task_ready_behavior(service_context: ServiceContext) -> None:

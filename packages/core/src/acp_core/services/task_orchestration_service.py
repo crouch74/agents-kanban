@@ -1,6 +1,8 @@
 from __future__ import annotations
 from acp_core.enums import (
     AgentProfile,
+    OutputMode,
+    Permission,
     SessionStatus,
     WorktreeStatus,
     WaitingQuestionStatus,
@@ -117,6 +119,8 @@ class TaskOrchestrationService:
         self._reconcile_subtasks(parent, state)
 
     def _reconcile_subtasks(self, parent: Task, state: dict[str, Any]) -> None:
+        self._ensure_parent_in_progress(parent)
+
         for subtask_id in state["ordered_subtask_ids"]:
             subtask = self.context.db.get(Task, subtask_id)
             if subtask is None:
@@ -161,15 +165,43 @@ class TaskOrchestrationService:
             if active_session_id:
                 active_session = self.context.db.get(AgentSession, active_session_id)
                 if active_session is not None and active_session.status in ACTIVE_SESSION_STATUSES:
+                    if subtask.workflow_state in {
+                        WorkflowState.BACKLOG.value,
+                        WorkflowState.READY.value,
+                    }:
+                        self._transition_task_state(
+                            subtask,
+                            WorkflowState.IN_PROGRESS.value,
+                        )
                     self._save_state(parent, state)
                     return
                 if active_session is not None and active_session.status == SessionStatus.DONE.value:
+                    if subtask.workflow_state != WorkflowState.REVIEW.value:
+                        self._transition_task_state(
+                            subtask,
+                            WorkflowState.REVIEW.value,
+                        )
+                    readiness = self._subtask_readiness(subtask)
+                    if readiness.can_mark_done:
+                        self._transition_task_state(
+                            subtask,
+                            WorkflowState.DONE.value,
+                        )
+                        state["current_subtask_id"] = None
+                        state["active_session_id"] = None
+                        self.context.record_event(
+                            entity_type="task",
+                            entity_id=parent.id,
+                            event_type="task.subtask_execution_completed",
+                            payload_json={"subtask_id": subtask.id},
+                        )
+                        continue
                     self._pause_parent(
                         parent,
                         state,
                         (
                             f"Subtree orchestration paused: subtask '{subtask.title}' "
-                            "finished its session without reaching done."
+                            "finished execution without enough evidence to mark done."
                         ),
                     )
                     return
@@ -186,13 +218,20 @@ class TaskOrchestrationService:
 
             live_session = self._active_session_for_task(subtask.id)
             if live_session is not None:
+                self._transition_task_state(
+                    subtask,
+                    WorkflowState.IN_PROGRESS.value,
+                )
+                self._ensure_parent_in_progress(parent)
                 state["active_session_id"] = live_session.id
                 self._save_state(parent, state)
                 return
 
             self._ensure_task_in_ready_state(subtask)
+            self._transition_task_state(subtask, WorkflowState.IN_PROGRESS.value)
             session = self._spawn_subtask_session(parent, subtask)
             if session is None:
+                self._transition_task_state(subtask, WorkflowState.READY.value)
                 self._pause_parent(
                     parent,
                     state,
@@ -209,6 +248,7 @@ class TaskOrchestrationService:
                 event_type="task.subtask_execution_started",
                 payload_json={"subtask_id": subtask.id, "session_id": session.id},
             )
+            self._ensure_parent_in_progress(parent)
             self._save_state(parent, state)
             return
 
@@ -227,9 +267,13 @@ class TaskOrchestrationService:
         if verification_session_id:
             session = self.context.db.get(AgentSession, verification_session_id)
             if session is not None and session.status in ACTIVE_SESSION_STATUSES:
+                if parent.workflow_state == WorkflowState.READY.value:
+                    self._transition_task_state(parent, WorkflowState.IN_PROGRESS.value)
                 self._save_state(parent, state)
                 return
             if session is not None and session.status == SessionStatus.DONE.value:
+                if parent.workflow_state == WorkflowState.IN_PROGRESS.value:
+                    self._transition_task_state(parent, WorkflowState.REVIEW.value)
                 state["mode"] = "completed"
                 state["phase"] = "finished"
                 state["active_session_id"] = None
@@ -256,6 +300,8 @@ class TaskOrchestrationService:
 
         live_session = self._active_session_for_task(parent.id, profile=AgentProfile.VERIFIER.value)
         if live_session is not None:
+            if parent.workflow_state == WorkflowState.READY.value:
+                self._transition_task_state(parent, WorkflowState.IN_PROGRESS.value)
             state["verification_session_id"] = live_session.id
             state["active_session_id"] = live_session.id
             self._save_state(parent, state)
@@ -275,6 +321,8 @@ class TaskOrchestrationService:
         state["current_subtask_id"] = None
         state["active_session_id"] = session.id
         state["verification_session_id"] = session.id
+        if parent.workflow_state == WorkflowState.READY.value:
+            self._transition_task_state(parent, WorkflowState.IN_PROGRESS.value)
         self.context.record_event(
             entity_type="task",
             entity_id=parent.id,
@@ -353,6 +401,14 @@ class TaskOrchestrationService:
         from acp_core.services.session_service import SessionService
 
         repository_id, worktree_id = self._resolve_launch_target(task, parent=parent)
+        if repository_id is None and worktree_id is None:
+            logger.warning(
+                "task orchestration launch blocked: no repository or worktree target",
+                task_id=task.id,
+                parent_task_id=parent.id if parent else None,
+                profile=profile,
+            )
+            return None
         session_service = SessionService(self.context)
         try:
             return session_service.spawn_session(
@@ -364,6 +420,8 @@ class TaskOrchestrationService:
                     launch_input=SessionLaunchInputCreate(
                         task_kind=task_kind,
                         prompt=prompt,
+                        permission_mode=Permission.DANGER_FULL_ACCESS.value,
+                        output_mode=OutputMode.STREAM_JSON.value,
                         repository_id=repository_id,
                         worktree_id=worktree_id,
                     ),
@@ -471,6 +529,31 @@ class TaskOrchestrationService:
             return False
         return self._task_is_waiting(subtask) or subtask.workflow_state == WorkflowState.CANCELLED.value
 
+    def _subtask_readiness(self, task: Task):
+        from acp_core.services.task_service import TaskService
+
+        return TaskService(self.context).get_completion_readiness(task.id)
+
+    def _transition_task_state(self, task: Task, workflow_state: str) -> None:
+        if task.workflow_state == workflow_state:
+            return
+        column = self._column_for_workflow_state(task.project_id, workflow_state)
+        task.workflow_state = workflow_state
+        if column is not None:
+            task.board_column_id = column.id
+        self.context.record_event(
+            entity_type="task",
+            entity_id=task.id,
+            event_type="task.updated",
+            payload_json={
+                "workflow_state": task.workflow_state,
+                "waiting_for_human": task.waiting_for_human,
+                "blocked_reason": task.blocked_reason,
+            },
+        )
+        self.context.db.commit()
+        self.context.db.refresh(task)
+
     def _active_session_for_task(
         self,
         task_id: str,
@@ -522,6 +605,10 @@ class TaskOrchestrationService:
         self.context.db.commit()
         self.context.db.refresh(task)
 
+    def _ensure_parent_in_progress(self, parent: Task) -> None:
+        if parent.workflow_state == WorkflowState.READY.value:
+            self._transition_task_state(parent, WorkflowState.IN_PROGRESS.value)
+
     def _clear_orchestration(self, task: Task) -> None:
         metadata = dict(task.metadata_json)
         if ORCHESTRATION_METADATA_KEY not in metadata:
@@ -561,6 +648,7 @@ class TaskOrchestrationService:
             f"Task objective:\n{task_summary}\n\n"
             "Expected behavior:\n"
             "- Implement the requested change for this task.\n"
+            "- Make actual file edits in the working directory; do not only print or describe code.\n"
             "- Keep ACP comments, checks, and artifacts current with what you do.\n"
             "- If requirements are unclear or blocked, open a waiting question instead of guessing.\n"
             "- Only move the task to done when verification evidence has been attached."
@@ -576,6 +664,8 @@ class TaskOrchestrationService:
             f"Your subtask:\n{subtask_summary}\n\n"
             "Execution rules:\n"
             "- Focus on this subtask only.\n"
+            "- Make actual file edits in the working directory and leave those edits on disk.\n"
+            "- Do not stop at pseudocode or code snippets; implement the change in the checkout.\n"
             "- Leave the parent-level integration and final verification to the parent verification phase.\n"
             "- Record comments, checks, and artifacts on the subtask as you work.\n"
             "- If you uncover missing requirements, open a waiting question rather than inventing scope.\n"
@@ -597,6 +687,7 @@ class TaskOrchestrationService:
             "Your responsibilities:\n"
             "- Verify the intended overall task has been implemented end-to-end.\n"
             "- Add any glue code or integration work still required between subtask outputs.\n"
+            "- Validate the real edited files in the working directory, not just generated suggestions.\n"
             "- Run or record the verification evidence needed on the parent task.\n"
             "- Use ACP comments, checks, and artifacts to leave an operator-auditable verification trail.\n"
             "- Only move the parent task to done if the readiness gate is actually satisfied."

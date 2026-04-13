@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from git import Repo
 
 from fastapi.testclient import TestClient
 
@@ -52,6 +53,13 @@ class FakeRuntime:
             )()
             for name in names
         ]
+
+
+def create_git_repo(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    Repo.init(path)
+    (path / "README.md").write_text("# repo for task orchestration tests\n", encoding="utf-8")
+    return path
 
 
 def test_task_write_routes_reject_malformed_payloads_and_missing_foreign_keys() -> None:
@@ -258,7 +266,9 @@ def test_create_subtask_rejects_nested_subtask() -> None:
         )
 
 
-def test_parent_ready_runs_subtasks_in_sequence_then_starts_parent_verifier() -> None:
+def test_parent_ready_runs_subtasks_in_sequence_then_starts_parent_verifier(
+    tmp_path: Path,
+) -> None:
     fake_runtime = FakeRuntime()
     app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
 
@@ -268,6 +278,15 @@ def test_parent_ready_runs_subtasks_in_sequence_then_starts_parent_verifier() ->
                 "/api/v1/projects",
                 json={"name": "Subtree Orchestration"},
             ).json()["id"]
+            repo_path = create_git_repo(tmp_path / "subtree-orchestration-repo")
+            client.post(
+                "/api/v1/repositories",
+                json={
+                    "project_id": project_id,
+                    "name": "Subtree Orchestration Repo",
+                    "local_path": str(repo_path),
+                },
+            )
             parent = client.post(
                 "/api/v1/tasks",
                 json={
@@ -303,16 +322,13 @@ def test_parent_ready_runs_subtasks_in_sequence_then_starts_parent_verifier() ->
 
             sessions = client.get(f"/api/v1/sessions?project_id={project_id}").json()
             assert len(sessions) == 1
+            assert sessions[0]["runtime_metadata"]["working_directory"] == str(repo_path.resolve())
             assert sessions[0]["task_id"] == subtask_one["id"]
             assert sessions[0]["profile"] == "executor"
 
-            assert (
-                client.patch(
-                    f"/api/v1/tasks/{subtask_one['id']}",
-                    json={"workflow_state": "in_progress"},
-                ).status_code
-                == 200
-            )
+            subtask_one_state = client.get(f"/api/v1/tasks/{subtask_one['id']}").json()
+            assert subtask_one_state["workflow_state"] == "in_progress"
+
             assert (
                 client.patch(
                     f"/api/v1/tasks/{subtask_one['id']}",
@@ -347,13 +363,6 @@ def test_parent_ready_runs_subtasks_in_sequence_then_starts_parent_verifier() ->
             assert (
                 client.patch(
                     f"/api/v1/tasks/{subtask_two['id']}",
-                    json={"workflow_state": "in_progress"},
-                ).status_code
-                == 200
-            )
-            assert (
-                client.patch(
-                    f"/api/v1/tasks/{subtask_two['id']}",
                     json={"workflow_state": "review"},
                 ).status_code
                 == 200
@@ -385,7 +394,9 @@ def test_parent_ready_runs_subtasks_in_sequence_then_starts_parent_verifier() ->
         app.dependency_overrides.pop(get_runtime_adapter, None)
 
 
-def test_parent_without_subtasks_still_starts_single_executor_session() -> None:
+def test_parent_without_subtasks_still_starts_single_executor_session(
+    tmp_path: Path,
+) -> None:
     fake_runtime = FakeRuntime()
     app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
 
@@ -395,6 +406,15 @@ def test_parent_without_subtasks_still_starts_single_executor_session() -> None:
                 "/api/v1/projects",
                 json={"name": "Single Task Trigger"},
             ).json()["id"]
+            repo_path = create_git_repo(tmp_path / "single-task-repo")
+            client.post(
+                "/api/v1/repositories",
+                json={
+                    "project_id": project_id,
+                    "name": "Single Task Repo",
+                    "local_path": str(repo_path),
+                },
+            )
             task = client.post(
                 "/api/v1/tasks",
                 json={

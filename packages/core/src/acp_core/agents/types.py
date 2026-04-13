@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from shlex import quote
-from typing import Any, Literal, Protocol
+from typing import Any, Protocol
 
 from acp_core.enums import OutputMode, Permission, SpecializedMode
 

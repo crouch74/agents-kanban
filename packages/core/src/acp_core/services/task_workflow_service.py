@@ -1,6 +1,4 @@
 from __future__ import annotations
-from acp_core.enums import WorkflowState
-
 from sqlalchemy import select
 
 from acp_core.constants import WORKFLOW_BY_COLUMN_KEY

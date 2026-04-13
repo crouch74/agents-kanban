@@ -17,11 +17,12 @@ fi
 
 log "🧪" "Running Python integration tests with coverage"
 "$VENV_PYTHON" -m pytest tests/integration -q \
+  -p pytest_cov \
   --cov=app \
   --cov=acp_core \
   --cov=acp_mcp_server \
+  --cov-config=.coveragerc \
   --cov-fail-under=85 \
-  --cov-omit=packages/core/src/acp_core/services.py,packages/core/src/acp_core/services_legacy.py \
   --cov-report=term-missing \
   --cov-report=xml
 
