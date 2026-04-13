@@ -162,6 +162,7 @@ class BootstrapService:
             - inspect the repository and scaffold
             - clarify missing requirements with the operator through ACP waiting questions
             - create or refine the ACP task tree for the initial scope
+            - only create new top-level tasks and one-level subtasks; never create the kickoff task itself or add tasks to it
             - make every created task and subtask description comprehensive enough to hand directly to an executor or verifier agent later
             - for parent tasks with subtasks, make the parent description describe final integration, glue work, and end-to-end verification expectations
             - for subtasks, make the description describe the concrete implementation slice, constraints, deliverables, and evidence expectations

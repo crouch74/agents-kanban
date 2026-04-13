@@ -42,6 +42,7 @@ from acp_core.schemas import (
     SessionMessageRead,
     SessionTailRead,
     SessionTimelineRead,
+    TaskPatch,
     WaitingQuestionRead,
 )
 from acp_core.services.base_service import ServiceContext
@@ -759,6 +760,8 @@ class SessionService:
                 },
             ) from exc
         next_status = self._runtime_session_status(session, exists=exists)
+        if next_status == SessionStatus.DONE.value:
+            self._auto_complete_kickoff_task(session)
         if session.status != next_status:
             session.status = next_status
             self.context.record_event(
@@ -775,6 +778,42 @@ class SessionService:
 
             TaskOrchestrationService(self.context).handle_session_updated(session.id)
         return session
+
+    def _auto_complete_kickoff_task(self, session: AgentSession) -> None:
+        if self._session_task_kind(session) != "kickoff":
+            return
+
+        task = self.context.db.get(Task, session.task_id)
+        if task is None or task.workflow_state == WorkflowState.DONE.value:
+            return
+
+        from acp_core.services.task_service import TaskService
+
+        try:
+            TaskService(self.context).patch_task(
+                task.id,
+                TaskPatch(workflow_state=WorkflowState.DONE.value),
+            )
+        except ValueError as exc:
+            logger.warning(
+                "kickoff task auto-completion skipped",
+                session_id=session.id,
+                task_id=task.id,
+                error=str(exc),
+            )
+
+    @staticmethod
+    def _session_task_kind(session: AgentSession) -> str | None:
+        task_kind = session.runtime_metadata.get("task_kind")
+        if isinstance(task_kind, str) and task_kind:
+            return task_kind
+
+        launch_inputs = session.runtime_metadata.get("launch_inputs")
+        if isinstance(launch_inputs, dict):
+            nested_task_kind = launch_inputs.get("task_kind")
+            if isinstance(nested_task_kind, str) and nested_task_kind:
+                return nested_task_kind
+        return None
 
     def tail_session(self, session_id: str, *, lines: int = 80) -> SessionTailRead:
         """Purpose: tail session.

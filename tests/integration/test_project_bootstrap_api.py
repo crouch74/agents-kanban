@@ -115,6 +115,10 @@ def test_bootstrap_existing_repo_in_repo_mode(tmp_path: Path) -> None:
             assert "Keep this note." in (repo_path / "AGENTS.md").read_text(encoding="utf-8")
             assert "<!-- acp-managed:start -->" in (repo_path / "AGENTS.md").read_text(encoding="utf-8")
             assert ".acp/" in (repo_path / ".gitignore").read_text(encoding="utf-8")
+            bootstrap_prompt = (
+                (repo_path / ".acp" / "bootstrap-prompt.md").read_text(encoding="utf-8")
+            )
+            assert "never create the kickoff task itself or add tasks to it" in bootstrap_prompt
             project_local = json.loads((repo_path / ".acp" / "project.local.json").read_text(encoding="utf-8"))
             assert project_local["project_id"] == payload["project"]["id"]
             assert project_local["kickoff_task_id"] == payload["kickoff_task"]["id"]

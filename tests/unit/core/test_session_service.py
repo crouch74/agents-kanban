@@ -406,3 +406,57 @@ def test_spawn_follow_up_session_preserves_family_lineage_across_flow_types(
     assert kwargs["runtime_metadata_extra"]["session_family_id"] == "family-1"
     assert kwargs["runtime_metadata_extra"]["follow_up_of_session_id"] == "sess-source"
     assert kwargs["runtime_metadata_extra"]["follow_up_type"] == follow_up_type
+
+
+def test_refresh_session_status_auto_completes_kickoff_task(
+    service_context: ServiceContext,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task = Task(
+        id="task-1",
+        project_id="proj-1",
+        board_column_id="col-1",
+        title="Kickoff",
+        workflow_state="in_progress",
+        priority="medium",
+        waiting_for_human=False,
+        metadata_json={},
+    )
+    session = AgentSession(
+        id="sess-1",
+        project_id=task.project_id,
+        task_id=task.id,
+        profile="executor",
+        status="running",
+        session_name="sess-1-name",
+        runtime_metadata={"task_kind": "kickoff"},
+    )
+
+    service_context.db.get.side_effect = (
+        lambda model, key: task if model is Task and key == task.id else None
+    )
+    runtime = MagicMock()
+    runtime.session_exists.return_value = False
+
+    completed_payloads: list[object] = []
+
+    class FakeTaskService:
+        def __init__(self, context: ServiceContext) -> None:
+            self.context = context
+
+        def patch_task(self, task_id: str, payload):
+            completed_payloads.append(payload)
+            task.workflow_state = payload.workflow_state
+            return task
+
+    monkeypatch.setattr("acp_core.services.task_service.TaskService", FakeTaskService)
+
+    service = SessionService(service_context, runtime=runtime)
+    service.get_session = MagicMock(return_value=session)
+
+    refreshed = service.refresh_session_status(session.id)
+
+    assert refreshed.status == "done"
+    assert completed_payloads
+    assert completed_payloads[0].workflow_state == "done"
+    assert task.workflow_state == "done"
