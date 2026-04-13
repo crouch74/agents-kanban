@@ -11,6 +11,9 @@ MCP_TRANSPORT="${ACP_MCP_TRANSPORT:-streamable-http}"
 MCP_HOST="${FASTMCP_HOST:-127.0.0.1}"
 MCP_PORT="${FASTMCP_PORT:-8001}"
 MCP_PATH="${FASTMCP_STREAMABLE_HTTP_PATH:-/mcp}"
+API_PORT="${ACP_API_PORT:-8000}"
+API_HOST="${ACP_API_HOST:-127.0.0.1}"
+WEB_PORT="${ACP_WEB_PORT:-5173}"
 
 ENABLE_API=1
 ENABLE_WEB=1
@@ -21,6 +24,7 @@ SHUTTING_DOWN=0
 SERVICE_NAMES=()
 SERVICE_PIDS=()
 MONITOR_PIDS=()
+TARGET_PORTS=()
 
 usage() {
   cat <<'EOF'
@@ -82,6 +86,22 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
+
+load_env_config() {
+  if [ -f "$ROOT/.env" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$ROOT/.env"
+    set +a
+  fi
+
+  API_PORT="${ACP_API_PORT:-$API_PORT}"
+  API_HOST="${ACP_API_HOST:-$API_HOST}"
+  WEB_PORT="${ACP_WEB_PORT:-$WEB_PORT}"
+  MCP_PORT="${FASTMCP_PORT:-$MCP_PORT}"
+  MCP_HOST="${FASTMCP_HOST:-$MCP_HOST}"
+  MCP_PATH="${FASTMCP_STREAMABLE_HTTP_PATH:-$MCP_PATH}"
+}
 
 if [ "$ENABLE_API" -eq 0 ] && [ "$ENABLE_WEB" -eq 0 ] && [ "$ENABLE_MCP" -eq 0 ]; then
   echo "No services selected." >&2
@@ -183,6 +203,8 @@ start_service() {
         cd "$ROOT"
         export PATH="$VENV_BIN_DIR:$PATH"
         export PYTHONPATH="$PYTHONPATH_COMMON"
+        export ACP_API_PORT="$API_PORT"
+        export ACP_API_HOST="$API_HOST"
         bash "$ROOT/scripts/dev-api.sh"
       ) >>"$log_file" 2>&1 &
       ;;
@@ -190,6 +212,7 @@ start_service() {
       (
         cd "$ROOT"
         export PATH="$VENV_BIN_DIR:$PATH"
+        export ACP_WEB_PORT="$WEB_PORT"
         bash "$ROOT/scripts/dev-web.sh"
       ) >>"$log_file" 2>&1 &
       ;;
@@ -214,6 +237,46 @@ start_service() {
   SERVICE_NAMES+=("$service_name")
   SERVICE_PIDS+=("$!")
   start_log_monitor "$service_name" "$log_file"
+}
+
+add_port_to_kill_list() {
+  local port="$1"
+  local existing
+
+  if [ -z "$port" ]; then
+    return
+  fi
+
+  for existing in "${TARGET_PORTS[@]:-}"; do
+    if [ "$existing" = "$port" ]; then
+      return
+    fi
+  done
+
+  TARGET_PORTS+=("$port")
+}
+
+kill_configured_port_listeners() {
+  local port pid
+  local -a pids=()
+
+  for port in "${TARGET_PORTS[@]:-}"; do
+    if ! [[ "$port" =~ ^[0-9]+$ ]]; then
+      continue
+    fi
+
+    for pid in $(lsof -ti :$port -sTCP:LISTEN -P -n 2>/dev/null || true); do
+      pids+=("$pid")
+    done
+  done
+
+  if [ "${#pids[@]}" -eq 0 ]; then
+    return
+  fi
+
+  for pid in "${pids[@]}"; do
+    kill -9 "$pid" 2>/dev/null || true
+  done
 }
 
 cleanup() {
@@ -248,11 +311,11 @@ print_summary() {
   echo "Runtime home: $RUNTIME_HOME"
   echo "Logs directory: $LOGS_DIR"
   if [ "$ENABLE_API" -eq 1 ]; then
-    echo "API: http://127.0.0.1:8000"
-    echo "Health: http://127.0.0.1:8000/api/v1/health"
+    echo "API: http://$API_HOST:$API_PORT"
+    echo "Health: http://$API_HOST:$API_PORT/api/v1/health"
   fi
   if [ "$ENABLE_WEB" -eq 1 ]; then
-    echo "Web: http://127.0.0.1:5173"
+    echo "Web: http://127.0.0.1:$WEB_PORT"
   fi
   if [ "$ENABLE_MCP" -eq 1 ]; then
     echo "MCP: http://$MCP_HOST:$MCP_PORT$MCP_PATH"
@@ -291,6 +354,21 @@ monitor_services() {
 }
 
 mkdir -p "$RUNTIME_HOME" "$LOGS_DIR"
+load_env_config
+
+if [ "$ENABLE_API" -eq 1 ]; then
+  add_port_to_kill_list "$API_PORT"
+fi
+
+if [ "$ENABLE_WEB" -eq 1 ]; then
+  add_port_to_kill_list "$WEB_PORT"
+fi
+
+if [ "$ENABLE_MCP" -eq 1 ]; then
+  add_port_to_kill_list "$MCP_PORT"
+fi
+
+kill_configured_port_listeners
 ensure_prerequisites
 print_summary
 
