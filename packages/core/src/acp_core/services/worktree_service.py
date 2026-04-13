@@ -1,4 +1,5 @@
 from __future__ import annotations
+from acp_core.enums import WorkflowState
 
 from pathlib import Path
 
@@ -290,14 +291,14 @@ class WorktreeHygieneService:
                 recommendation = "inspect"
 
             if session is not None and session.status in {
-                "done",
+                WorkflowState.DONE.value,
                 "failed",
-                "cancelled",
+                WorkflowState.CANCELLED.value,
             }:
                 reasons.append(f"session_{session.status}")
                 recommendation = "archive" if worktree.status == "active" else "prune"
 
-            if task is not None and task.workflow_state in {"done", "cancelled"}:
+            if task is not None and task.workflow_state in {WorkflowState.DONE.value, WorkflowState.CANCELLED.value}:
                 reasons.append(f"task_{task.workflow_state}")
                 if recommendation is None:
                     recommendation = (

@@ -1,10 +1,12 @@
 from __future__ import annotations
+from acp_core.enums import WorkflowState
 
 from sqlalchemy import select
 
 from acp_core.constants import DEFAULT_BOARD_COLUMNS
 from acp_core.logging import logger
 from acp_core.models import AgentSession, Board, BoardColumn, Project, Repository, Task, WaitingQuestion, Worktree
+from acp_core.services.session_service import SessionService
 from acp_core.schemas import (
     AgentSessionRead,
     BoardColumnRead,
@@ -148,7 +150,7 @@ class ProjectService:
 
         tasks_stmt = (
             select(Task)
-            .where(Task.project_id == project_id, Task.workflow_state != "cancelled")
+            .where(Task.project_id == project_id, Task.workflow_state != WorkflowState.CANCELLED.value)
             .order_by(Task.parent_task_id.is_not(None), Task.created_at.asc())
         )
         tasks = list(self.context.db.scalars(tasks_stmt))
@@ -224,6 +226,16 @@ class ProjectService:
         if project.archived:
             return project
 
+        session_service = SessionService(self.context)
+        project_sessions = self.context.db.scalars(
+            select(AgentSession).where(
+                AgentSession.project_id == project_id,
+                AgentSession.status.not_in([WorkflowState.DONE.value, "failed", WorkflowState.CANCELLED.value]),
+            )
+        )
+        for session in list(project_sessions):
+            session_service.cancel_session(session.id)
+
         project.archived = True
         self.context.record_event(
             entity_type="project",
@@ -236,4 +248,3 @@ class ProjectService:
 
         logger.info("🗂️ project archived", project_id=project.id)
         return project
-

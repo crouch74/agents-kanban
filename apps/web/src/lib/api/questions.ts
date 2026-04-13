@@ -1,4 +1,4 @@
-import type { WaitingQuestionSummary } from "@acp/sdk";
+import type { Urgency, WaitingQuestionSummary } from "@acp/sdk";
 import { fetchJson, postJson } from "./httpClient";
 import type { WaitingQuestionDetail } from "./types";
 
@@ -25,7 +25,7 @@ export function createQuestion(payload: {
   session_id?: string;
   prompt: string;
   blocked_reason?: string;
-  urgency?: string;
+  urgency?: Urgency;
   options_json?: Array<Record<string, unknown>>;
 }) {
   return postJson<WaitingQuestionSummary>("/questions", payload);

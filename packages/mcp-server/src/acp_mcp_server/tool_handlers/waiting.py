@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from acp_core.enums import Urgency
 from acp_core.schemas import WaitingQuestionCreate, WaitingQuestionRead
 from acp_core.services.waiting_service import WaitingService
 
@@ -17,7 +18,7 @@ def question_open(
     prompt: str,
     session_id: str | None = None,
     blocked_reason: str | None = None,
-    urgency: str | None = None,
+    urgency: str | Urgency | None = None,
     options_json: list[dict[str, Any]] | None = None,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:

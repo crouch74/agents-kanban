@@ -1,4 +1,9 @@
 from __future__ import annotations
+from acp_core.enums import (
+    CheckStatus,
+    WaitingQuestionStatus,
+    WorkflowState,
+)
 
 from sqlalchemy import func, select
 
@@ -88,7 +93,7 @@ class TaskReadService:
         passing_check_count = self.context.db.scalar(
             select(func.count(TaskCheck.id)).where(
                 TaskCheck.task_id == task.id,
-                TaskCheck.status.in_(["passed", "warning"]),
+                TaskCheck.status.in_([CheckStatus.PASSED.value, CheckStatus.WARNING.value]),
             )
         ) or 0
         artifact_count = self.context.db.scalar(
@@ -99,13 +104,13 @@ class TaskReadService:
             .join(Task, Task.id == TaskDependency.depends_on_task_id)
             .where(
                 TaskDependency.task_id == task.id,
-                Task.workflow_state.not_in(["done", "cancelled"]),
+                Task.workflow_state.not_in([WorkflowState.DONE.value, WorkflowState.CANCELLED.value]),
             )
         ) or 0
         open_waiting_question_count = self.context.db.scalar(
             select(func.count(WaitingQuestion.id)).where(
                 WaitingQuestion.task_id == task.id,
-                WaitingQuestion.status == "open",
+                WaitingQuestion.status == WaitingQuestionStatus.OPEN.value,
             )
         ) or 0
 
@@ -143,7 +148,7 @@ class TaskReadService:
             select(Task)
             .where(
                 Task.parent_task_id.is_(None),
-                Task.workflow_state.in_(["ready", "in_progress"]),
+                Task.workflow_state.in_([WorkflowState.READY.value, WorkflowState.IN_PROGRESS.value]),
                 Task.waiting_for_human.is_(False),
             )
             .order_by(

@@ -66,6 +66,29 @@ import { WorktreesSectionContainer } from "@/features/project/containers/Worktre
 import { createControlPlaneInvalidation } from "@/features/control-plane/invalidation";
 import { ProjectBootstrapWizard } from "@/components/project-bootstrap-wizard";
 import { toDisplay } from "@/utils/display";
+import {
+  AgentProfile,
+  CheckStatus,
+  FollowUpType,
+  SessionStatus,
+  Urgency,
+  WorktreeStatus,
+  WorkflowState,
+} from "@acp/sdk";
+
+const QUESTION_URGENCY_OPTIONS: Urgency[] = [
+  Urgency.LOW,
+  Urgency.MEDIUM,
+  Urgency.HIGH,
+  Urgency.URGENT,
+];
+
+const CHECK_STATUS_OPTIONS: CheckStatus[] = [
+  CheckStatus.PENDING,
+  CheckStatus.PASSED,
+  CheckStatus.FAILED,
+  CheckStatus.WARNING,
+];
 
 function formatEvent(eventType: string) {
   return toDisplay(eventType.replaceAll(".", "_"));
@@ -128,7 +151,7 @@ export function App() {
     useState<string>("");
   const [selectedSessionWorktreeId, setSelectedSessionWorktreeId] =
     useState<string>("");
-  const [sessionProfile, setSessionProfile] = useState("executor");
+  const [sessionProfile, setSessionProfile] = useState(AgentProfile.EXECUTOR);
   const [sessionAgentName, setSessionAgentName] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     null,
@@ -139,12 +162,12 @@ export function App() {
   const [inspectedTaskId, setInspectedTaskId] = useState<string | null>(null);
   const [draftQuestionPrompt, setDraftQuestionPrompt] = useState("");
   const [draftQuestionReason, setDraftQuestionReason] = useState("");
-  const [draftQuestionUrgency, setDraftQuestionUrgency] = useState("medium");
+  const [draftQuestionUrgency, setDraftQuestionUrgency] = useState(Urgency.MEDIUM);
   const [draftReplyBody, setDraftReplyBody] = useState("");
   const [draftCommentBody, setDraftCommentBody] = useState("");
   const [draftCheckSummary, setDraftCheckSummary] = useState("");
   const [draftCheckType] = useState("verification");
-  const [draftCheckStatus, setDraftCheckStatus] = useState("pending");
+  const [draftCheckStatus, setDraftCheckStatus] = useState(CheckStatus.PENDING);
   const [draftArtifactName, setDraftArtifactName] = useState("");
   const [draftArtifactType] = useState("log");
   const [draftArtifactUri, setDraftArtifactUri] = useState("");
@@ -733,7 +756,7 @@ export function App() {
                             ].join(" ")}
                           >
                             <div className="flex min-w-0 items-center gap-2">
-                              <StatusDot status={selectedProjectId === project.id ? "ready" : "backlog"} />
+                              <StatusDot status={selectedProjectId === project.id ? WorkflowState.READY : WorkflowState.BACKLOG} />
                               <span className="truncate">{project.name}</span>
                             </div>
                             <button
@@ -811,7 +834,7 @@ export function App() {
                                     <input
                                       value={draftTaskTitle}
                                       onChange={(event) => setDraftTaskTitle(event.target.value)}
-                                      placeholder={column.key === "backlog" ? "Add task" : "Add task title"}
+                                      placeholder={column.key === WorkflowState.BACKLOG ? "Add task" : "Add task title"}
                                       className="w-full rounded-[4px] border border-[color:var(--border)] px-3 py-2 text-sm"
                                     />
                                     <button
@@ -865,19 +888,19 @@ export function App() {
                             onLock={(worktreeId) =>
                               patchWorktreeMutation.mutate({
                                 worktreeId,
-                                status: "locked",
+                                status: WorktreeStatus.LOCKED,
                               })
                             }
                             onArchive={(worktreeId) =>
                               patchWorktreeMutation.mutate({
                                 worktreeId,
-                                status: "archived",
+                                status: WorktreeStatus.ARCHIVED,
                               })
                             }
                             onPrune={(worktreeId) =>
                               patchWorktreeMutation.mutate({
                                 worktreeId,
-                                status: "pruned",
+                                status: WorktreeStatus.PRUNED,
                               })
                             }
                             controls={
@@ -1028,7 +1051,7 @@ export function App() {
                                 >
                                   <option value="">No worktree</option>
                                   {(projectDetailQuery.data?.worktrees ?? [])
-                                    .filter((worktree) => worktree.status !== "pruned")
+                                    .filter((worktree) => worktree.status !== WorktreeStatus.PRUNED)
                                     .map((worktree) => (
                                       <option key={worktree.id} value={worktree.id}>
                                         {worktree.branch_name}
@@ -1038,11 +1061,11 @@ export function App() {
                                 <select
                                   value={sessionProfile}
                                   onChange={(event) =>
-                                    setSessionProfile(event.target.value)
+                                    setSessionProfile(event.target.value as AgentProfile)
                                   }
                                   className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
                                 >
-                                  {["executor", "reviewer", "verifier", "research", "docs"].map((profile) => (
+                                  {Object.values(AgentProfile).map((profile) => (
                                     <option key={profile} value={profile}>
                                       {toDisplay(profile)}
                                     </option>
@@ -1129,7 +1152,7 @@ export function App() {
                                             type="button"
                                             onClick={() => {
                                               setActiveSection("worktrees");
-                                              selectWorktree(selectedSession.worktree_id);
+                                              selectWorktree(selectedSession.worktree_id!);
                                             }}
                                             className="text-[color:var(--accent)] underline"
                                           >
@@ -1148,7 +1171,7 @@ export function App() {
                                     <>
                                       {selectedSessionId &&
                                       sessionTailQuery.data?.session.status ===
-                                        "running" ? (
+                                        SessionStatus.RUNNING ? (
                                         <button
                                           onClick={() =>
                                             cancelSessionMutation.mutate(
@@ -1167,22 +1190,22 @@ export function App() {
                                             {
                                               label: "Retry",
                                               profile: sessionTimelineQuery.data.session.profile,
-                                              followUpType: "retry" as const,
+                                              followUpType: FollowUpType.RETRY,
                                             },
                                             {
                                               label: "Review",
-                                              profile: "reviewer",
-                                              followUpType: "review" as const,
+                                              profile: AgentProfile.REVIEWER,
+                                              followUpType: FollowUpType.REVIEW,
                                             },
                                             {
                                               label: "Verify",
-                                              profile: "verifier",
-                                              followUpType: "verify" as const,
+                                              profile: AgentProfile.VERIFIER,
+                                              followUpType: FollowUpType.VERIFY,
                                             },
                                             {
                                               label: "Handoff",
-                                              profile: "executor",
-                                              followUpType: "handoff" as const,
+                                              profile: AgentProfile.EXECUTOR,
+                                              followUpType: FollowUpType.HANDOFF,
                                             },
                                           ].map((followUp) => (
                                             <button
@@ -1410,11 +1433,11 @@ export function App() {
                               <select
                                 value={draftQuestionUrgency}
                                 onChange={(event) =>
-                                  setDraftQuestionUrgency(event.target.value)
+                                  setDraftQuestionUrgency(event.target.value as Urgency)
                                 }
                                 className="mt-3 w-full rounded-[4px] border border-[color:var(--border)] px-3 py-3 text-sm outline-none"
                               >
-                                {["low", "medium", "high", "urgent"].map((urgency) => (
+                                {QUESTION_URGENCY_OPTIONS.map((urgency) => (
                                   <option key={urgency} value={urgency}>
                                     {toDisplay(urgency)}
                                   </option>
@@ -1539,13 +1562,13 @@ export function App() {
                         </button>
                       </DropdownMenu.Trigger>
                       <DropdownMenu.Content className="rounded-[6px] border border-[color:var(--border)] bg-[color:var(--surface)] p-1 shadow-[var(--shadow-panel)]">
-                        {taskDetailQuery.data.workflow_state !== "cancelled" ? (
+                        {taskDetailQuery.data.workflow_state !== WorkflowState.CANCELLED ? (
                           <DropdownMenu.Item
                             className="rounded px-2 py-1.5 text-sm outline-none"
                             onSelect={() =>
                               patchTaskMutation.mutate({
                                 taskId: taskDetailQuery.data.id,
-                                workflowState: "cancelled",
+                                workflowState: WorkflowState.CANCELLED,
                               })
                             }
                           >
@@ -1557,7 +1580,7 @@ export function App() {
                             onSelect={() =>
                               patchTaskMutation.mutate({
                                 taskId: taskDetailQuery.data.id,
-                                workflowState: "backlog",
+                                workflowState: WorkflowState.BACKLOG,
                               })
                             }
                           >
@@ -1611,7 +1634,7 @@ export function App() {
                         onClick={() =>
                           createSessionMutation.mutate({
                             task_id: taskDetailQuery.data.id,
-                            profile: "executor",
+                            profile: AgentProfile.EXECUTOR,
                           })
                         }
                         disabled={createSessionMutation.isPending}
@@ -1697,7 +1720,7 @@ export function App() {
                             project_id: taskDetailQuery.data.project_id,
                             title: draftSubtaskTitle,
                             parent_task_id: taskDetailQuery.data.id,
-                            board_column_key: "backlog",
+                            board_column_key: WorkflowState.BACKLOG,
                           })
                         }
                         disabled={!draftSubtaskTitle.trim()}
@@ -1758,10 +1781,10 @@ export function App() {
                       ))}
                       <select
                         value={draftCheckStatus}
-                        onChange={(event) => setDraftCheckStatus(event.target.value)}
+                        onChange={(event) => setDraftCheckStatus(event.target.value as CheckStatus)}
                         className="w-full rounded-[4px] border border-[color:var(--border)] px-3 py-2 text-sm"
                       >
-                        {["pending", "passed", "failed", "warning"].map((status) => (
+                        {CHECK_STATUS_OPTIONS.map((status) => (
                           <option key={status} value={status}>
                             {toDisplay(status)}
                           </option>

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from acp_core.enums import AgentProfile, FollowUpType
 from acp_core.schemas import (
     AgentSessionCreate,
     AgentSessionFollowUpCreate,
@@ -19,7 +20,7 @@ from acp_mcp_server.idempotency import (
 
 def session_spawn(
     task_id: str,
-    profile: str = "executor",
+    profile: str = AgentProfile.EXECUTOR.value,
     agent_name: str | None = None,
     repository_id: str | None = None,
     worktree_id: str | None = None,
@@ -51,9 +52,9 @@ def session_spawn(
 
 def session_follow_up(
     session_id: str,
-    profile: str = "verifier",
+    profile: str = AgentProfile.VERIFIER.value,
     agent_name: str | None = None,
-    follow_up_type: str | None = None,
+    follow_up_type: str | FollowUpType | None = None,
     reuse_worktree: bool = True,
     reuse_repository: bool = True,
     launch_input: dict[str, Any] | None = None,

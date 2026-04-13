@@ -2,6 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from acp_core.enums import (
+    AuthorType,
+    CheckStatus,
+    DependencyRelationshipType,
+    TaskPriority,
+    WorkflowState,
+)
 from acp_core.schemas import (
     TaskArtifactCreate,
     TaskCheckCreate,
@@ -37,7 +44,7 @@ def task_create(
     project_id: str,
     title: str,
     description: str | None = None,
-    priority: str = "medium",
+    priority: str = TaskPriority.MEDIUM.value,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
     return run_idempotent_write(
@@ -59,7 +66,7 @@ def subtask_create(
     parent_task_id: str,
     title: str,
     description: str | None = None,
-    priority: str = "medium",
+    priority: str = TaskPriority.MEDIUM.value,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
     def _create_subtask(context: ServiceContext) -> Any:
@@ -86,7 +93,7 @@ def task_update(
     task_id: str,
     title: str | None = None,
     description: str | None = None,
-    workflow_state: str | None = None,
+    workflow_state: WorkflowState | None = None,
     blocked_reason: str | None = None,
     waiting_for_human: bool | None = None,
     client_request_id: str | None = None,
@@ -129,7 +136,7 @@ def task_comment_add(
     task_id: str,
     author_name: str,
     body: str,
-    author_type: str = "agent",
+    author_type: str | AuthorType = AuthorType.AGENT.value,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
     return run_idempotent_write(
@@ -149,7 +156,7 @@ def task_comment_add(
 def task_check_add(
     task_id: str,
     check_type: str,
-    status: str,
+    status: str | CheckStatus,
     summary: str,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
@@ -203,7 +210,7 @@ def task_dependencies_get(task_id: str) -> list[dict[str, Any]]:
 def task_dependency_add(
     task_id: str,
     depends_on_task_id: str,
-    relationship_type: str = "blocks",
+    relationship_type: str | DependencyRelationshipType = DependencyRelationshipType.BLOCKS.value,
     client_request_id: str | None = None,
 ) -> dict[str, Any]:
     return run_idempotent_write(

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from acp_core.enums import WorkflowState
 
 from dataclasses import replace
 from pathlib import Path
@@ -167,13 +168,13 @@ class SessionService:
                 return "running"
 
             if not is_active and session.status == "running":
-                return "done"
+                return WorkflowState.DONE.value
 
             if session.status == "waiting_human":
                 return "waiting_human"
             if session.status == "blocked":
                 return "blocked"
-            return "running" if is_active else "done"
+            return "running" if is_active else WorkflowState.DONE.value
         return "failed"
 
     def _next_attempt_number(self, task_id: str) -> int:
@@ -186,7 +187,7 @@ class SessionService:
     def _task_kind_from_profile(profile: str) -> str:
         mapping = {
             "executor": "execute",
-            "reviewer": "review",
+            "reviewer": WorkflowState.REVIEW.value,
             "verifier": "verify",
             "research": "research",
             "docs": "docs",
@@ -197,7 +198,7 @@ class SessionService:
     def _normalize_task_kind_for_agent_resolution(task_kind: str | None) -> str:
         if task_kind == "execute":
             return "execution"
-        if task_kind in {"execution", "kickoff", "review", "verify", "research", "docs"}:
+        if task_kind in {"execution", "kickoff", WorkflowState.REVIEW.value, "verify", "research", "docs"}:
             return task_kind
         return "execution"
 
@@ -208,8 +209,8 @@ class SessionService:
         launch_task_kind: str | None,
         follow_up_type: str | None = None,
     ) -> str:
-        if follow_up_type == "review":
-            return "review"
+        if follow_up_type == WorkflowState.REVIEW.value:
+            return WorkflowState.REVIEW.value
         if follow_up_type == "verify":
             return "verify"
         if follow_up_type in {"retry", "handoff"}:
@@ -218,10 +219,10 @@ class SessionService:
         normalized_task_kind = self._normalize_task_kind_for_agent_resolution(
             launch_task_kind
         )
-        if normalized_task_kind in {"kickoff", "review", "verify", "execution"}:
+        if normalized_task_kind in {"kickoff", WorkflowState.REVIEW.value, "verify", "execution"}:
             return normalized_task_kind
         if profile == "reviewer":
-            return "review"
+            return WorkflowState.REVIEW.value
         if profile == "verifier":
             return "verify"
 
@@ -624,7 +625,7 @@ class SessionService:
             if payload.profile == source.profile:
                 follow_up_type = "retry"
             elif payload.profile == "reviewer":
-                follow_up_type = "review"
+                follow_up_type = WorkflowState.REVIEW.value
             elif payload.profile == "verifier":
                 follow_up_type = "verify"
             else:
@@ -740,7 +741,7 @@ class SessionService:
             Enforces canonical gating/event/reconciliation semantics in the service layer.
         """
         session = self.get_session(session_id)
-        if session.status in {"cancelled", "failed"}:
+        if session.status in {WorkflowState.CANCELLED.value, "failed"}:
             return session
         try:
             exists = self.runtime.session_exists(session.session_name)
@@ -907,7 +908,7 @@ class SessionService:
             ValueError: When validation or lookup constraints fail.
         """
         session = self.get_session(session_id)
-        if session.status in {"done", "failed", "cancelled"}:
+        if session.status in {WorkflowState.DONE.value, "failed", WorkflowState.CANCELLED.value}:
             return session
 
         try:
@@ -921,7 +922,7 @@ class SessionService:
                     "session_name": session.session_name,
                 },
             ) from exc
-        session.status = "cancelled"
+        session.status = WorkflowState.CANCELLED.value
 
         latest_run = self.context.db.scalar(
             select(AgentRun)
@@ -929,7 +930,7 @@ class SessionService:
             .order_by(AgentRun.attempt_number.desc(), AgentRun.created_at.desc())
         )
         if latest_run is not None:
-            latest_run.status = "cancelled"
+            latest_run.status = WorkflowState.CANCELLED.value
             latest_run.summary = "Session cancelled by operator"
 
         self.context.db.add(

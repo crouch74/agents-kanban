@@ -2,7 +2,26 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, Literal
+from acp_core.enums import (
+    AgentProfile,
+    AuthorType,
+    CheckStatus,
+    DependencyRelationshipType,
+    FollowUpType,
+    OutputMode,
+    Permission,
+    SessionRuntimeStatus,
+    SessionStatus,
+    TaskKind,
+    TaskPriority,
+    Urgency,
+    WaitingQuestionStatus,
+    WorkflowState,
+    WorktreeAction,
+    WorktreeRecommendation,
+    WorktreeStatus,
+)
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -74,13 +93,13 @@ class RuntimeLaunchSpecCreate(BaseModel):
 
 
 class SessionLaunchInputCreate(BaseModel):
-    task_kind: Literal["kickoff", "execute", "review", "verify", "research", "docs"] = "execute"
+    task_kind: TaskKind = TaskKind.EXECUTE
     agent_name: str | None = None
     prompt: str | None = None
     working_directory: str | None = None
     model: str | None = None
-    permission_mode: str | None = None
-    output_mode: str | None = None
+    permission_mode: Permission | None = None
+    output_mode: OutputMode | None = None
     max_turns: int | None = Field(default=None, ge=1)
     resume_token: str | None = None
     allowed_tools: list[str] = Field(default_factory=list)
@@ -94,7 +113,7 @@ class SessionLaunchInputCreate(BaseModel):
 
 class AgentSessionCreate(BaseModel):
     task_id: str
-    profile: Literal["executor", "reviewer", "verifier", "research", "docs"] = "executor"
+    profile: AgentProfile = AgentProfile.EXECUTOR
     agent_name: str | None = None
     repository_id: str | None = None
     worktree_id: str | None = None
@@ -105,8 +124,8 @@ class AgentSessionCreate(BaseModel):
 
 
 class AgentSessionFollowUpCreate(BaseModel):
-    profile: Literal["executor", "reviewer", "verifier", "research", "docs"] = "verifier"
-    follow_up_type: Literal["retry", "review", "verify", "handoff"] | None = None
+    profile: AgentProfile = AgentProfile.VERIFIER
+    follow_up_type: FollowUpType | None = None
     agent_name: str | None = None
     reuse_worktree: bool = True
     reuse_repository: bool = True
@@ -124,8 +143,8 @@ class AgentSessionRead(BaseModel):
     task_id: str
     repository_id: str | None
     worktree_id: str | None
-    profile: str
-    status: str
+    profile: AgentProfile
+    status: SessionStatus
     session_name: str
     runtime_metadata: dict[str, Any]
     created_at: datetime
@@ -137,7 +156,7 @@ class WaitingQuestionCreate(BaseModel):
     session_id: str | None = None
     prompt: str = Field(min_length=3)
     blocked_reason: str | None = None
-    urgency: Literal["low", "medium", "high", "urgent"] | None = None
+    urgency: Urgency | None = None
     options_json: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -165,10 +184,10 @@ class WaitingQuestionRead(BaseModel):
     project_id: str
     task_id: str
     session_id: str | None
-    status: str
+    status: WaitingQuestionStatus
     prompt: str
     blocked_reason: str | None
-    urgency: str | None
+    urgency: Urgency | None
     options_json: list[dict[str, Any]]
     created_at: datetime
     updated_at: datetime
@@ -221,7 +240,7 @@ class BoardColumnRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    key: str
+    key: WorkflowState
     name: str
     position: int
     wip_limit: int | None
@@ -234,23 +253,23 @@ class TaskCreate(BaseModel):
     project_id: str
     title: str = Field(min_length=2, max_length=255)
     description: str | None = None
-    priority: Literal["low", "medium", "high", "urgent"] = "medium"
+    priority: TaskPriority = TaskPriority.MEDIUM
     parent_task_id: str | None = None
-    board_column_key: str = "backlog"
+    board_column_key: WorkflowState = WorkflowState.BACKLOG
     tags: list[str] = Field(default_factory=list)
 
 
 class TaskPatch(BaseModel):
     title: str | None = Field(default=None, min_length=2, max_length=255)
     description: str | None = None
-    workflow_state: str | None = None
+    workflow_state: WorkflowState | None = None
     board_column_id: str | None = None
     blocked_reason: str | None = None
     waiting_for_human: bool | None = None
 
 
 class TaskCommentCreate(BaseModel):
-    author_type: Literal["human", "agent", "system"] = "human"
+    author_type: AuthorType = AuthorType.HUMAN
     author_name: str = Field(min_length=2, max_length=255)
     body: str = Field(min_length=1)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
@@ -261,7 +280,7 @@ class TaskCommentRead(BaseModel):
 
     id: str
     task_id: str
-    author_type: str
+    author_type: AuthorType
     author_name: str
     body: str
     metadata_json: dict[str, Any]
@@ -270,7 +289,7 @@ class TaskCommentRead(BaseModel):
 
 class TaskCheckCreate(BaseModel):
     check_type: str = Field(min_length=2, max_length=64)
-    status: Literal["pending", "passed", "failed", "warning"] = "pending"
+    status: CheckStatus = CheckStatus.PENDING
     summary: str = Field(min_length=1)
     payload_json: dict[str, Any] = Field(default_factory=dict)
 
@@ -281,7 +300,7 @@ class TaskCheckRead(BaseModel):
     id: str
     task_id: str
     check_type: str
-    status: str
+    status: CheckStatus
     summary: str
     payload_json: dict[str, Any]
     created_at: datetime
@@ -308,7 +327,7 @@ class TaskArtifactRead(BaseModel):
 
 class TaskDependencyCreate(BaseModel):
     depends_on_task_id: str
-    relationship_type: Literal["blocks", "relates_to"] = "blocks"
+    relationship_type: DependencyRelationshipType = DependencyRelationshipType.BLOCKS
 
 
 class TaskDependencyRead(BaseModel):
@@ -317,7 +336,7 @@ class TaskDependencyRead(BaseModel):
     id: str
     task_id: str
     depends_on_task_id: str
-    relationship_type: str
+    relationship_type: DependencyRelationshipType
     created_at: datetime
 
 
@@ -340,8 +359,8 @@ class TaskRead(BaseModel):
     parent_task_id: str | None
     title: str
     description: str | None
-    workflow_state: str
-    priority: str
+    workflow_state: WorkflowState
+    priority: TaskPriority
     tags: list[str]
     blocked_reason: str | None
     waiting_for_human: bool
@@ -364,7 +383,7 @@ class WorktreeCreate(BaseModel):
 
 
 class WorktreePatch(BaseModel):
-    status: Literal["locked", "archived", "pruned"] | None = None
+    status: WorktreeStatus | None = None
     lock_reason: str | None = None
 
 
@@ -377,7 +396,7 @@ class WorktreeRead(BaseModel):
     session_id: str | None
     branch_name: str
     path: str
-    status: str
+    status: WorktreeStatus
     lock_reason: str | None
     metadata_json: dict[str, Any]
     created_at: datetime
@@ -391,8 +410,8 @@ class WorktreeHygieneIssueRead(BaseModel):
     session_id: str | None
     branch_name: str
     path: str
-    status: str
-    recommendation: Literal["archive", "prune", "inspect"]
+    status: WorktreeStatus
+    recommendation: WorktreeRecommendation
     reasons: list[str]
 
 
@@ -415,7 +434,7 @@ class ProjectOverview(BaseModel):
 
 class ProjectBootstrapPlannedChange(BaseModel):
     path: str
-    action: Literal["create", "create_or_update", "append_line", "scaffold"]
+    action: WorktreeAction
     description: str
 
 

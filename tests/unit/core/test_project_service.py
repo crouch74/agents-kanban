@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -81,3 +82,55 @@ def test_archive_project_is_idempotent_when_already_archived() -> None:
     context.record_event.assert_not_called()
     db.commit.assert_not_called()
     db.refresh.assert_not_called()
+
+
+def test_archive_project_cancels_active_project_sessions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = MagicMock()
+    context = ServiceContext(db=db, actor_type="system", actor_name="unit-tests")
+    context.record_event = MagicMock()
+
+    project = SimpleNamespace(id="proj-archive", archived=False)
+    active_session = SimpleNamespace(id="session-1")
+    completed_session = SimpleNamespace(id="session-2")
+    sessions = [active_session, completed_session]
+
+    captured = {}
+
+    def _scalars(statement):
+        captured["statement"] = statement
+        return sessions
+
+    db.scalars = MagicMock(side_effect=_scalars)
+
+    cancelled = []
+
+    class FakeSessionService:
+        def __init__(self, inner_context: ServiceContext) -> None:
+            self.context = inner_context
+
+        def cancel_session(self, session_id: str) -> SimpleNamespace:
+            cancelled.append(session_id)
+            return SimpleNamespace(id=session_id, status="cancelled")
+
+    monkeypatch.setattr("acp_core.services.project_service.SessionService", FakeSessionService)
+
+    service = ProjectService(context)
+    service.get_project = MagicMock(return_value=project)
+
+    service.archive_project("proj-archive")
+
+    assert cancelled == ["session-1", "session-2"]
+    assert project.archived is True
+    context.record_event.assert_called_once_with(
+        entity_type="project",
+        entity_id="proj-archive",
+        event_type="project.archived",
+        payload_json={"archived": True},
+    )
+    assert captured["statement"].whereclause is not None
+    where_clause = captured["statement"].whereclause
+    where_clause_sql = str(where_clause.compile(compile_kwargs={"literal_binds": True}))
+    assert "agent_sessions.project_id = 'proj-archive'" in where_clause_sql
+    assert "agent_sessions.status NOT IN ('done', 'failed', 'cancelled')" in where_clause_sql

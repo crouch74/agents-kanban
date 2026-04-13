@@ -1,3 +1,4 @@
+from acp_core.enums import WorkflowState
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -301,7 +302,7 @@ class ProjectService:
 
         tasks_stmt = (
             select(Task)
-            .where(Task.project_id == project_id, Task.workflow_state != "cancelled")
+            .where(Task.project_id == project_id, Task.workflow_state != WorkflowState.CANCELLED.value)
             .order_by(Task.parent_task_id.is_not(None), Task.created_at.asc())
         )
         tasks = list(self.context.db.scalars(tasks_stmt))
@@ -555,7 +556,7 @@ class TaskService:
             .join(Task, Task.id == TaskDependency.depends_on_task_id)
             .where(
                 TaskDependency.task_id == task.id,
-                Task.workflow_state.not_in(["done", "cancelled"]),
+                Task.workflow_state.not_in([WorkflowState.DONE.value, WorkflowState.CANCELLED.value]),
             )
         ) or 0
         open_waiting_question_count = self.context.db.scalar(
@@ -669,11 +670,11 @@ class TaskService:
                 )
             next_workflow_state = payload.workflow_state
 
-        if task.workflow_state != "done" and next_workflow_state == "done":
+        if task.workflow_state != WorkflowState.DONE.value and next_workflow_state == WorkflowState.DONE.value:
             self._ensure_completion_evidence(task)
 
         task.workflow_state = next_workflow_state
-        if "board_column_id" not in provided and next_workflow_state != "cancelled":
+        if "board_column_id" not in provided and next_workflow_state != WorkflowState.CANCELLED.value:
             column = self._column_for_workflow_state(task.project_id, next_workflow_state)
             if column is not None:
                 task.board_column_id = column.id
@@ -692,7 +693,7 @@ class TaskService:
         self.context.db.refresh(task)
 
         # Agentic Board: Auto-trigger session on Ready
-        if task.workflow_state == "ready" and old_workflow_state != "ready":
+        if task.workflow_state == WorkflowState.READY.value and old_workflow_state != WorkflowState.READY.value:
              self._auto_trigger_agent_session(task)
              self.context.db.commit()
 
@@ -917,7 +918,7 @@ class TaskService:
             select(Task)
             .where(
                 Task.parent_task_id.is_(None),
-                Task.workflow_state.in_(["ready", "in_progress"]),
+                Task.workflow_state.in_([WorkflowState.READY.value, WorkflowState.IN_PROGRESS.value]),
                 Task.waiting_for_human.is_(False),
             )
             .order_by(
@@ -1336,13 +1337,13 @@ class SessionService:
                 return "running"
 
             if not is_active and session.status == "running":
-                return "done"
+                return WorkflowState.DONE.value
             
             if session.status == "waiting_human":
                 return "waiting_human"
             if session.status == "blocked":
                 return "blocked"
-            return "running" if is_active else "done"
+            return "running" if is_active else WorkflowState.DONE.value
         return "failed"
 
     def _next_attempt_number(self, task_id: str) -> int:
@@ -1501,7 +1502,7 @@ class SessionService:
             if payload.profile == source.profile:
                 follow_up_type = "retry"
             elif payload.profile == "reviewer":
-                follow_up_type = "review"
+                follow_up_type = WorkflowState.REVIEW.value
             elif payload.profile == "verifier":
                 follow_up_type = "verify"
             else:
@@ -1585,7 +1586,7 @@ class SessionService:
             Enforces canonical gating/event/reconciliation semantics in the service layer.
         """
         session = self.get_session(session_id)
-        if session.status in {"cancelled", "failed"}:
+        if session.status in {WorkflowState.CANCELLED.value, "failed"}:
             return session
         try:
             exists = self.runtime.session_exists(session.session_name)
@@ -1730,7 +1731,7 @@ class SessionService:
             ValueError: When validation or lookup constraints fail.
         """
         session = self.get_session(session_id)
-        if session.status in {"done", "failed", "cancelled"}:
+        if session.status in {WorkflowState.DONE.value, "failed", WorkflowState.CANCELLED.value}:
             return session
 
         try:
@@ -1741,7 +1742,7 @@ class SessionService:
                 exc=exc,
                 details={"session_id": session.id, "session_name": session.session_name},
             ) from exc
-        session.status = "cancelled"
+        session.status = WorkflowState.CANCELLED.value
 
         latest_run = self.context.db.scalar(
             select(AgentRun)
@@ -1749,7 +1750,7 @@ class SessionService:
             .order_by(AgentRun.attempt_number.desc(), AgentRun.created_at.desc())
         )
         if latest_run is not None:
-            latest_run.status = "cancelled"
+            latest_run.status = WorkflowState.CANCELLED.value
             latest_run.summary = "Session cancelled by operator"
 
         self.context.db.add(
@@ -2065,7 +2066,7 @@ class BootstrapService:
                 project_id=project.id,
                 title="Kick off planning and board setup",
                 description=task_description,
-                board_column_key="in_progress",
+                board_column_key=WorkflowState.IN_PROGRESS.value,
             )
         )
         state.project = project
@@ -2406,7 +2407,7 @@ class WaitingService:
                         is_active = False
 
                     if session_exists:
-                        session.status = "running" if is_active else "done"
+                        session.status = "running" if is_active else WorkflowState.DONE.value
                     else:
                         session.status = "failed"
                 self.context.db.add(
@@ -2548,7 +2549,7 @@ class RecoveryService:
                     session,
                     exists=True,
                 )
-            elif session.status != "cancelled":
+            elif session.status != WorkflowState.CANCELLED.value:
                 next_status = "failed"
 
             if next_status is not None and session.status != next_status:
@@ -2611,11 +2612,11 @@ class WorktreeHygieneService:
                 reasons.append("worktree_path_missing")
                 recommendation = "inspect"
 
-            if session is not None and session.status in {"done", "failed", "cancelled"}:
+            if session is not None and session.status in {WorkflowState.DONE.value, "failed", WorkflowState.CANCELLED.value}:
                 reasons.append(f"session_{session.status}")
                 recommendation = "archive" if worktree.status == "active" else "prune"
 
-            if task is not None and task.workflow_state in {"done", "cancelled"}:
+            if task is not None and task.workflow_state in {WorkflowState.DONE.value, WorkflowState.CANCELLED.value}:
                 reasons.append(f"task_{task.workflow_state}")
                 if recommendation is None:
                     recommendation = "archive" if worktree.status == "active" else "prune"

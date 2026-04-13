@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from acp_core.enums import WorkflowState
+
 DEFAULT_BOARD_COLUMNS: list[dict[str, object]] = [
     {
-        "key": "backlog",
+        "key": WorkflowState.BACKLOG.value,
         "name": "Backlog",
         "position": 0,
         "wip_limit": None,
@@ -13,7 +15,7 @@ DEFAULT_BOARD_COLUMNS: list[dict[str, object]] = [
         "done_policy": "Task has a title, owner context, and clear next step.",
     },
     {
-        "key": "ready",
+        "key": WorkflowState.READY.value,
         "name": "Ready",
         "position": 1,
         "wip_limit": 8,
@@ -22,7 +24,7 @@ DEFAULT_BOARD_COLUMNS: list[dict[str, object]] = [
         "done_policy": "Task is unblocked and selected for active execution.",
     },
     {
-        "key": "in_progress",
+        "key": WorkflowState.IN_PROGRESS.value,
         "name": "In Progress",
         "position": 2,
         "wip_limit": 5,
@@ -31,7 +33,7 @@ DEFAULT_BOARD_COLUMNS: list[dict[str, object]] = [
         "done_policy": "Work has evidence, notes, and a clear review handoff.",
     },
     {
-        "key": "review",
+        "key": WorkflowState.REVIEW.value,
         "name": "Review",
         "position": 3,
         "wip_limit": 5,
@@ -40,7 +42,7 @@ DEFAULT_BOARD_COLUMNS: list[dict[str, object]] = [
         "done_policy": "Work has been verified or explicitly accepted.",
     },
     {
-        "key": "done",
+        "key": WorkflowState.DONE.value,
         "name": "Done",
         "position": 4,
         "wip_limit": None,
@@ -51,18 +53,18 @@ DEFAULT_BOARD_COLUMNS: list[dict[str, object]] = [
 ]
 
 WORKFLOW_BY_COLUMN_KEY: Mapping[str, str] = {
-    "backlog": "backlog",
-    "ready": "ready",
-    "in_progress": "in_progress",
-    "review": "review",
-    "done": "done",
+    WorkflowState.BACKLOG.value: WorkflowState.BACKLOG.value,
+    WorkflowState.READY.value: WorkflowState.READY.value,
+    WorkflowState.IN_PROGRESS.value: WorkflowState.IN_PROGRESS.value,
+    WorkflowState.REVIEW.value: WorkflowState.REVIEW.value,
+    WorkflowState.DONE.value: WorkflowState.DONE.value,
 }
 
 TASK_TRANSITIONS: Mapping[str, set[str]] = {
-    "backlog": {"ready", "cancelled"},
-    "ready": {"backlog", "in_progress", "cancelled"},
-    "in_progress": {"ready", "review", "cancelled"},
-    "review": {"in_progress", "done", "cancelled"},
-    "done": {"review", "cancelled"},
-    "cancelled": {"backlog"},
+    WorkflowState.BACKLOG.value: {WorkflowState.READY.value, WorkflowState.CANCELLED.value},
+    WorkflowState.READY.value: {WorkflowState.BACKLOG.value, WorkflowState.IN_PROGRESS.value, WorkflowState.CANCELLED.value},
+    WorkflowState.IN_PROGRESS.value: {WorkflowState.READY.value, WorkflowState.REVIEW.value, WorkflowState.CANCELLED.value},
+    WorkflowState.REVIEW.value: {WorkflowState.IN_PROGRESS.value, WorkflowState.DONE.value, WorkflowState.CANCELLED.value},
+    WorkflowState.DONE.value: {WorkflowState.REVIEW.value, WorkflowState.CANCELLED.value},
+    WorkflowState.CANCELLED.value: {WorkflowState.BACKLOG.value},
 }

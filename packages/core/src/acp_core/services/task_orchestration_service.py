@@ -1,4 +1,5 @@
 from __future__ import annotations
+from acp_core.enums import AgentProfile, SessionStatus, WorkflowState
 
 from typing import Any
 
@@ -10,7 +11,11 @@ from acp_core.models import AgentSession, Board, BoardColumn, Repository, Task, 
 from acp_core.schemas import AgentSessionCreate, SessionLaunchInputCreate
 from acp_core.services.base_service import ServiceContext
 
-ACTIVE_SESSION_STATUSES = {"running", "waiting_human", "blocked"}
+ACTIVE_SESSION_STATUSES = {
+    SessionStatus.RUNNING.value,
+    SessionStatus.WAITING_HUMAN.value,
+    SessionStatus.BLOCKED.value,
+}
 ORCHESTRATION_METADATA_KEY = "subtree_orchestration"
 
 
@@ -85,7 +90,7 @@ class TaskOrchestrationService:
 
         state = self._get_state(parent)
         if state is None:
-            if parent.workflow_state != "ready":
+            if parent.workflow_state != WorkflowState.READY.value:
                 return
             state = self._build_state(parent, subtasks)
 
@@ -111,7 +116,7 @@ class TaskOrchestrationService:
             if subtask is None:
                 continue
 
-            if subtask.workflow_state == "done":
+            if subtask.workflow_state == WorkflowState.DONE.value:
                 if state.get("current_subtask_id") == subtask.id:
                     state["current_subtask_id"] = None
                     state["active_session_id"] = None
@@ -123,7 +128,7 @@ class TaskOrchestrationService:
                     )
                 continue
 
-            if subtask.workflow_state == "cancelled":
+            if subtask.workflow_state == WorkflowState.CANCELLED.value:
                 self._pause_parent(
                     parent,
                     state,
@@ -149,10 +154,10 @@ class TaskOrchestrationService:
 
             if active_session_id:
                 active_session = self.context.db.get(AgentSession, active_session_id)
-                if active_session is not None and active_session.status in ACTIVE_SESSION_STATUSES:
+            if active_session is not None and active_session.status in ACTIVE_SESSION_STATUSES:
                     self._save_state(parent, state)
                     return
-                if active_session is not None and active_session.status == "done":
+                if active_session is not None and active_session.status == WorkflowState.DONE.value:
                     self._pause_parent(
                         parent,
                         state,
@@ -162,7 +167,10 @@ class TaskOrchestrationService:
                         ),
                     )
                     return
-                if active_session is not None and active_session.status in {"failed", "cancelled"}:
+                if active_session is not None and active_session.status in {
+                    SessionStatus.FAILED.value,
+                    WorkflowState.CANCELLED.value,
+                }:
                     self._pause_parent(
                         parent,
                         state,
@@ -215,7 +223,7 @@ class TaskOrchestrationService:
             if session is not None and session.status in ACTIVE_SESSION_STATUSES:
                 self._save_state(parent, state)
                 return
-            if session is not None and session.status == "done":
+            if session is not None and session.status == WorkflowState.DONE.value:
                 state["mode"] = "completed"
                 state["phase"] = "finished"
                 state["active_session_id"] = None
@@ -229,7 +237,10 @@ class TaskOrchestrationService:
                 )
                 self._save_state(parent, state)
                 return
-            if session is not None and session.status in {"failed", "cancelled"}:
+                if session is not None and session.status in {
+                    SessionStatus.FAILED.value,
+                    WorkflowState.CANCELLED.value,
+                }:
                 self._pause_parent(
                     parent,
                     state,
@@ -237,7 +248,7 @@ class TaskOrchestrationService:
                 )
                 return
 
-        live_session = self._active_session_for_task(parent.id, profile="verifier")
+        live_session = self._active_session_for_task(parent.id, profile=AgentProfile.VERIFIER.value)
         if live_session is not None:
             state["verification_session_id"] = live_session.id
             state["active_session_id"] = live_session.id
@@ -291,7 +302,7 @@ class TaskOrchestrationService:
             return
         self._spawn_session(
             task=task,
-            profile="executor",
+            profile=AgentProfile.EXECUTOR.value,
             task_kind="execute",
             prompt=self._build_single_task_prompt(task),
             parent=None,
@@ -300,7 +311,7 @@ class TaskOrchestrationService:
     def _spawn_subtask_session(self, parent: Task, subtask: Task) -> AgentSession | None:
         return self._spawn_session(
             task=subtask,
-            profile="executor",
+            profile=AgentProfile.EXECUTOR.value,
             task_kind="execute",
             prompt=self._build_subtask_prompt(parent, subtask),
             parent=parent,
@@ -318,7 +329,7 @@ class TaskOrchestrationService:
                 subtask_titles.append(subtask.title)
         return self._spawn_session(
             task=parent,
-            profile="verifier",
+            profile=AgentProfile.VERIFIER.value,
             task_kind="verify",
             prompt=self._build_parent_verification_prompt(parent, subtask_titles),
             parent=parent,
@@ -395,11 +406,11 @@ class TaskOrchestrationService:
         return sorted(active_worktrees, key=lambda item: item.created_at, reverse=True)[0]
 
     def _ensure_task_in_ready_state(self, task: Task) -> None:
-        if task.workflow_state != "backlog":
+        if task.workflow_state != WorkflowState.BACKLOG.value:
             return
 
-        ready_column = self._column_for_workflow_state(task.project_id, "ready")
-        task.workflow_state = "ready"
+        ready_column = self._column_for_workflow_state(task.project_id, WorkflowState.READY.value)
+        task.workflow_state = WorkflowState.READY.value
         if ready_column is not None:
             task.board_column_id = ready_column.id
         self.context.record_event(
@@ -452,7 +463,7 @@ class TaskOrchestrationService:
         subtask = self.context.db.get(Task, current_subtask_id)
         if subtask is None:
             return False
-        return self._task_is_waiting(subtask) or subtask.workflow_state == "cancelled"
+        return self._task_is_waiting(subtask) or subtask.workflow_state == WorkflowState.CANCELLED.value
 
     def _active_session_for_task(
         self,

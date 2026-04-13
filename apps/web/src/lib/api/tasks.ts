@@ -1,4 +1,11 @@
-import type { TaskSummary } from "@acp/sdk";
+import type {
+  AuthorType,
+  CheckStatus,
+  DependencyRelationshipType,
+  TaskPriority,
+  TaskSummary,
+  WorkflowState,
+} from "@acp/sdk";
 import { fetchJson, patchJson, postJson } from "./httpClient";
 import type { TaskDetail } from "./types";
 
@@ -12,7 +19,7 @@ export function createTask(payload: {
   project_id: string;
   title: string;
   description?: string;
-  priority?: string;
+  priority?: TaskPriority;
   parent_task_id?: string;
   board_column_key?: string;
 }) {
@@ -31,7 +38,7 @@ export function patchTask(
   payload: {
     title?: string;
     description?: string;
-    workflow_state?: string;
+    workflow_state?: WorkflowState;
     board_column_id?: string;
     blocked_reason?: string | null;
     waiting_for_human?: boolean;
@@ -58,7 +65,7 @@ export function getTaskDetail(taskId: string) {
  */
 export function addTaskComment(
   taskId: string,
-  payload: { author_type?: string; author_name: string; body: string; metadata_json?: Record<string, unknown> },
+  payload: { author_type?: AuthorType; author_name: string; body: string; metadata_json?: Record<string, unknown> },
 ) {
   return postJson<TaskDetail["comments"][number]>(`/tasks/${taskId}/comments`, payload);
 }
@@ -71,7 +78,7 @@ export function addTaskComment(
  */
 export function addTaskCheck(
   taskId: string,
-  payload: { check_type: string; status: string; summary: string; payload_json?: Record<string, unknown> },
+  payload: { check_type: string; status: CheckStatus; summary: string; payload_json?: Record<string, unknown> },
 ) {
   return postJson<TaskDetail["checks"][number]>(`/tasks/${taskId}/checks`, payload);
 }
@@ -97,7 +104,7 @@ export function addTaskArtifact(
  */
 export function addTaskDependency(
   taskId: string,
-  payload: { depends_on_task_id: string; relationship_type?: string },
+  payload: { depends_on_task_id: string; relationship_type?: DependencyRelationshipType },
 ) {
   return postJson<TaskDetail["dependencies"][number]>(`/tasks/${taskId}/dependencies`, payload);
 }

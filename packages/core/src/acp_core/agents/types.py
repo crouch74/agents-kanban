@@ -5,9 +5,10 @@ from pathlib import Path
 from shlex import quote
 from typing import Any, Literal, Protocol
 
-PermissionMode = Literal["danger-full-access"]
-OutputMode = Literal["json", "stream-json"]
-SpecializedMode = Literal["review", "verify"]
+from acp_core.enums import OutputMode, Permission, SpecializedMode
+
+PermissionMode = Permission
+OutputMode = OutputMode
 
 
 @dataclass(frozen=True)

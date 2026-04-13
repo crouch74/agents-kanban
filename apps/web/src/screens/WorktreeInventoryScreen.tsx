@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { GitFork, Lock, Trash2 } from "lucide-react";
-import type { SessionSummary, TaskSummary, WorktreeSummary, RepositorySummary } from "@acp/sdk";
+import { WorktreeStatus, type SessionSummary, type TaskSummary, type WorktreeSummary, type RepositorySummary } from "@acp/sdk";
 import type { EventRecord } from "@/lib/api";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { SectionFrame, SectionTitle } from "@/components/ui";
@@ -58,7 +58,7 @@ export function WorktreeInventoryScreen({
   controls,
 }: WorktreeInventoryScreenProps) {
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | WorktreeStatus>("all");
 
   const repositoryById = useMemo(
     () => new Map(repositories.map((repo) => [repo.id, repo])),
@@ -159,14 +159,14 @@ export function WorktreeInventoryScreen({
       key: "actions",
       header: "Actions",
       render: (row) => (
-        <div className="flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
-          {row.raw.status === "active" ? (
+          <div className="flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
+          {row.raw.status !== WorktreeStatus.LOCKED && row.raw.status !== WorktreeStatus.ARCHIVED ? (
             <>
               <Button onClick={() => onLock(row.id)} className="px-2.5 py-1 text-xs"><Lock className="h-3.5 w-3.5" />Lock</Button>
               <Button onClick={() => onArchive(row.id)} className="px-2.5 py-1 text-xs"><GitFork className="h-3.5 w-3.5" />Archive</Button>
             </>
           ) : null}
-          {row.raw.status === "locked" || row.raw.status === "archived" ? (
+          {row.raw.status === WorktreeStatus.LOCKED || row.raw.status === WorktreeStatus.ARCHIVED ? (
             <Button variant="danger" onClick={() => onPrune(row.id)} className="px-2.5 py-1 text-xs"><Trash2 className="h-3.5 w-3.5" />Prune</Button>
           ) : null}
         </div>
@@ -191,7 +191,7 @@ export function WorktreeInventoryScreen({
         />
         <Select
           value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value)}
+          onChange={(event) => setStatusFilter(event.target.value as "all" | WorktreeStatus)}
           className="max-w-56"
           aria-label="Filter lifecycle"
         >

@@ -1,4 +1,11 @@
-import type { SessionSummary } from "@acp/sdk";
+import type {
+  AgentProfile,
+  FollowUpType,
+  OutputMode,
+  Permission,
+  SessionSummary,
+  TaskKind,
+} from "@acp/sdk";
 import { fetchJson, postJson } from "./httpClient";
 import type { SessionTail, SessionTimeline } from "./types";
 
@@ -11,17 +18,17 @@ import type { SessionTail, SessionTimeline } from "./types";
  */
 export function createSession(payload: {
   task_id: string;
-  profile: string;
+  profile: AgentProfile;
   repository_id?: string;
   worktree_id?: string;
   launch_input?: {
-    task_kind?: "kickoff" | "execute" | "review" | "verify" | "research" | "docs";
+    task_kind?: TaskKind;
     agent_name?: string;
     prompt?: string;
     working_directory?: string;
     model?: string;
-    permission_mode?: string;
-    output_mode?: string;
+    permission_mode?: Permission;
+    output_mode?: OutputMode;
     max_turns?: number;
     resume_token?: string;
     allowed_tools?: string[];
@@ -47,19 +54,19 @@ export function createSession(payload: {
 export function createFollowUpSession(
   sessionId: string,
   payload: {
-    profile: string;
-    follow_up_type?: "retry" | "review" | "verify" | "handoff";
+    profile: AgentProfile;
+    follow_up_type?: FollowUpType;
     agent_name?: string;
     reuse_worktree?: boolean;
     reuse_repository?: boolean;
     launch_input?: {
-      task_kind?: "kickoff" | "execute" | "review" | "verify" | "research" | "docs";
+      task_kind?: TaskKind;
       agent_name?: string;
       prompt?: string;
       working_directory?: string;
       model?: string;
-      permission_mode?: string;
-      output_mode?: string;
+      permission_mode?: Permission;
+      output_mode?: OutputMode;
       max_turns?: number;
       resume_token?: string;
       allowed_tools?: string[];

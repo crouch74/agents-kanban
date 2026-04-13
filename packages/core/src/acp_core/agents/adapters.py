@@ -8,6 +8,9 @@ from acp_core.agents.types import (
     AgentLaunchPlan,
     AgentRequest,
     CodingAgentAdapterProtocol,
+    OutputMode,
+    Permission,
+    SpecializedMode,
 )
 from acp_core.settings import settings
 
@@ -24,13 +27,13 @@ class CodexAgentAdapter:
         return AgentCapabilities(
             supports_model=True,
             native_resume=True,
-            permission_modes=frozenset({"danger-full-access"}),
-            output_modes=frozenset({"json", "stream-json"}),
+            permission_modes=frozenset({Permission.DANGER_FULL_ACCESS.value}),
+            output_modes=frozenset({OutputMode.JSON.value, OutputMode.STREAM_JSON.value}),
             supports_streaming_json=True,
             supports_allowed_tools=True,
             supports_disallowed_tools=True,
             supports_max_turns=True,
-            specialized_modes=frozenset({"review", "verify"}),
+            specialized_modes=frozenset({SpecializedMode.REVIEW.value, SpecializedMode.VERIFY.value}),
         )
 
     def build_launch_plan(self, request: AgentRequest) -> AgentLaunchPlan:
@@ -50,7 +53,7 @@ class CodexAgentAdapter:
             )
 
         argv = ["codex"]
-        if request.permissions == "danger-full-access":
+        if request.permissions == Permission.DANGER_FULL_ACCESS.value:
             argv.append("--dangerously-bypass-approvals-and-sandbox")
         if request.model:
             argv.extend(["--model", request.model])

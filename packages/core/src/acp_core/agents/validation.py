@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from acp_core.agents.adapters import AgentRegistry, resolve_coding_agent_adapter
-from acp_core.agents.types import AgentCapabilities, AgentLaunchPlan, AgentRequest
+from acp_core.agents.types import (
+    AgentCapabilities,
+    AgentLaunchPlan,
+    AgentRequest,
+    SpecializedMode,
+)
 
 
 def validate_request_against_capabilities(
@@ -40,7 +45,7 @@ def validate_request_against_capabilities(
         raise ValueError(f"Agent '{request.agent_name}' does not support max_turns")
 
     if (
-        request.task_kind in {"review", "verify"}
+        request.task_kind in {SpecializedMode.REVIEW.value, SpecializedMode.VERIFY.value}
         and request.task_kind not in capabilities.specialized_modes
     ):
         supported = ", ".join(sorted(capabilities.specialized_modes)) or "none"

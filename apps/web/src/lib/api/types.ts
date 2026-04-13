@@ -6,6 +6,12 @@ import type {
   TaskSummary,
   WaitingQuestionSummary,
   WorktreeSummary,
+  WorktreeRecommendation,
+  WorktreeStatus,
+  DependencyRelationshipType,
+  AuthorType,
+  CheckStatus,
+  SessionStatus,
 } from "@acp/sdk";
 
 export type Diagnostics = {
@@ -27,8 +33,8 @@ export type Diagnostics = {
     session_id?: string | null;
     branch_name: string;
     path: string;
-    status: string;
-    recommendation: "archive" | "prune" | "inspect";
+    status: WorktreeStatus;
+    recommendation: WorktreeRecommendation;
     reasons: string[];
   }>;
   git_available: boolean;
@@ -112,7 +118,7 @@ export type SessionTimeline = {
     id: string;
     session_id: string;
     attempt_number: number;
-    status: string;
+    status: SessionStatus;
     summary?: string | null;
     runtime_metadata: Record<string, unknown>;
     created_at: string;
@@ -140,13 +146,13 @@ export type TaskDetail = TaskSummary & {
     id: string;
     task_id: string;
     depends_on_task_id: string;
-    relationship_type: string;
+    relationship_type: DependencyRelationshipType;
     created_at: string;
   }>;
   comments: Array<{
     id: string;
     task_id: string;
-    author_type: string;
+    author_type: AuthorType;
     author_name: string;
     body: string;
     metadata_json: Record<string, unknown>;
@@ -156,7 +162,7 @@ export type TaskDetail = TaskSummary & {
     id: string;
     task_id: string;
     check_type: string;
-    status: string;
+    status: CheckStatus;
     summary: string;
     payload_json: Record<string, unknown>;
     created_at: string;

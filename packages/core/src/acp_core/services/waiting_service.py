@@ -1,4 +1,5 @@
 from __future__ import annotations
+from acp_core.enums import WorkflowState
 
 from sqlalchemy import func, select
 
@@ -195,7 +196,7 @@ class WaitingService:
                         ) from exc
 
                     if session_exists:
-                        session.status = "running" if is_active else "done"
+                        session.status = "running" if is_active else WorkflowState.DONE.value
                     else:
                         session.status = "failed"
                 self.context.db.add(

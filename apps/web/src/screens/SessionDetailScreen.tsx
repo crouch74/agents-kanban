@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { AgentProfile, SessionStatus } from "@acp/sdk";
 import { Pill } from "@/components/ui";
 import { toDisplay } from "@/utils/display";
 
@@ -9,8 +10,8 @@ type SessionDetailPanel = {
 };
 
 type SessionDetailScreenProps = {
-  profile: string;
-  status: string;
+  profile: AgentProfile;
+  status: SessionStatus;
   summary?: ReactNode;
   actions?: ReactNode;
   outputPanel: ReactNode;

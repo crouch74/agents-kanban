@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { type DetailSelection, type NavSection, validSections } from "@/app-shell/types";
 
 type ParsedState = {
@@ -7,6 +7,10 @@ type ParsedState = {
   inspectedTaskId: string | null;
   selectedSessionId: string | null;
   selectedQuestionId: string | null;
+};
+
+type PersistedState = ParsedState & {
+  schema_version: number;
 };
 
 type Params = {
@@ -23,6 +27,9 @@ type Params = {
   setDrawerSelection: (selection: DetailSelection | null) => void;
 };
 
+const APP_URL_STATE_STORAGE_KEY = "acp.app-url-state";
+const APP_URL_STATE_SCHEMA_VERSION = 1;
+
 const defaultState: ParsedState = {
   activeSection: "home",
   selectedProjectId: null,
@@ -30,6 +37,70 @@ const defaultState: ParsedState = {
   selectedSessionId: null,
   selectedQuestionId: null,
 };
+
+function isPersistedState(value: unknown): value is PersistedState {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.schema_version === "number" &&
+    typeof candidate.activeSection === "string" &&
+    validSections.has(candidate.activeSection as NavSection) &&
+    (candidate.selectedProjectId === null ||
+      typeof candidate.selectedProjectId === "string") &&
+    (candidate.inspectedTaskId === null || typeof candidate.inspectedTaskId === "string") &&
+    (candidate.selectedSessionId === null || typeof candidate.selectedSessionId === "string") &&
+    (candidate.selectedQuestionId === null || typeof candidate.selectedQuestionId === "string")
+  );
+}
+
+function readPersistedState(): ParsedState | null {
+  try {
+    const raw = window.localStorage.getItem(APP_URL_STATE_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (!isPersistedState(parsed)) {
+      return null;
+    }
+    return {
+      activeSection: parsed.activeSection as NavSection,
+      selectedProjectId: parsed.selectedProjectId,
+      inspectedTaskId: parsed.inspectedTaskId,
+      selectedSessionId: parsed.selectedSessionId,
+      selectedQuestionId: parsed.selectedQuestionId,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writePersistedState(state: ParsedState) {
+  try {
+    const payload: PersistedState = {
+      ...state,
+      schema_version: APP_URL_STATE_SCHEMA_VERSION,
+    };
+    window.localStorage.setItem(APP_URL_STATE_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore quota or storage restrictions in environments that do not allow persistence.
+  }
+}
+
+function shouldUsePersistedFallback(pathname: string, state: ParsedState): boolean {
+  const normalizedPath = pathname.split("?")[0].replace(/\/+$/, "");
+  const isRoot = normalizedPath === "";
+  const isHomeEquivalent =
+    state.activeSection === "home" &&
+    state.selectedProjectId === null &&
+    state.inspectedTaskId === null &&
+    state.selectedSessionId === null &&
+    state.selectedQuestionId === null;
+  return isRoot && isHomeEquivalent;
+}
 
 function parseLegacyQuery(params: URLSearchParams): ParsedState {
   const section = params.get("section");
@@ -271,15 +342,21 @@ export function useAppUrlState({
   setSelectedQuestionId,
   setDrawerSelection,
 }: Params) {
+  const hasHydratedFromUrl = useRef(false);
+
   useEffect(() => {
     const state = parsePath(window.location.pathname, window.location.search);
+    const resolvedState = shouldUsePersistedFallback(window.location.pathname, state)
+      ? readPersistedState() ?? state
+      : state;
 
-    setActiveSection(state.activeSection);
-    setSelectedProjectId(state.selectedProjectId);
-    setInspectedTaskId(state.inspectedTaskId);
-    setSelectedSessionId(state.selectedSessionId);
-    setSelectedQuestionId(state.selectedQuestionId);
+    setActiveSection(resolvedState.activeSection);
+    setSelectedProjectId(resolvedState.selectedProjectId);
+    setInspectedTaskId(resolvedState.inspectedTaskId);
+    setSelectedSessionId(resolvedState.selectedSessionId);
+    setSelectedQuestionId(resolvedState.selectedQuestionId);
     setDrawerSelection(null);
+    hasHydratedFromUrl.current = true;
   }, [
     setActiveSection,
     setDrawerSelection,
@@ -290,6 +367,10 @@ export function useAppUrlState({
   ]);
 
   useEffect(() => {
+    if (!hasHydratedFromUrl.current) {
+      return;
+    }
+
     const href = buildPath(
       activeSection,
       selectedProjectId,
@@ -297,7 +378,18 @@ export function useAppUrlState({
       selectedSessionId,
       selectedQuestionId,
     );
-    window.history.replaceState(null, "", href);
+
+    const current = `${window.location.pathname}${window.location.search}`;
+    if (current !== href) {
+      window.history.replaceState(null, "", href);
+    }
+    writePersistedState({
+      activeSection,
+      selectedProjectId,
+      inspectedTaskId,
+      selectedSessionId,
+      selectedQuestionId,
+    });
   }, [
     activeSection,
     inspectedTaskId,

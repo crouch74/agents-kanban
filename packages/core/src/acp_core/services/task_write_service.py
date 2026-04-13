@@ -1,4 +1,5 @@
 from __future__ import annotations
+from acp_core.enums import WorkflowState
 
 from sqlalchemy import func, select
 
@@ -109,11 +110,11 @@ class TaskWriteService(TaskReadService, TaskWorkflowService):
                 )
             next_workflow_state = payload.workflow_state
 
-        if task.workflow_state != "done" and next_workflow_state == "done":
+        if task.workflow_state != WorkflowState.DONE.value and next_workflow_state == WorkflowState.DONE.value:
             self._ensure_completion_evidence(task)
 
         task.workflow_state = next_workflow_state
-        if "board_column_id" not in provided and next_workflow_state != "cancelled":
+        if "board_column_id" not in provided and next_workflow_state != WorkflowState.CANCELLED.value:
             column = self._column_for_workflow_state(task.project_id, next_workflow_state)
             if column is not None:
                 task.board_column_id = column.id
@@ -133,7 +134,7 @@ class TaskWriteService(TaskReadService, TaskWorkflowService):
 
         from acp_core.services.task_orchestration_service import TaskOrchestrationService
 
-        if task.workflow_state == "ready" and old_workflow_state != "ready":
+        if task.workflow_state == WorkflowState.READY.value and old_workflow_state != WorkflowState.READY.value:
             self._auto_trigger_agent_session(task)
         else:
             TaskOrchestrationService(self.context).handle_task_updated(task.id)

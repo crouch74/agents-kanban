@@ -1,4 +1,5 @@
 from __future__ import annotations
+from acp_core.enums import WorkflowState
 
 from sqlalchemy import select
 

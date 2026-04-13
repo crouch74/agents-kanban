@@ -1,6 +1,9 @@
 import { cn } from "@/lib/utils";
+import { type WorkflowState, type SessionStatus, type WorktreeStatus } from "@acp/sdk";
 
-const statusClassByKey: Record<string, string> = {
+type StatusKey = WorkflowState | SessionStatus | WorktreeStatus | string;
+
+const statusClassByKey: Record<StatusKey, string> = {
   backlog: "bg-[color:var(--status-backlog)]",
   ready: "bg-[color:var(--status-ready)]",
   in_progress: "bg-[color:var(--status-progress)]",
@@ -13,7 +16,7 @@ export function StatusDot({
   status,
   className,
 }: {
-  status: string;
+  status: StatusKey;
   className?: string;
 }) {
   return (
@@ -26,4 +29,3 @@ export function StatusDot({
     />
   );
 }
-

@@ -116,7 +116,13 @@ class TmuxRuntimeAdapter:
                 *(f"{key}={value}" for key, value in launch_spec.env.items()),
                 *launch_spec.argv,
             ]
-            return shell_join(command_tokens)
+            rendered_command = shell_join(command_tokens)
+            stdin_file = launch_spec.adapter_metadata.get("stdin_file") if launch_spec.adapter_metadata else None
+            if isinstance(stdin_file, str) and stdin_file.strip():
+                rendered_command = (
+                    f"{rendered_command} < {shell_join([stdin_file.strip()])}"
+                )
+            return rendered_command
 
         if command is not None:
             return command

@@ -1,4 +1,4 @@
-import type { WorktreeSummary } from "@acp/sdk";
+import type { WorktreeStatus, WorktreeSummary } from "@acp/sdk";
 import { patchJson, postJson } from "./httpClient";
 
 /**
@@ -18,6 +18,6 @@ export function createWorktree(payload: { repository_id: string; task_id?: strin
  * Raises: Rejects on transport errors or non-2xx API responses.
  * WHY: Preserves workflow/event/idempotent behavior by delegating mutations to canonical backend services.
  */
-export function patchWorktree(worktreeId: string, payload: { status: string; lock_reason?: string }) {
+export function patchWorktree(worktreeId: string, payload: { status: WorktreeStatus; lock_reason?: string }) {
   return patchJson<WorktreeSummary>(`/worktrees/${worktreeId}`, payload);
 }

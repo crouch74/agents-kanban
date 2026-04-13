@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ArrowRight, CheckCircle2, CircleDot, ExternalLink, LayoutGrid, MessageSquareText } from "lucide-react";
+import { Urgency } from "@acp/sdk";
 import type { SessionSummary, TaskSummary, WaitingQuestionSummary } from "@acp/sdk";
 import { cn } from "@/lib/utils";
 import { SectionFrame, SectionTitle } from "@/components/ui";
@@ -12,9 +13,18 @@ type WaitingQuestionWithTimestamps = WaitingQuestionSummary & {
   updated_at?: string;
 };
 
+const QUESTION_STATUS = {
+  OPEN: "open",
+  CLOSED: "closed",
+} as const;
+
 type QueueSortKey = "urgency" | "impact" | "age" | "project" | "session" | "task";
 
-type StatusFilter = "all" | "open" | "closed";
+type StatusFilter = "all" | (typeof QUESTION_STATUS)[keyof typeof QUESTION_STATUS];
+type UrgencyFilter = "all" | Urgency;
+
+const QUESTION_STATUS_OPTIONS = [QUESTION_STATUS.OPEN, QUESTION_STATUS.CLOSED] as const;
+const URGENCY_FILTER_OPTIONS = ["all", ...Object.values(Urgency)] as const;
 
 type WaitingInboxScreenProps = {
   active: boolean;
@@ -34,15 +44,15 @@ type WaitingInboxScreenProps = {
   onOpenTask: (taskId: string) => void;
 };
 
-function urgencyRank(urgency?: string | null) {
-  if (urgency === "urgent") return 4;
-  if (urgency === "high") return 3;
-  if (urgency === "medium") return 2;
+function urgencyRank(urgency?: Urgency | null) {
+  if (urgency === Urgency.URGENT) return 4;
+  if (urgency === Urgency.HIGH) return 3;
+  if (urgency === Urgency.MEDIUM) return 2;
   return 1;
 }
 
 function inferImpact(question: WaitingQuestionWithTimestamps) {
-  const urgency = urgencyRank(question.urgency);
+  const urgency = urgencyRank(coerceUrgency(question.urgency));
   const sessionWeight = question.session_id ? 1 : 0;
   const blockWeight = question.blocked_reason ? 1 : 0;
   const score = urgency + sessionWeight + blockWeight;
@@ -81,6 +91,20 @@ function toneVariant(label: string): "success" | "info" | "warning" {
   return "success";
 }
 
+function coerceQuestionStatus(status: string | null | undefined): StatusFilter {
+  if (status === QUESTION_STATUS.OPEN || status === QUESTION_STATUS.CLOSED) {
+    return status;
+  }
+  return QUESTION_STATUS.OPEN;
+}
+
+function coerceUrgency(value: string | null | undefined): Urgency {
+  if (value === Urgency.URGENT || value === Urgency.HIGH || value === Urgency.MEDIUM || value === Urgency.LOW) {
+    return value;
+  }
+  return Urgency.LOW;
+}
+
 export function WaitingInboxScreen({
   active,
   questions,
@@ -99,8 +123,8 @@ export function WaitingInboxScreen({
   onOpenTask,
 }: WaitingInboxScreenProps) {
   const [sortBy, setSortBy] = useState<QueueSortKey>("urgency");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
-  const [urgencyFilter, setUrgencyFilter] = useState<"all" | "low" | "medium" | "high" | "urgent">("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(QUESTION_STATUS.OPEN);
+  const [urgencyFilter, setUrgencyFilter] = useState<UrgencyFilter>("all");
 
   const sessionNameById = useMemo(
     () => new Map(sessions.map((session) => [session.id, `${session.profile} · ${session.session_name}`])),
@@ -113,12 +137,12 @@ export function WaitingInboxScreen({
 
   const queue = useMemo(() => {
     const filtered = questions
-      .filter((question) => statusFilter === "all" || question.status === statusFilter)
-      .filter((question) => urgencyFilter === "all" || (question.urgency ?? "low") === urgencyFilter);
+      .filter((question) => statusFilter === "all" || coerceQuestionStatus(question.status) === statusFilter)
+      .filter((question) => urgencyFilter === "all" || coerceUrgency(question.urgency) === urgencyFilter);
 
     return [...filtered].sort((left, right) => {
       if (sortBy === "urgency") {
-        return urgencyRank(right.urgency) - urgencyRank(left.urgency);
+        return urgencyRank(coerceUrgency(right.urgency)) - urgencyRank(coerceUrgency(left.urgency));
       }
       if (sortBy === "impact") {
         return inferImpact(right).score - inferImpact(left).score;
@@ -156,7 +180,7 @@ export function WaitingInboxScreen({
               <option value="urgency">Sort: urgency</option>
               <option value="impact">Sort: impact</option>
               <option value="age">Sort: age</option>
-              <option value="project">Sort: project</option>
+            <option value="project">Sort: project</option>
               <option value="session">Sort: session</option>
               <option value="task">Sort: task</option>
             </Select>
@@ -165,22 +189,23 @@ export function WaitingInboxScreen({
               onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
               className="text-xs"
             >
-              <option value="open">Open</option>
-              <option value="closed">Closed</option>
+              {QUESTION_STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>
+                  {toDisplay(status)}
+                </option>
+              ))}
               <option value="all">All</option>
             </Select>
             <Select
               value={urgencyFilter}
-              onChange={(event) =>
-                setUrgencyFilter(event.target.value as "all" | "low" | "medium" | "high" | "urgent")
-              }
+              onChange={(event) => setUrgencyFilter(event.target.value as UrgencyFilter)}
               className="text-xs"
             >
-              <option value="all">Urgency: all</option>
-              <option value="low">Urgency: low</option>
-              <option value="medium">Urgency: medium</option>
-              <option value="high">Urgency: high</option>
-              <option value="urgent">Urgency: urgent</option>
+              {URGENCY_FILTER_OPTIONS.map((urgency) => (
+                <option key={urgency} value={urgency}>
+                  {urgency === "all" ? "Urgency: all" : `Urgency: ${toDisplay(urgency)}`}
+                </option>
+              ))}
             </Select>
           </div>
 
@@ -201,7 +226,9 @@ export function WaitingInboxScreen({
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="line-clamp-2 text-sm font-medium text-[color:var(--text)]">{question.prompt}</div>
-                    <Badge variant={toneVariant(question.urgency ?? "low")}>{toDisplay(question.urgency ?? "low")}</Badge>
+                    <Badge variant={toneVariant(coerceUrgency(question.urgency))}>
+                      {toDisplay(coerceUrgency(question.urgency))}
+                    </Badge>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
                     <Badge variant={toneVariant(impact.label)} className="text-[10px]">Impact {toDisplay(impact.label)}</Badge>
@@ -233,16 +260,16 @@ export function WaitingInboxScreen({
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
-                <Badge variant={questionDetail.status === "closed" ? "success" : "info"}>
-                  {questionDetail.status === "closed" ? (
+                <Badge variant={questionDetail.status === QUESTION_STATUS.CLOSED ? "success" : "info"}>
+                  {questionDetail.status === QUESTION_STATUS.CLOSED ? (
                     <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
                   ) : (
                     <CircleDot className="mr-1 h-3.5 w-3.5" />
                   )}
                   {toDisplay(questionDetail.status)}
                 </Badge>
-                <Badge variant={toneVariant(questionDetail.urgency ?? "low")}>
-                  Urgency {toDisplay(questionDetail.urgency ?? "low")}
+                <Badge variant={toneVariant(questionDetail.urgency ?? Urgency.LOW)}>
+                  Urgency {toDisplay(questionDetail.urgency ?? Urgency.LOW)}
                 </Badge>
                 <Badge>age {formatAge(questionDetail.created_at)}</Badge>
               </div>
@@ -271,7 +298,7 @@ export function WaitingInboxScreen({
                 {!questionDetail.replies.length ? <div className="text-sm text-[color:var(--text-muted)]">No replies yet.</div> : null}
               </div>
 
-              {questionDetail.status === "open" ? (
+              {questionDetail.status === QUESTION_STATUS.OPEN ? (
                 <>
                   <div className="mt-4 flex flex-wrap gap-2">
                     {[

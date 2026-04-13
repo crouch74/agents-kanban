@@ -16,6 +16,7 @@ import {
   getSessionTail,
   getSessionTimeline,
 } from "@/lib/api/sessions";
+import { AgentProfile, CheckStatus, FollowUpType, WorkflowState, WorktreeStatus } from "@acp/sdk";
 import {
   cleanRuntimeOrphans,
   getDashboard,
@@ -135,7 +136,7 @@ export const usePatchTaskMutation = (
       boardColumnId?: string;
       title?: string;
       description?: string;
-      workflowState?: string;
+      workflowState?: WorkflowState;
     }
   >,
 ) =>
@@ -153,11 +154,18 @@ export const useCreateRepositoryMutation = (options?: MutationHookOptions<Awaite
   useMutation({ mutationFn: createRepository, ...options });
 export const useCreateWorktreeMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof createWorktree>>, Parameters<typeof createWorktree>[0]>) =>
   useMutation({ mutationFn: createWorktree, ...options });
-export const usePatchWorktreeMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof patchWorktree>>, { worktreeId: string; status: string }>) =>
+export const usePatchWorktreeMutation = (
+  options?: MutationHookOptions<Awaited<ReturnType<typeof patchWorktree>>, { worktreeId: string; status: WorktreeStatus }>,
+) =>
   useMutation({ mutationFn: ({ worktreeId, status }) => patchWorktree(worktreeId, { status }), ...options });
 export const useCreateSessionMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof createSession>>, Parameters<typeof createSession>[0]>) =>
   useMutation({ mutationFn: createSession, ...options });
-export const useCreateFollowUpSessionMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof createFollowUpSession>>, { sessionId: string; profile: string; followUpType?: "retry" | "review" | "verify" | "handoff" }>) =>
+export const useCreateFollowUpSessionMutation = (
+  options?: MutationHookOptions<
+    Awaited<ReturnType<typeof createFollowUpSession>>,
+    { sessionId: string; profile: AgentProfile; followUpType?: FollowUpType }
+  >,
+) =>
   useMutation({
     mutationFn: ({ sessionId, profile, followUpType }) =>
       createFollowUpSession(sessionId, {
@@ -174,8 +182,11 @@ export const useAnswerQuestionMutation = (options?: MutationHookOptions<Awaited<
   useMutation({ mutationFn: ({ questionId, body }) => answerQuestion(questionId, { responder_name: "operator", body }), ...options });
 export const useAddTaskCommentMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof addTaskComment>>, { taskId: string; body: string }>) =>
   useMutation({ mutationFn: ({ taskId, body }) => addTaskComment(taskId, { author_name: "operator", body }), ...options });
-export const useAddTaskCheckMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof addTaskCheck>>, { taskId: string; checkType: string; status: string; summary: string }>) =>
-  useMutation({ mutationFn: ({ taskId, checkType, status, summary }) => addTaskCheck(taskId, { check_type: checkType, status, summary }), ...options });
+export const useAddTaskCheckMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof addTaskCheck>>, { taskId: string; checkType: string; status: CheckStatus; summary: string }>) =>
+  useMutation({
+    mutationFn: ({ taskId, checkType, status, summary }) => addTaskCheck(taskId, { check_type: checkType, status, summary }),
+    ...options,
+  });
 export const useAddTaskArtifactMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof addTaskArtifact>>, { taskId: string; artifactType: string; name: string; uri: string }>) =>
   useMutation({ mutationFn: ({ taskId, artifactType, name, uri }) => addTaskArtifact(taskId, { artifact_type: artifactType, name, uri }), ...options });
 export const useAddTaskDependencyMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof addTaskDependency>>, { taskId: string; dependsOnTaskId: string }>) =>
