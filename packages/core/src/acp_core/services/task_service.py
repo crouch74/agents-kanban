@@ -19,6 +19,7 @@ from acp_core.schemas import (
     TaskDetail,
     TaskPatch,
     TaskRead,
+    WaitingQuestionRead,
 )
 from acp_core.services.base_service import ServiceContext
 
@@ -589,5 +590,4 @@ class TaskService:
         if project_id is not None:
             stmt = stmt.where(Task.project_id == project_id)
         return self.context.db.scalar(stmt.limit(1))
-
 
