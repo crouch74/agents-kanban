@@ -7,9 +7,9 @@ const BASE_URL = process.env.PR_SCREENSHOT_BASE_URL ?? 'http://127.0.0.1:5173';
 const OUTPUT_DIR = path.resolve('.artifacts/pr-screenshots');
 
 const targets = [
-  { section: 'home', fileName: 'dashboard-home.png' },
-  { section: 'projects', fileName: 'project-board-tasks.png' },
-  { section: 'activity', fileName: 'activity-stream.png' },
+  { route: '/', fileName: 'dashboard-home.png' },
+  { route: '/projects', fileName: 'project-board-tasks.png' },
+  { route: '/activity', fileName: 'activity-stream.png' },
 ];
 
 async function capture() {
@@ -24,7 +24,7 @@ async function capture() {
     const page = await context.newPage();
 
     for (const target of targets) {
-      const url = `${BASE_URL}/?section=${target.section}`;
+      const url = `${BASE_URL}${target.route}`;
       await page.goto(url, { waitUntil: 'networkidle', timeout: 30_000 });
       await page.screenshot({
         path: path.join(OUTPUT_DIR, target.fileName),

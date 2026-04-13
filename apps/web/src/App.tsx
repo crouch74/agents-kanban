@@ -167,7 +167,6 @@ export function App() {
     inspectedTaskId,
     selectedSessionId,
     selectedQuestionId,
-    drawerSelection,
     setActiveSection,
     setSelectedProjectId,
     setInspectedTaskId,
@@ -515,6 +514,9 @@ export function App() {
   const selectSession = (sessionId: string) => {
     setSelectedSessionId(sessionId);
     setDrawerSelection({ type: "session", id: sessionId });
+    setInspectedTaskId(
+      projectDetailQuery.data?.sessions.find((session) => session.id === sessionId)?.task_id ?? null,
+    );
     setActiveSection("sessions");
   };
 

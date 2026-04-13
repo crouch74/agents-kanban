@@ -397,7 +397,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}) {
 }
 
 export async function bootstrapProject(page: Page, name: string) {
-  await page.goto("/?section=projects");
+  await page.goto("/projects");
   await expect(page.getByText("Agent Control Plane")).toBeVisible();
   await page.getByRole("button", { name: "Projects" }).click();
   await page.getByRole("button", { name: /\+ new project/i }).click();

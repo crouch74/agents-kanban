@@ -9,7 +9,7 @@ beforeEach(() => {
 });
 
 test('submits the project bootstrap wizard and shows kickoff summary details', async () => {
-  renderApp({ route: '/?section=projects&project=project-1' });
+  renderApp({ route: '/projects/project-1' });
 
   fireEvent.click(await screen.findByRole('button', { name: /\+ new project/i }));
 
@@ -39,7 +39,7 @@ test('submits the project bootstrap wizard and shows kickoff summary details', a
 });
 
 test('opens project bootstrap in a dialog from the project switcher', async () => {
-  renderApp({ route: '/?section=projects&project=project-1' });
+  renderApp({ route: '/projects/project-1' });
 
   fireEvent.click(await screen.findByRole('button', { name: /\+ new project/i }));
 

@@ -12,7 +12,7 @@ test("creates a calculator project through the default bootstrap dialog flow", a
 test("requires explicit confirm when preview indicates an existing repository", async ({ page }) => {
   await installMockApi(page, { requireBootstrapConfirmation: true });
 
-  await page.goto("/?section=projects");
+  await page.goto("/projects");
   await page.getByRole("button", { name: "Projects" }).click();
   await page.getByRole("button", { name: /\+ new project/i }).click();
   await page.getByPlaceholder("Acme migration program").fill("Calculator Confirmed");
@@ -37,7 +37,7 @@ test("requires explicit confirm when preview indicates an existing repository", 
 
 test("supports api-only project creation contract via browser fetch", async ({ page }) => {
   await installMockApi(page);
-  await page.goto("/?section=projects");
+  await page.goto("/projects");
 
   const responseStatus = await page.evaluate(async () => {
     const response = await fetch("/api/v1/projects", {

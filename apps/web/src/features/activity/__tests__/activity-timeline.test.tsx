@@ -10,7 +10,7 @@ beforeEach(() => {
 });
 
 test('renders activity timeline and filter controls', async () => {
-  renderApp({ route: '/?section=activity&project=project-1' });
+  renderApp({ route: '/activity/project-1' });
 
   await waitFor(() => {
     expect(screen.getByRole('heading', { name: 'Activity timeline' })).toBeInTheDocument();
