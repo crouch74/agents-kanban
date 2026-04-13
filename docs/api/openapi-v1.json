@@ -77,6 +77,26 @@
             ],
             "title": "Command"
           },
+          "launch_input": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionLaunchInputCreate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "launch_spec": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuntimeLaunchSpecCreate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "profile": {
             "default": "executor",
             "enum": [
@@ -162,6 +182,26 @@
               }
             ],
             "title": "Follow Up Type"
+          },
+          "launch_input": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionLaunchInputCreate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "launch_spec": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuntimeLaunchSpecCreate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "profile": {
             "default": "verifier",
@@ -745,6 +785,17 @@
       },
       "ProjectBootstrapCreate": {
         "properties": {
+          "agent_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Model"
+          },
           "agent_name": {
             "anyOf": [
               {
@@ -755,6 +806,28 @@
               }
             ],
             "title": "Agent Name"
+          },
+          "agent_output": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Output"
+          },
+          "agent_permissions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Permissions"
           },
           "confirm_existing_repo": {
             "default": false,
@@ -1201,6 +1274,51 @@
         "title": "RepositoryRead",
         "type": "object"
       },
+      "RuntimeLaunchSpecCreate": {
+        "properties": {
+          "argv": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Argv",
+            "type": "array"
+          },
+          "display_command": {
+            "title": "Display Command",
+            "type": "string"
+          },
+          "env": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Env",
+            "type": "object"
+          },
+          "legacy_shell_command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legacy Shell Command"
+          },
+          "working_directory": {
+            "minLength": 1,
+            "title": "Working Directory",
+            "type": "string"
+          }
+        },
+        "required": [
+          "argv",
+          "display_command",
+          "working_directory"
+        ],
+        "title": "RuntimeLaunchSpecCreate",
+        "type": "object"
+      },
       "SearchHit": {
         "properties": {
           "created_at": {
@@ -1278,6 +1396,179 @@
           "hits"
         ],
         "title": "SearchResults",
+        "type": "object"
+      },
+      "SessionLaunchInputCreate": {
+        "properties": {
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "allowed_tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Tools",
+            "type": "array"
+          },
+          "disallowed_tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Disallowed Tools",
+            "type": "array"
+          },
+          "extra_env": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Extra Env",
+            "type": "object"
+          },
+          "follow_up_of_session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Up Of Session Id"
+          },
+          "max_turns": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Turns"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "output_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Mode"
+          },
+          "permission_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Permission Mode"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt"
+          },
+          "repository_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository Id"
+          },
+          "resume_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resume Token"
+          },
+          "session_family_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Family Id"
+          },
+          "task_kind": {
+            "default": "execute",
+            "enum": [
+              "kickoff",
+              "execute",
+              "review",
+              "verify",
+              "research",
+              "docs"
+            ],
+            "title": "Task Kind",
+            "type": "string"
+          },
+          "working_directory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Working Directory"
+          },
+          "worktree_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worktree Id"
+          }
+        },
+        "title": "SessionLaunchInputCreate",
         "type": "object"
       },
       "SessionMessageRead": {
