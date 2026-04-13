@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from shutil import which
 from pathlib import Path
+from shutil import which
+from typing import Any
 
 from sqlalchemy import String, cast, func, or_, select
 
+from acp_core.errors import build_runtime_service_error
 from acp_core.infrastructure.runtime_adapter import (
     DefaultRuntimeAdapter,
     RuntimeAdapterProtocol,
@@ -169,6 +171,56 @@ class RecoveryService:
             "runtime_managed_session_count": len(runtime_sessions),
             "orphan_runtime_session_count": len(orphan_runtime_sessions),
             "orphan_runtime_sessions": orphan_runtime_sessions,
+        }
+
+    def cleanup_runtime_orphans(self) -> dict[str, Any]:
+        """Purpose: cleanup runtime orphans.
+
+        Args:
+            None.
+
+        Returns:
+            Service result as declared by the function signature.
+
+        Raises:
+            ValueError: When validation or lookup constraints fail.
+        """
+        tracked_runtime_sessions = {
+            session.session_name: session
+            for session in self.context.db.scalars(
+                select(AgentSession).where(
+                    AgentSession.status.in_(["running", "waiting_human", "blocked"])
+                )
+            )
+        }
+        try:
+            runtime_sessions = self.runtime.list_sessions(prefix="acp-")
+        except Exception as exc:
+            raise build_runtime_service_error(
+                operation="runtime_orphan_cleanup",
+                exc=exc,
+                details={"phase": "list_sessions"},
+            ) from exc
+        runtime_session_names = {item.session_name for item in runtime_sessions}
+        orphan_runtime_sessions = sorted(
+            runtime_session_names.difference(tracked_runtime_sessions.keys())
+        )
+
+        removed_runtime_sessions: list[str] = []
+        for session_name in orphan_runtime_sessions:
+            try:
+                self.runtime.terminate_session(session_name)
+            except Exception as exc:
+                raise build_runtime_service_error(
+                    operation="runtime_orphan_cleanup",
+                    exc=exc,
+                    details={"phase": "terminate_session", "session_name": session_name},
+                ) from exc
+            removed_runtime_sessions.append(session_name)
+
+        return {
+            "removed_runtime_session_count": len(removed_runtime_sessions),
+            "removed_runtime_sessions": removed_runtime_sessions,
         }
 
 
@@ -354,20 +406,107 @@ class DashboardService:
         Raises:
             ValueError: When validation or lookup constraints fail.
         """
-        projects = list(
-            self.context.db.scalars(
-                select(Project).order_by(Project.created_at.desc()).limit(8)
-            )
+        active_project_ids = set(
+            self.context.db.scalars(select(Project.id).where(Project.archived.is_(False)))
         )
-        events = list(
+        archived_project_ids = set(
+            self.context.db.scalars(select(Project.id).where(Project.archived.is_(True)))
+        )
+
+        task_session_project_ids: dict[str, str] = {}
+        session_project_ids: dict[str, str] = {}
+        question_project_ids: dict[str, str] = {}
+        repository_project_ids: dict[str, str] = {}
+
+        def _resolve_task_project_id(task_id: str) -> str | None:
+            if task_id not in task_session_project_ids:
+                task_session_project_ids[task_id] = (
+                    self.context.db.scalar(select(Task.project_id).where(Task.id == task_id))
+                    or ""
+                )
+            project_id = task_session_project_ids[task_id]
+            return project_id or None
+
+        def _resolve_session_project_id(session_id: str) -> str | None:
+            if session_id not in session_project_ids:
+                session_project_ids[session_id] = (
+                    self.context.db.scalar(select(AgentSession.project_id).where(AgentSession.id == session_id))
+                    or ""
+                )
+            project_id = session_project_ids[session_id]
+            return project_id or None
+
+        def _resolve_question_project_id(question_id: str) -> str | None:
+            if question_id not in question_project_ids:
+                question_project_ids[question_id] = (
+                    self.context.db.scalar(select(WaitingQuestion.project_id).where(WaitingQuestion.id == question_id))
+                    or ""
+                )
+            project_id = question_project_ids[question_id]
+            return project_id or None
+
+        def _resolve_repository_project_id(repository_id: str) -> str | None:
+            if repository_id not in repository_project_ids:
+                repository_project_ids[repository_id] = (
+                    self.context.db.scalar(select(Repository.project_id).where(Repository.id == repository_id))
+                    or ""
+                )
+            project_id = repository_project_ids[repository_id]
+            return project_id or None
+
+        def _event_project_id(event: Event) -> str | None:
+            payload = event.payload_json or {}
+            if event.entity_type == "project":
+                return event.entity_id
+            if isinstance(payload.get("project_id"), str):
+                return payload["project_id"]
+            if isinstance(payload.get("task_id"), str):
+                return _resolve_task_project_id(payload["task_id"])
+            if event.entity_type == "task":
+                return _resolve_task_project_id(event.entity_id)
+            if isinstance(payload.get("session_id"), str):
+                return _resolve_session_project_id(payload["session_id"])
+            if event.entity_type == "session":
+                return _resolve_session_project_id(event.entity_id)
+            if event.entity_type == "waiting_question":
+                if isinstance(payload.get("task_id"), str):
+                    return _resolve_task_project_id(payload["task_id"])
+                return _resolve_question_project_id(event.entity_id)
+            if event.entity_type in {"task_comment", "task_check", "task_artifact", "task_dependency"}:
+                if isinstance(payload.get("task_id"), str):
+                    return _resolve_task_project_id(payload["task_id"])
+            if event.entity_type == "repository":
+                if isinstance(payload.get("repository_id"), str):
+                    return _resolve_repository_project_id(payload["repository_id"])
+                return _resolve_repository_project_id(event.entity_id)
+
+            return None
+
+        events = []
+        for event in list(
             self.context.db.scalars(
                 select(Event).order_by(Event.created_at.desc()).limit(12)
+            )
+        ):
+            project_id = _event_project_id(event)
+            if project_id is None or project_id not in archived_project_ids:
+                events.append(event)
+
+        projects = list(
+            self.context.db.scalars(
+                select(Project)
+                .where(Project.archived.is_(False))
+                .order_by(Project.created_at.desc())
+                .limit(8)
             )
         )
         waiting_questions = list(
             self.context.db.scalars(
                 select(WaitingQuestion)
-                .where(WaitingQuestion.status == "open")
+                .where(
+                    WaitingQuestion.status == "open",
+                    WaitingQuestion.project_id.in_(active_project_ids),
+                )
                 .order_by(WaitingQuestion.created_at.desc())
                 .limit(8)
             )
@@ -375,7 +514,10 @@ class DashboardService:
         blocked_tasks = list(
             self.context.db.scalars(
                 select(Task)
-                .where(Task.blocked_reason.is_not(None))
+                .where(
+                    Task.blocked_reason.is_not(None),
+                    Task.project_id.in_(active_project_ids),
+                )
                 .order_by(Task.updated_at.desc())
                 .limit(8)
             )
@@ -383,7 +525,10 @@ class DashboardService:
         active_sessions = list(
             self.context.db.scalars(
                 select(AgentSession)
-                .where(AgentSession.status == "running")
+                .where(
+                    AgentSession.status == "running",
+                    AgentSession.project_id.in_(active_project_ids),
+                )
                 .order_by(AgentSession.updated_at.desc())
                 .limit(8)
             )

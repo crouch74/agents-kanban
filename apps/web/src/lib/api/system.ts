@@ -1,5 +1,11 @@
-import { fetchJson } from "./httpClient";
-import type { Dashboard, Diagnostics, EventRecord, SearchResults } from "./types";
+import { fetchJson, postJson } from "./httpClient";
+import type {
+  Dashboard,
+  Diagnostics,
+  EventRecord,
+  RuntimeOrphanCleanup,
+  SearchResults,
+} from "./types";
 
 /**
  * Purpose: Call `getDashboard` API endpoint.
@@ -43,6 +49,16 @@ export function getEvents(params?: { projectId?: string; taskId?: string; sessio
  */
 export function getDiagnostics() {
   return fetchJson<Diagnostics>("/diagnostics");
+}
+
+/**
+ * Purpose: Call runtime orphan cleanup endpoint.
+ * Parameters: See function signature payload/query fields.
+ * Returns: Promise resolving to the typed API response shape.
+ * Raises: Rejects on transport errors or non-2xx API responses.
+ */
+export function cleanRuntimeOrphans() {
+  return postJson<RuntimeOrphanCleanup>("/diagnostics/runtime-orphans/cleanup", {});
 }
 
 /**

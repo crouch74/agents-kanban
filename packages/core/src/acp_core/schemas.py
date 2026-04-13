@@ -499,6 +499,11 @@ class DiagnosticsRead(BaseModel):
     current_event_count: int
 
 
+class RuntimeOrphanCleanupRead(BaseModel):
+    removed_runtime_session_count: int
+    removed_runtime_sessions: list[str]
+
+
 class DashboardRead(BaseModel):
     projects: list[ProjectSummary]
     recent_events: list[EventRecord]

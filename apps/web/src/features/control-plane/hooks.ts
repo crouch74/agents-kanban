@@ -16,7 +16,13 @@ import {
   getSessionTail,
   getSessionTimeline,
 } from "@/lib/api/sessions";
-import { getDashboard, getDiagnostics, getEvents, searchContext } from "@/lib/api/system";
+import {
+  cleanRuntimeOrphans,
+  getDashboard,
+  getDiagnostics,
+  getEvents,
+  searchContext,
+} from "@/lib/api/system";
 import {
   addTaskArtifact,
   addTaskCheck,
@@ -176,3 +182,7 @@ export const useAddTaskDependencyMutation = (options?: MutationHookOptions<Await
   useMutation({ mutationFn: ({ taskId, dependsOnTaskId }) => addTaskDependency(taskId, { depends_on_task_id: dependsOnTaskId }), ...options });
 export const useCancelSessionMutation = (options?: MutationHookOptions<Awaited<ReturnType<typeof cancelSession>>, Parameters<typeof cancelSession>[0]>) =>
   useMutation({ mutationFn: cancelSession, ...options });
+
+export const useCleanRuntimeOrphansMutation = (
+  options?: MutationHookOptions<Awaited<ReturnType<typeof cleanRuntimeOrphans>>, void>,
+) => useMutation({ mutationFn: () => cleanRuntimeOrphans(), ...options });

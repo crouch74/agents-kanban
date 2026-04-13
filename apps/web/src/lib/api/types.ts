@@ -41,6 +41,11 @@ export type Diagnostics = {
   current_event_count: number;
 };
 
+export type RuntimeOrphanCleanup = {
+  removed_runtime_session_count: number;
+  removed_runtime_sessions: string[];
+};
+
 export type EventRecord = {
   id: string;
   actor_type: string;
