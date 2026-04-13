@@ -152,3 +152,41 @@ def test_worktree_creation_rejects_cross_project_task(tmp_path: Path) -> None:
         )
         assert response.status_code == 400
         assert response.json()["detail"] == "Task must belong to the same project as the repository"
+
+
+def test_worktree_creation_supports_label_branches_and_supports_locked_transitions(tmp_path: Path) -> None:
+    repo_path = create_git_repo(tmp_path / "labelled-worktree")
+
+    with TestClient(app) as client:
+        project_id = client.post("/api/v1/projects", json={"name": "Labelled Worktree Project"}).json()["id"]
+        repository_id = client.post(
+            "/api/v1/repositories",
+            json={"project_id": project_id, "local_path": str(repo_path)},
+        ).json()["id"]
+
+        worktree = client.post(
+            "/api/v1/worktrees",
+            json={
+                "repository_id": repository_id,
+                "label": "Feature Board",
+            },
+        ).json()
+        assert worktree["status"] == "active"
+        assert Path(worktree["path"]).exists()
+        assert worktree["branch_name"] == "acp/labelled-worktree-project/feature-board"
+
+        locked = client.patch(
+            f"/api/v1/worktrees/{worktree['id']}",
+            json={"status": "locked", "lock_reason": "Hold for review"},
+        )
+        assert locked.status_code == 200
+        locked_payload = locked.json()
+        assert locked_payload["status"] == "locked"
+        assert locked_payload["lock_reason"] == "Hold for review"
+
+        no_change = client.patch(
+            f"/api/v1/worktrees/{worktree['id']}",
+            json={},
+        )
+        assert no_change.status_code == 400
+        assert no_change.json()["detail"] == "No worktree change requested"

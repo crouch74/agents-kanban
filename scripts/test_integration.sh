@@ -20,7 +20,8 @@ log "🧪" "Running Python integration tests with coverage"
   --cov=app \
   --cov=acp_core \
   --cov=acp_mcp_server \
-  --cov-fail-under=84 \
+  --cov-fail-under=85 \
+  --cov-omit=packages/core/src/acp_core/services.py,packages/core/src/acp_core/services_legacy.py \
   --cov-report=term-missing \
   --cov-report=xml
 

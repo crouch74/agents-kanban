@@ -128,3 +128,60 @@ def test_task_check_defaults_to_pending_when_status_is_omitted() -> None:
         )
         assert check_response.status_code == 201
         assert check_response.json()["status"] == "pending"
+
+
+def test_task_dependencies_reject_self_and_duplicate_links() -> None:
+    with TestClient(app) as client:
+        project_id = client.post("/api/v1/projects", json={"name": "Dependency Rules"}).json()["id"]
+        task_id = client.post(
+            "/api/v1/tasks",
+            json={"project_id": project_id, "title": "Blocking task", "board_column_key": "ready"},
+        ).json()["id"]
+        blocker_id = client.post(
+            "/api/v1/tasks",
+            json={"project_id": project_id, "title": "Blocker task", "board_column_key": "ready"},
+        ).json()["id"]
+
+        self_dependency_response = client.post(
+            f"/api/v1/tasks/{task_id}/dependencies",
+            json={"depends_on_task_id": task_id, "relationship_type": "blocks"},
+        )
+        assert self_dependency_response.status_code == 400
+        assert self_dependency_response.json()["detail"] == "Task cannot depend on itself"
+
+        dependency_response = client.post(
+            f"/api/v1/tasks/{task_id}/dependencies",
+            json={"depends_on_task_id": blocker_id, "relationship_type": "blocks"},
+        )
+        assert dependency_response.status_code == 201
+
+        duplicate_dependency_response = client.post(
+            f"/api/v1/tasks/{task_id}/dependencies",
+            json={"depends_on_task_id": blocker_id, "relationship_type": "blocks"},
+        )
+        assert duplicate_dependency_response.status_code == 400
+        assert duplicate_dependency_response.json()["detail"] == "Dependency already exists"
+
+
+def test_task_dependencies_reject_cross_project_reference() -> None:
+    with TestClient(app) as client:
+        project_alpha = client.post("/api/v1/projects", json={"name": "Project Alpha"}).json()["id"]
+        project_beta = client.post("/api/v1/projects", json={"name": "Project Beta"}).json()["id"]
+        task_id = client.post(
+            "/api/v1/tasks",
+            json={"project_id": project_alpha, "title": "Primary task", "board_column_key": "ready"},
+        ).json()["id"]
+        beta_task_id = client.post(
+            "/api/v1/tasks",
+            json={"project_id": project_beta, "title": "Beta task", "board_column_key": "ready"},
+        ).json()["id"]
+
+        cross_project_dependency = client.post(
+            f"/api/v1/tasks/{task_id}/dependencies",
+            json={"depends_on_task_id": beta_task_id, "relationship_type": "blocks"},
+        )
+        assert cross_project_dependency.status_code == 400
+        assert (
+            cross_project_dependency.json()["detail"]
+            == "Dependencies must stay within the same project"
+        )

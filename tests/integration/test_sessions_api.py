@@ -322,6 +322,63 @@ def test_session_spawn_and_follow_up_surface_runtime_adapter_failure(
         app.dependency_overrides.clear()
 
 
+def test_session_spawn_rejects_unknown_or_incompatible_agent_request() -> None:
+    from app.bootstrap.dependencies import get_runtime_adapter
+
+    class RejectingRuntime:
+        def spawn_session(self, **_: object) -> None:  # pragma: no cover
+            raise RuntimeError("spawn must not be reached")
+
+    app.dependency_overrides[get_runtime_adapter] = lambda: RejectingRuntime()
+
+    try:
+        with TestClient(app) as client:
+            project_id = client.post(
+                "/api/v1/projects", json={"name": "Agent Validation"}
+            ).json()["id"]
+            task_id = client.post(
+                "/api/v1/tasks",
+                json={
+                    "project_id": project_id,
+                    "title": "Agent scope check",
+                },
+            ).json()["id"]
+
+            unknown_agent = client.post(
+                "/api/v1/sessions",
+                json={
+                    "task_id": task_id,
+                    "profile": "executor",
+                    "launch_input": {
+                        "task_kind": "execute",
+                        "agent_name": "ghost",
+                    },
+                },
+            )
+            assert unknown_agent.status_code == 400
+            assert unknown_agent.json()["detail"] == "Unknown agent: ghost"
+
+            unsupported_output = client.post(
+                "/api/v1/sessions",
+                json={
+                    "task_id": task_id,
+                    "profile": "executor",
+                    "launch_input": {
+                        "task_kind": "execute",
+                        "agent_name": "codex",
+                        "output_mode": "ndjson",
+                    },
+                },
+            )
+            assert unsupported_output.status_code == 400
+            assert (
+                unsupported_output.json()["detail"]
+                == "Agent 'codex' does not support output_mode='ndjson'. Supported values: json, stream-json"
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_session_spawn_rejects_cross_project_repository(tmp_path: Path) -> None:
     fake_runtime = FakeRuntime()
     app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime

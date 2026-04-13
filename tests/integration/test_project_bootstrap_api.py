@@ -274,6 +274,41 @@ def test_bootstrap_empty_folder_with_git_init_and_worktree(tmp_path: Path, monke
         app.dependency_overrides.clear()
 
 
+def test_bootstrap_empty_folder_with_git_init_and_nextjs_scaffold(tmp_path: Path, monkeypatch) -> None:
+    fake_runtime = FakeRuntime()
+    app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime
+    repo_path = tmp_path / "nextjs-bootstrap-repo"
+    repo_path.mkdir()
+    monkeypatch.setenv("GIT_AUTHOR_NAME", "ACP Test")
+    monkeypatch.setenv("GIT_AUTHOR_EMAIL", "acp@example.test")
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/projects/bootstrap",
+                json={
+                    "name": "Bootstrap NextJS Repo",
+                    "repo_path": str(repo_path),
+                    "initialize_repo": True,
+                    "stack_preset": "nextjs",
+                    "initial_prompt": "Bootstrap with a NextJS starter.",
+                },
+            )
+            assert response.status_code == 201
+            payload = response.json()
+
+            assert payload["stack_preset"] == "nextjs"
+            assert payload["repo_initialized"] is True
+            assert payload["scaffold_applied"] is True
+            assert payload["execution_path"] == str(repo_path)
+            assert (repo_path / "package.json").exists()
+            assert (repo_path / "tsconfig.json").exists()
+            assert (repo_path / "next.config.ts").exists()
+            assert (repo_path / "app" / "page.tsx").exists()
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_bootstrap_rejects_non_empty_non_repo_folder(tmp_path: Path) -> None:
     fake_runtime = FakeRuntime()
     app.dependency_overrides[get_runtime_adapter] = lambda: fake_runtime

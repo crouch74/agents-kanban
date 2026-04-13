@@ -174,3 +174,36 @@ def test_create_subtask_under_parent_task() -> None:
         assert board_response.status_code == 200
         board = board_response.json()
         assert any(task["id"] == subtask["id"] and task["parent_task_id"] == parent_task["id"] for task in board["tasks"])
+
+
+def test_create_subtask_rejects_nested_subtask() -> None:
+    with TestClient(app) as client:
+        project_id = client.post("/api/v1/projects", json={"name": "Nested Subtasks"}).json()["id"]
+        parent_task = client.post(
+            "/api/v1/tasks",
+            json={"project_id": project_id, "title": "Parent task", "board_column_key": "ready"},
+        ).json()
+        child_task = client.post(
+            "/api/v1/tasks",
+            json={
+                "project_id": project_id,
+                "title": "Child task",
+                "parent_task_id": parent_task["id"],
+                "board_column_key": "ready",
+            },
+        ).json()
+
+        nested_response = client.post(
+            "/api/v1/tasks",
+            json={
+                "project_id": project_id,
+                "title": "Nested child",
+                "parent_task_id": child_task["id"],
+                "board_column_key": "ready",
+            },
+        )
+        assert nested_response.status_code == 400
+        assert (
+            nested_response.json()["detail"]
+            == "Nested subtasks beyond one level are not supported in v1"
+        )
