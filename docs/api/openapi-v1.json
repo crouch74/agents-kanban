@@ -1,6 +1,17 @@
 {
   "components": {
     "schemas": {
+      "AgentProfile": {
+        "enum": [
+          "executor",
+          "reviewer",
+          "verifier",
+          "research",
+          "docs"
+        ],
+        "title": "AgentProfile",
+        "type": "string"
+      },
       "AgentRunRead": {
         "properties": {
           "attempt_number": {
@@ -98,16 +109,8 @@
             ]
           },
           "profile": {
-            "default": "executor",
-            "enum": [
-              "executor",
-              "reviewer",
-              "verifier",
-              "research",
-              "docs"
-            ],
-            "title": "Profile",
-            "type": "string"
+            "$ref": "#/components/schemas/AgentProfile",
+            "default": "executor"
           },
           "repository_id": {
             "anyOf": [
@@ -169,19 +172,12 @@
           "follow_up_type": {
             "anyOf": [
               {
-                "enum": [
-                  "retry",
-                  "review",
-                  "verify",
-                  "handoff"
-                ],
-                "type": "string"
+                "$ref": "#/components/schemas/FollowUpType"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Follow Up Type"
+            ]
           },
           "launch_input": {
             "anyOf": [
@@ -204,16 +200,8 @@
             ]
           },
           "profile": {
-            "default": "verifier",
-            "enum": [
-              "executor",
-              "reviewer",
-              "verifier",
-              "research",
-              "docs"
-            ],
-            "title": "Profile",
-            "type": "string"
+            "$ref": "#/components/schemas/AgentProfile",
+            "default": "verifier"
           },
           "reuse_repository": {
             "default": true,
@@ -241,8 +229,7 @@
             "type": "string"
           },
           "profile": {
-            "title": "Profile",
-            "type": "string"
+            "$ref": "#/components/schemas/AgentProfile"
           },
           "project_id": {
             "title": "Project Id",
@@ -269,8 +256,7 @@
             "type": "string"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/SessionStatus"
           },
           "task_id": {
             "title": "Task Id",
@@ -362,6 +348,15 @@
         "title": "ApiErrorEnvelope",
         "type": "object"
       },
+      "AuthorType": {
+        "enum": [
+          "human",
+          "agent",
+          "system"
+        ],
+        "title": "AuthorType",
+        "type": "string"
+      },
       "BoardColumnRead": {
         "properties": {
           "done_policy": {
@@ -402,8 +397,7 @@
             "type": "string"
           },
           "key": {
-            "title": "Key",
-            "type": "string"
+            "$ref": "#/components/schemas/WorkflowState"
           },
           "name": {
             "title": "Name",
@@ -477,6 +471,16 @@
         "title": "BoardView",
         "type": "object"
       },
+      "CheckStatus": {
+        "enum": [
+          "pending",
+          "passed",
+          "failed",
+          "warning"
+        ],
+        "title": "CheckStatus",
+        "type": "string"
+      },
       "DashboardRead": {
         "properties": {
           "active_sessions": {
@@ -539,6 +543,14 @@
         ],
         "title": "DashboardRead",
         "type": "object"
+      },
+      "DependencyRelationshipType": {
+        "enum": [
+          "blocks",
+          "relates_to"
+        ],
+        "title": "DependencyRelationshipType",
+        "type": "string"
       },
       "DiagnosticsRead": {
         "properties": {
@@ -704,6 +716,16 @@
         "title": "EventRecord",
         "type": "object"
       },
+      "FollowUpType": {
+        "enum": [
+          "retry",
+          "review",
+          "verify",
+          "handoff"
+        ],
+        "title": "FollowUpType",
+        "type": "string"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -782,6 +804,13 @@
         ],
         "title": "HumanReplyRead",
         "type": "object"
+      },
+      "Permission": {
+        "enum": [
+          "danger-full-access"
+        ],
+        "title": "Permission",
+        "type": "string"
       },
       "ProjectBootstrapCreate": {
         "properties": {
@@ -898,14 +927,7 @@
       "ProjectBootstrapPlannedChange": {
         "properties": {
           "action": {
-            "enum": [
-              "create",
-              "create_or_update",
-              "append_line",
-              "scaffold"
-            ],
-            "title": "Action",
-            "type": "string"
+            "$ref": "#/components/schemas/WorktreeAction"
           },
           "description": {
             "title": "Description",
@@ -1319,6 +1341,27 @@
         "title": "RuntimeLaunchSpecCreate",
         "type": "object"
       },
+      "RuntimeOrphanCleanupRead": {
+        "properties": {
+          "removed_runtime_session_count": {
+            "title": "Removed Runtime Session Count",
+            "type": "integer"
+          },
+          "removed_runtime_sessions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Removed Runtime Sessions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "removed_runtime_session_count",
+          "removed_runtime_sessions"
+        ],
+        "title": "RuntimeOrphanCleanupRead",
+        "type": "object"
+      },
       "SearchHit": {
         "properties": {
           "created_at": {
@@ -1480,13 +1523,12 @@
           "permission_mode": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/Permission"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Permission Mode"
+            ]
           },
           "prompt": {
             "anyOf": [
@@ -1533,17 +1575,8 @@
             "title": "Session Family Id"
           },
           "task_kind": {
-            "default": "execute",
-            "enum": [
-              "kickoff",
-              "execute",
-              "review",
-              "verify",
-              "research",
-              "docs"
-            ],
-            "title": "Task Kind",
-            "type": "string"
+            "$ref": "#/components/schemas/TaskKind",
+            "default": "execute"
           },
           "working_directory": {
             "anyOf": [
@@ -1615,6 +1648,19 @@
         ],
         "title": "SessionMessageRead",
         "type": "object"
+      },
+      "SessionStatus": {
+        "enum": [
+          "queued",
+          "running",
+          "waiting_human",
+          "blocked",
+          "done",
+          "failed",
+          "cancelled"
+        ],
+        "title": "SessionStatus",
+        "type": "string"
       },
       "SessionTailRead": {
         "properties": {
@@ -1799,15 +1845,8 @@
             "type": "object"
           },
           "status": {
-            "default": "pending",
-            "enum": [
-              "pending",
-              "passed",
-              "failed",
-              "warning"
-            ],
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/CheckStatus",
+            "default": "pending"
           },
           "summary": {
             "minLength": 1,
@@ -1843,8 +1882,7 @@
             "type": "object"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/CheckStatus"
           },
           "summary": {
             "title": "Summary",
@@ -1876,14 +1914,8 @@
             "type": "string"
           },
           "author_type": {
-            "default": "human",
-            "enum": [
-              "human",
-              "agent",
-              "system"
-            ],
-            "title": "Author Type",
-            "type": "string"
+            "$ref": "#/components/schemas/AuthorType",
+            "default": "human"
           },
           "body": {
             "minLength": 1,
@@ -1910,8 +1942,7 @@
             "type": "string"
           },
           "author_type": {
-            "title": "Author Type",
-            "type": "string"
+            "$ref": "#/components/schemas/AuthorType"
           },
           "body": {
             "title": "Body",
@@ -1951,9 +1982,8 @@
       "TaskCreate": {
         "properties": {
           "board_column_key": {
-            "default": "backlog",
-            "title": "Board Column Key",
-            "type": "string"
+            "$ref": "#/components/schemas/WorkflowState",
+            "default": "backlog"
           },
           "description": {
             "anyOf": [
@@ -1978,15 +2008,8 @@
             "title": "Parent Task Id"
           },
           "priority": {
-            "default": "medium",
-            "enum": [
-              "low",
-              "medium",
-              "high",
-              "urgent"
-            ],
-            "title": "Priority",
-            "type": "string"
+            "$ref": "#/components/schemas/TaskPriority",
+            "default": "medium"
           },
           "project_id": {
             "title": "Project Id",
@@ -2020,13 +2043,8 @@
             "type": "string"
           },
           "relationship_type": {
-            "default": "blocks",
-            "enum": [
-              "blocks",
-              "relates_to"
-            ],
-            "title": "Relationship Type",
-            "type": "string"
+            "$ref": "#/components/schemas/DependencyRelationshipType",
+            "default": "blocks"
           }
         },
         "required": [
@@ -2051,8 +2069,7 @@
             "type": "string"
           },
           "relationship_type": {
-            "title": "Relationship Type",
-            "type": "string"
+            "$ref": "#/components/schemas/DependencyRelationshipType"
           },
           "task_id": {
             "title": "Task Id",
@@ -2146,8 +2163,7 @@
             "title": "Parent Task Id"
           },
           "priority": {
-            "title": "Priority",
-            "type": "string"
+            "$ref": "#/components/schemas/TaskPriority"
           },
           "project_id": {
             "title": "Project Id",
@@ -2181,8 +2197,7 @@
             "type": "array"
           },
           "workflow_state": {
-            "title": "Workflow State",
-            "type": "string"
+            "$ref": "#/components/schemas/WorkflowState"
           }
         },
         "required": [
@@ -2207,6 +2222,18 @@
         ],
         "title": "TaskDetail",
         "type": "object"
+      },
+      "TaskKind": {
+        "enum": [
+          "kickoff",
+          "execute",
+          "review",
+          "verify",
+          "research",
+          "docs"
+        ],
+        "title": "TaskKind",
+        "type": "string"
       },
       "TaskPatch": {
         "properties": {
@@ -2270,17 +2297,26 @@
           "workflow_state": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/WorkflowState"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Workflow State"
+            ]
           }
         },
         "title": "TaskPatch",
         "type": "object"
+      },
+      "TaskPriority": {
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "urgent"
+        ],
+        "title": "TaskPriority",
+        "type": "string"
       },
       "TaskRead": {
         "properties": {
@@ -2331,8 +2367,7 @@
             "title": "Parent Task Id"
           },
           "priority": {
-            "title": "Priority",
-            "type": "string"
+            "$ref": "#/components/schemas/TaskPriority"
           },
           "project_id": {
             "title": "Project Id",
@@ -2359,8 +2394,7 @@
             "type": "boolean"
           },
           "workflow_state": {
-            "title": "Workflow State",
-            "type": "string"
+            "$ref": "#/components/schemas/WorkflowState"
           }
         },
         "required": [
@@ -2380,6 +2414,16 @@
         ],
         "title": "TaskRead",
         "type": "object"
+      },
+      "Urgency": {
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "urgent"
+        ],
+        "title": "Urgency",
+        "type": "string"
       },
       "ValidationError": {
         "properties": {
@@ -2458,19 +2502,12 @@
           "urgency": {
             "anyOf": [
               {
-                "enum": [
-                  "low",
-                  "medium",
-                  "high",
-                  "urgent"
-                ],
-                "type": "string"
+                "$ref": "#/components/schemas/Urgency"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Urgency"
+            ]
           }
         },
         "required": [
@@ -2537,8 +2574,7 @@
             "title": "Session Id"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/WaitingQuestionStatus"
           },
           "task_id": {
             "title": "Task Id",
@@ -2552,13 +2588,12 @@
           "urgency": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/Urgency"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Urgency"
+            ]
           }
         },
         "required": [
@@ -2628,8 +2663,7 @@
             "title": "Session Id"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/WaitingQuestionStatus"
           },
           "task_id": {
             "title": "Task Id",
@@ -2643,13 +2677,12 @@
           "urgency": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/Urgency"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Urgency"
+            ]
           }
         },
         "required": [
@@ -2667,6 +2700,36 @@
         ],
         "title": "WaitingQuestionRead",
         "type": "object"
+      },
+      "WaitingQuestionStatus": {
+        "enum": [
+          "open",
+          "closed"
+        ],
+        "title": "WaitingQuestionStatus",
+        "type": "string"
+      },
+      "WorkflowState": {
+        "enum": [
+          "backlog",
+          "ready",
+          "in_progress",
+          "review",
+          "done",
+          "cancelled"
+        ],
+        "title": "WorkflowState",
+        "type": "string"
+      },
+      "WorktreeAction": {
+        "enum": [
+          "create",
+          "create_or_update",
+          "append_line",
+          "scaffold"
+        ],
+        "title": "WorktreeAction",
+        "type": "string"
       },
       "WorktreeCreate": {
         "properties": {
@@ -2733,13 +2796,7 @@
             "type": "array"
           },
           "recommendation": {
-            "enum": [
-              "archive",
-              "prune",
-              "inspect"
-            ],
-            "title": "Recommendation",
-            "type": "string"
+            "$ref": "#/components/schemas/WorktreeRecommendation"
           },
           "session_id": {
             "anyOf": [
@@ -2753,8 +2810,7 @@
             "title": "Session Id"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/WorktreeStatus"
           },
           "task_id": {
             "anyOf": [
@@ -2802,18 +2858,12 @@
           "status": {
             "anyOf": [
               {
-                "enum": [
-                  "locked",
-                  "archived",
-                  "pruned"
-                ],
-                "type": "string"
+                "$ref": "#/components/schemas/WorktreeStatus"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Status"
+            ]
           }
         },
         "title": "WorktreePatch",
@@ -2870,8 +2920,7 @@
             "title": "Session Id"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/WorktreeStatus"
           },
           "task_id": {
             "anyOf": [
@@ -2905,6 +2954,25 @@
         ],
         "title": "WorktreeRead",
         "type": "object"
+      },
+      "WorktreeRecommendation": {
+        "enum": [
+          "archive",
+          "prune",
+          "inspect"
+        ],
+        "title": "WorktreeRecommendation",
+        "type": "string"
+      },
+      "WorktreeStatus": {
+        "enum": [
+          "active",
+          "locked",
+          "archived",
+          "pruned"
+        ],
+        "title": "WorktreeStatus",
+        "type": "string"
       }
     }
   },
@@ -2953,6 +3021,58 @@
           }
         },
         "summary": "Diagnostics",
+        "tags": [
+          "diagnostics"
+        ]
+      }
+    },
+    "/api/v1/diagnostics/runtime-orphans/cleanup": {
+      "post": {
+        "description": "Handle runtime orphan cleanup requests.\n\nArgs:\n    service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
+        "operationId": "cleanup_runtime_orphans_api_v1_diagnostics_runtime_orphans_cleanup_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeOrphanCleanupRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Runtime adapter failure."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Runtime subsystem unavailable."
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Runtime adapter timeout."
+          }
+        },
+        "summary": "Cleanup Runtime Orphans",
         "tags": [
           "diagnostics"
         ]
@@ -3299,6 +3419,49 @@
           }
         },
         "summary": "Get Project",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/archive": {
+      "post": {
+        "description": "Handle archive project requests.\n\nArgs:\n    project_id: Input parameter.\n    request: from request/signature.\n    service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
+        "operationId": "archive_project_api_v1_projects__project_id__archive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Archive Project",
         "tags": [
           "projects"
         ]
