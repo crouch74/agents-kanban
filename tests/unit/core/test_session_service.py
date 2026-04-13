@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 
+from acp_core.agents.types import SessionLaunchInputs
 from acp_core.models import AgentSession, Task
+from acp_core.runtime import RuntimeLaunchSpec
 from acp_core.schemas import AgentSessionFollowUpCreate
 from acp_core.services.base_service import ServiceContext
 from acp_core.services.session_service import SessionService
@@ -214,3 +218,119 @@ def test_spawn_follow_up_session_uses_flow_specific_agent_defaults(
         settings.default_agent = original_default_agent
         settings.review_agent = original_review_agent
         settings.verify_agent = original_verify_agent
+
+
+def test_spawn_session_record_includes_agent_details_in_session_and_run_metadata(
+    service_context: ServiceContext,
+) -> None:
+    task = Task(
+        id="task-1",
+        project_id="proj-1",
+        board_column_id="col-1",
+        title="Implement feature",
+        workflow_state="in_progress",
+        priority="medium",
+        waiting_for_human=False,
+        metadata_json={},
+    )
+    runtime = MagicMock()
+    runtime.spawn_session.return_value = SimpleNamespace(
+        session_name="sess-1",
+        pane_id="%1",
+        window_name="main",
+        working_directory="/tmp/work",
+        command="env ACP_RUNTIME_HOME=/runtime codex exec -",
+    )
+
+    service = SessionService(service_context, runtime=runtime)
+    service._resolve_session_target = MagicMock(return_value=(None, None, Path("/tmp/work")))
+    service._next_attempt_number = MagicMock(return_value=1)
+
+    launch_inputs = SessionLaunchInputs(
+        task_kind="execute",
+        agent_name="codex",
+        prompt="Plan work",
+        working_directory=Path("/tmp/work"),
+    )
+    launch_spec = RuntimeLaunchSpec(
+        argv=["codex", "exec", "-"],
+        env={"ACP_RUNTIME_HOME": "/runtime"},
+        display_command="codex exec - < prompt.md",
+        working_directory="/tmp/work",
+        adapter_metadata={"agent": "codex"},
+    )
+
+    service._spawn_session_record(
+        task=task,
+        profile="executor",
+        launch_spec=launch_spec,
+        launch_inputs=launch_inputs,
+    )
+
+    session = service_context.db.add.call_args_list[0].args[0]
+    run = service_context.db.add.call_args_list[1].args[0]
+    assert session.runtime_metadata["agent_name"] == "codex"
+    assert session.runtime_metadata["launch_argv"] == ["codex", "exec", "-"]
+    assert session.runtime_metadata["adapter_metadata"] == {"agent": "codex"}
+    assert run.runtime_metadata["agent_name"] == "codex"
+    assert run.runtime_metadata["launch_inputs"]["task_kind"] == "execute"
+
+
+@pytest.mark.parametrize(
+    ("profile", "follow_up_type"),
+    [("executor", "retry"), ("reviewer", "review"), ("verifier", "verify")],
+)
+def test_spawn_follow_up_session_preserves_family_lineage_across_flow_types(
+    service_context: ServiceContext,
+    profile: str,
+    follow_up_type: str,
+) -> None:
+    task = Task(
+        id="task-1",
+        project_id="proj-1",
+        board_column_id="col-1",
+        title="Review me",
+        workflow_state="review",
+        priority="medium",
+        waiting_for_human=False,
+        metadata_json={},
+    )
+    source = AgentSession(
+        id="sess-source",
+        project_id=task.project_id,
+        task_id=task.id,
+        repository_id="repo-1",
+        worktree_id="wt-1",
+        profile="executor",
+        status="running",
+        session_name="sess-source-name",
+        runtime_metadata={"session_family_id": "family-1"},
+    )
+    spawned = AgentSession(
+        id="sess-follow-up",
+        project_id=task.project_id,
+        task_id=task.id,
+        profile=profile,
+        status="running",
+        session_name=f"sess-{follow_up_type}",
+        runtime_metadata={},
+    )
+
+    service_context.db.get.side_effect = lambda model, key: {(Task, task.id): task}.get(
+        (model, key)
+    )
+
+    service = SessionService(service_context, runtime=MagicMock())
+    service.get_session = MagicMock(return_value=source)
+    service._spawn_session_record = MagicMock(return_value=spawned)
+
+    service.spawn_follow_up_session(
+        source.id,
+        AgentSessionFollowUpCreate(profile=profile, follow_up_type=None),
+    )
+
+    kwargs = service._spawn_session_record.call_args.kwargs
+    assert kwargs["runtime_metadata_extra"]["session_family_id"] == "family-1"
+    assert kwargs["runtime_metadata_extra"]["follow_up_of_session_id"] == "sess-source"
+    assert kwargs["runtime_metadata_extra"]["follow_up_type"] == follow_up_type
+
