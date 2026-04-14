@@ -1,10 +1,7 @@
 export enum WorkflowState {
   BACKLOG = "backlog",
-  READY = "ready",
   IN_PROGRESS = "in_progress",
-  REVIEW = "review",
   DONE = "done",
-  CANCELLED = "cancelled",
 }
 
 export enum TaskKind {

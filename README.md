@@ -1,237 +1,120 @@
-# Agent Control Plane
+# Shared Task Board
 
-<!-- TODO(maintainer): replace OWNER/REPO in CI and coverage badges once repository slug is confirmed. -->
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-artifact%20in%20CI-blue)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
-![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)
-![Node 22](https://img.shields.io/badge/node-22-5FA04E?logo=node.js&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.116-009688?logo=fastapi&logoColor=white)
-![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+Shared Task Board is a local-first coordination system for operators and external coding agents.
 
-Agent Control Plane is a local-first control plane for a single technical
-operator managing multiple AI agents across multiple repositories and projects.
-It combines a structured kanban workflow, tmux-backed session runtime, git
-worktree isolation, a FastAPI backend, a React operator UI, and an MCP-native
-agent surface.
+The product boundary is intentionally narrow:
+
+- source of truth for `projects`, `board columns`, `tasks`, `status`, `comments`, and lightweight `events`
+- humans use the web app to create, prioritize, and move work
+- agents use API/MCP to create tasks, update status, and post progress comments
+- this application does **not** launch, host, supervise, or reconcile agent runtimes
 
 ## Stack
 
-- Backend: Python 3.12+, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, structlog
-- Frontend: React 19, TypeScript, Vite, TanStack Query, Tailwind CSS
-- Verification: pytest (+pytest-cov), Vitest, Playwright
-- Runtime: SQLite (WAL), tmux, git worktrees
-- Package management: `pip` in `.venv`, `npm` workspaces
+- Backend: Python 3.12+, FastAPI, Pydantic v2, SQLAlchemy 2
+- Frontend: React 19, TypeScript, Vite, TanStack Query
+- Transport: REST + WebSocket mutation invalidation
+- Store: SQLite (local, durable)
+- Agent interface: MCP tools/resources mapped to task-board operations
+
+## Core Workflows
+
+1. Create a project.
+2. Add tasks into board columns.
+3. Drag tasks across columns (`backlog`, `ready`, `in_progress`, `review`, `done`, `cancelled`).
+3. Drag tasks across columns (`backlog`, `in_progress`, `done`).
+4. Open task detail and add comments with actor/source metadata.
+5. Use search/events to monitor progress.
+
+## API Surface (Current)
+
+- `GET /api/v1/health`
+- `GET /api/v1/dashboard`
+- `GET /api/v1/projects`
+- `POST /api/v1/projects`
+- `GET /api/v1/projects/{project_id}`
+- `POST /api/v1/projects/{project_id}/archive`
+- `GET /api/v1/projects/{project_id}/board`
+- `GET /api/v1/tasks`
+- `POST /api/v1/tasks`
+- `GET /api/v1/tasks/{task_id}`
+- `GET /api/v1/tasks/{task_id}/detail`
+- `PATCH /api/v1/tasks/{task_id}`
+- `GET /api/v1/tasks/{task_id}/comments`
+- `POST /api/v1/tasks/{task_id}/comments`
+- `GET /api/v1/events`
+- `GET /api/v1/search`
+- `GET /api/v1/settings/diagnostics`
+- `POST /api/v1/settings/purge-db`
+
+Removed control-plane surfaces include sessions, worktrees, repositories, waiting-question inbox, bootstrap execution, and runtime diagnostics.
+
+## How-To: connect major coding agents
+
+### 1. Codex
+
+```toml
+[mcp_servers.kanban_task_board]
+command = "bash"
+args = ["-lc", "cd /Users/aeid/git_tree/kanban && export PYTHONPATH=/Users/aeid/git_tree/kanban/packages/core/src:/Users/aeid/git_tree/kanban/packages/mcp-server/src:${PYTHONPATH:-} && /Users/aeid/git_tree/kanban/.venv/bin/python -c 'from acp_mcp_server.server import mcp; mcp.run()'"]
+```
+
+Enable the repository skill:
+
+```toml
+[[skills.config]]
+path = "/Users/aeid/git_tree/kanban/skills/agent-control-plane-api/SKILL.md"
+enabled = true
+```
+
+### 2. Claude Code / Claude Desktop
+
+Add the same MCP server command in your Claude MCP config:
+
+```json
+{
+  "mcpServers": {
+    "kanban_task_board": {
+      "command": "bash",
+      "args": [
+        "-lc",
+        "cd /Users/aeid/git_tree/kanban && export PYTHONPATH=/Users/aeid/git_tree/kanban/packages/core/src:/Users/aeid/git_tree/kanban/packages/mcp-server/src:${PYTHONPATH:-} && /Users/aeid/git_tree/kanban/.venv/bin/python -c 'from acp_mcp_server.server import mcp; mcp.run()'"
+      ]
+    }
+  }
+}
+```
+
+### 3. Aider
+
+Aider can use the REST API directly:
+
+```bash
+curl http://127.0.0.1:8000/api/v1/projects
+
+curl -X POST http://127.0.0.1:8000/api/v1/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"project_id":"<project-id>","title":"Implement parser","board_column_key":"backlog","source":"aider"}'
+
+curl -X POST http://127.0.0.1:8000/api/v1/tasks/<task-id>/comments \
+  -H "Content-Type: application/json" \
+  -d '{"author_type":"agent","author_name":"aider","source":"aider","body":"Work in progress"}'
+```
+
+### 4. Other MCP-compatible agents (Cursor, Continue, etc.)
+
+Register the same stdio MCP command under a server name such as `kanban_task_board`.
+
+Restart the agent tool after config changes.
+
+## Agent Integration
+
+- MCP server exposes task-board-only tools/resources.
+- Skill guide for agent API usage: [skills/agent-control-plane-api/SKILL.md](skills/agent-control-plane-api/SKILL.md)
 
 ## Verification
 
-Canonical commands (used by local development, Codex Cloud, and GitHub Actions):
-
-1. Bootstrap everything from a clean checkout:
-
-   ```bash
-   bash scripts/bootstrap.sh
-   ```
-
-2. Run all verification:
-
-   ```bash
-   bash scripts/verify.sh
-   ```
-
-3. Optional explicit entrypoints:
-
-   ```bash
-   bash scripts/test_integration.sh
-   bash scripts/test_ui.sh
-   .venv/bin/python scripts/generate_openapi.py
-   ```
-
-### OpenAPI artifact workflow
-
-The committed OpenAPI snapshot lives at `docs/api/openapi-v1.json` and is
-generated from the FastAPI app's `/openapi.json` schema.
-
-When API routes, request/response schemas, or FastAPI metadata change:
-
-1. Regenerate the artifact:
-   ```bash
-   .venv/bin/python scripts/generate_openapi.py
-   ```
-2. Commit the updated `docs/api/openapi-v1.json` file with your API changes.
-
-CI and `scripts/verify.sh` enforce drift detection with:
-
-```bash
-.venv/bin/python scripts/generate_openapi.py --check
-```
-
-### Pre-commit hooks (local CI guardrails)
-
-To reduce CI-only failures, this repository includes a root
-`.pre-commit-config.yaml` that mirrors key verification behavior:
-
-- Python import hygiene (`ruff check --select F401`) on the same paths used by
-  `scripts/lint_python.sh`
-- Ruff formatting checks (`ruff format --check`) for backend/test Python files
-- lightweight TypeScript validation via `npm --workspace @acp/web run lint`
-- file hygiene checks (YAML validity, trailing whitespace, merge markers, etc.)
-
-Setup:
-
 ```bash
 bash scripts/bootstrap.sh
-.venv/bin/python -m pip install pre-commit
-.venv/bin/pre-commit install
+bash scripts/verify.sh --skip-bootstrap
 ```
-
-Run all hooks on demand:
-
-```bash
-.venv/bin/pre-commit run --all-files
-```
-
-Coverage thresholds enforced by these commands:
-
-- Python integration tests: **85% minimum total coverage** via
-  `--cov-fail-under=85` in `scripts/test_integration.sh`.
-- Web unit tests (Vitest): minimum thresholds of
-  **70% lines / 70% statements / 70% functions / 60% branches** in
-  `apps/web/vite.config.ts`.
-
-When thresholds are not met, the underlying test command exits non-zero and CI
-fails in the `verify` job.
-
-CI workflow (`.github/workflows/ci.yml`) runs on pull requests and pushes to
-`main`. On pull requests, it first runs an automated screenshot-evidence job
-that starts the web app, captures three desktop screenshots (`home`,
-`projects`, `activity`), uploads `.artifacts/pr-screenshots/`, and creates or
-updates a sticky PR comment with inline screenshot previews plus the workflow artifact link. The existing verify job then
-bootstraps from scratch, runs `scripts/verify.sh`, and uploads coverage
-(`coverage.xml` and `coverage/web/`) plus Playwright artifacts (`playwright-report/`,
-`test-results/`). GitHub Actions used in CI are pinned to full commit SHAs.
-
-### Action SHA maintenance
-
-Keep action pins current with one of these routines:
-
-1. **Monthly bump (manual):**
-   - Check for new major-safe tags (`v4`, `v5`, etc.) on each action used in
-     `.github/workflows/ci.yml`.
-   - Resolve each tag to a commit SHA and update `uses:` lines.
-   - Verify every updated SHA still maps to the expected tag before merging.
-2. **Bot-driven bump:**
-   - Enable a dependency bot (for example Dependabot/Renovate) to open PRs for
-     GitHub Action updates.
-   - Require the same tag→SHA verification in PR review before merge.
-
-Suggested verification commands:
-
-```bash
-gh api repos/actions/checkout/git/ref/tags/v4 --jq '.object.sha'
-gh api repos/actions/setup-python/git/ref/tags/v5 --jq '.object.sha'
-gh api repos/actions/setup-node/git/ref/tags/v4 --jq '.object.sha'
-gh api repos/actions/upload-artifact/git/ref/tags/v4 --jq '.object.sha'
-gh api repos/actions/github-script/git/ref/tags/v7 --jq '.object.sha'
-```
-
-Security workflow (`.github/workflows/security.yml`) also runs on pull requests
-and pushes to `main`, including a required `Secret Scan (gitleaks)` job that
-scans both git history and the current working tree. Known false positives are
-managed in `.github/security/gitleaks.toml`; any new allowlist entries require
-an explicit approval review that contains `ALLOWLIST_APPROVED`.
-
-## Current State
-
-This repository is beyond scaffold stage. The current implementation includes:
-
-- projects with one default board per project
-- guided project bootstrap from repo path, stack preset, and kickoff prompt
-- canonical kanban columns: `Backlog`, `Ready`, `In Progress`, `Review`, `Done`
-- tasks and one level of subtasks
-- task dependencies, comments, checks, and artifacts
-- repository registration for local git repositories
-- optional repo initialization and starter scaffold for empty folders
-- deterministic task-linked git worktree allocation and lifecycle management
-- tmux-backed agent sessions with status, tail, timeline, cancel, and follow-up
-  workflows
-- waiting questions and human replies with resume semantics
-- append-only audit events and dashboard/activity views
-- global search across key operator surfaces
-- workspace-wide search from the shell header with project context shown in results
-- quick-create actions for task entry and project bootstrap from the top bar
-- a real MCP server with typed tools/resources and idempotent write support
-- startup runtime reconciliation and worktree hygiene diagnostics
-- live WebSocket-driven UI refresh on committed mutations
-
-The backend plus SQLite plus append-only events are the system of record. The UI
-and MCP server are clients of those domain services.
-
-## Local Development
-
-Recommended single entrypoint:
-
-1. Run `scripts/dev-stack.sh`
-
-Environment variables and `.env` setup are documented in
-[`docs/setup/environment.md`](docs/setup/environment.md).
-
-This script:
-
-- bootstraps local dependencies when needed
-- starts API, web, and MCP by default
-- writes per-service logs under `.acp/logs/dev/`
-- streams prefixed live logs in one terminal
-- stops all managed processes on `Ctrl-C`
-
-Useful variants:
-
-- `scripts/dev-stack.sh --no-mcp`
-- `scripts/dev-stack.sh --api-only`
-- `scripts/dev-stack.sh --web-only`
-- `scripts/dev-stack.sh --mcp-only`
-- `scripts/dev-stack.sh --no-bootstrap`
-
-### Docker
-
-Alternatively, you can run the entire stack using Docker Compose:
-
-```bash
-docker-compose up --build
-```
-
-This will:
-- Build and start API, Web, and MCP services.
-- Enable hot reload for both backend and frontend via volume mounts.
-- Run health checks to ensure service availability.
-
-## Runtime Conventions
-
-- `ACP_RUNTIME_HOME` controls the local data directory. By default it is
-  `.acp/` in the repo root.
-- SQLite runs in WAL mode with foreign keys enabled.
-- tmux session names are deterministic and prefixed with `acp-`.
-- Worktree branch names are deterministic and task-derived.
-- Structured logs use emoji prefixes for fast scanning.
-
-## Docs
-
-- [Glossary](docs/glossary.md)
-- [Module Guides](#module-guides)
-- [Current State](docs/prd/current-state.md)
-- [Refined PRD](docs/prd/refined-prd.md)
-- [Domain Model](docs/prd/domain-model.md)
-- [State Machines](docs/prd/state-machines.md)
-- [API Outline](docs/prd/api-outline.md)
-- [MCP Surface](docs/prd/mcp-surface.md)
-- [Architecture Decisions](docs/adr/0001-modular-monolith.md)
-- [Agent Guide](AGENTS.md)
-
-## Module Guides
-
-- [`apps/api`](apps/api/README.md)
-- [`apps/web`](apps/web/README.md)
-- [`packages/core`](packages/core/README.md)
-- [`packages/mcp-server`](packages/mcp-server/README.md)
-- [`packages/sdk`](packages/sdk/README.md)
-- [`scripts`](scripts/README.md)
-- [`tests`](tests/README.md)

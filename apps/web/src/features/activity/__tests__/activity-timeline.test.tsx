@@ -9,15 +9,13 @@ beforeEach(() => {
   useUIStore.getState().setSelectedProjectId('project-1');
 });
 
-test('renders activity timeline and filter controls', async () => {
-  renderApp({ route: '/activity/project-1' });
+test('renders simplified activity timeline', async () => {
+  renderApp({ route: '/activity' });
+  fireEvent.click(screen.getAllByRole('button', { name: 'Activity' })[0]);
 
   await waitFor(() => {
-    expect(screen.getByRole('heading', { name: 'Activity timeline' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Activity' })).toBeInTheDocument();
   });
 
-  expect(screen.getByRole('option', { name: 'All projects' })).toBeInTheDocument();
-  expect(screen.getByRole('option', { name: 'All tasks' })).toBeInTheDocument();
-  expect(screen.getByRole('option', { name: 'All sessions' })).toBeInTheDocument();
-  expect(screen.getByRole('option', { name: 'All event types' })).toBeInTheDocument();
+  expect(screen.getByText('Shared Task Board')).toBeInTheDocument();
 });

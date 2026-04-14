@@ -1,89 +1,33 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-from unittest.mock import MagicMock
-
-import pytest
-
-from acp_core.models import Task
-from acp_core.schemas import TaskPatch
+from acp_core.db import SessionLocal
+from acp_core.schemas import ProjectCreate, TaskCommentCreate, TaskCreate, TaskPatch
 from acp_core.services.base_service import ServiceContext
+from acp_core.services.project_service import ProjectService
 from acp_core.services.task_service import TaskService
 
 
-@pytest.fixture
-def db_session_mock() -> MagicMock:
-    db = MagicMock()
-    db.add = MagicMock()
-    db.flush = MagicMock()
-    db.commit = MagicMock()
-    db.refresh = MagicMock()
-    db.get = MagicMock()
-    db.scalar = MagicMock(return_value=None)
-    db.scalars = MagicMock(return_value=[])
-    return db
+def test_task_service_transition_and_comment_flow() -> None:
+    db = SessionLocal()
+    try:
+        context = ServiceContext(db=db, actor_type="test", actor_name="pytest")
+        project = ProjectService(context).create_project(ProjectCreate(name="Task Service"))
+        task_service = TaskService(context)
 
+        task = task_service.create_task(TaskCreate(project_id=project.id, title="Unit task"))
+        assert task.workflow_state == "backlog"
 
-@pytest.fixture
-def service_context(db_session_mock: MagicMock) -> ServiceContext:
-    return ServiceContext(db=db_session_mock, actor_type="human", actor_name="tester")
+        task = task_service.patch_task(task.id, TaskPatch(workflow_state="in_progress"))
+        assert task.workflow_state == "in_progress"
 
+        comment = task_service.add_comment(
+            task.id,
+            TaskCommentCreate(author_type="agent", author_name="codex", source="mcp", body="Work in progress"),
+        )
+        assert comment.author_name == "codex"
 
-@pytest.fixture
-def task_record() -> Task:
-    return Task(
-        id="task-1",
-        project_id="proj-1",
-        board_column_id="col-1",
-        title="Task",
-        workflow_state="review",
-        priority="medium",
-        waiting_for_human=False,
-        metadata_json={},
-    )
-
-
-@pytest.mark.parametrize(
-    ("current_state", "next_state"),
-    [
-        ("backlog", "done"),
-        ("ready", "review"),
-        ("in_progress", "done"),
-        ("cancelled", "ready"),
-    ],
-)
-def test_patch_task_rejects_invalid_workflow_transitions(
-    service_context: ServiceContext,
-    task_record: Task,
-    current_state: str,
-    next_state: str,
-) -> None:
-    task_record.workflow_state = current_state
-    service = TaskService(service_context)
-    service.get_task = MagicMock(return_value=task_record)
-
-    with pytest.raises(ValueError, match="Invalid workflow transition"):
-        service.patch_task(task_record.id, TaskPatch(workflow_state=next_state))
-
-
-@pytest.mark.parametrize(
-    "missing_requirements",
-    [
-        ["attach at least one passing check or artifact"],
-        ["resolve blocking dependencies"],
-        ["close open waiting questions"],
-    ],
-)
-def test_patch_task_enforces_completion_gating(
-    service_context: ServiceContext,
-    task_record: Task,
-    missing_requirements: list[str],
-) -> None:
-    service = TaskService(service_context)
-    service.get_task = MagicMock(return_value=task_record)
-    service.get_completion_readiness = MagicMock(
-        return_value=SimpleNamespace(can_mark_done=False, missing_requirements=missing_requirements)
-    )
-
-    with pytest.raises(ValueError, match="Task cannot move to done"):
-        service.patch_task(task_record.id, TaskPatch(workflow_state="done"))
+        detail = task_service.get_task_detail(task.id)
+        assert len(detail.comments) == 1
+        assert detail.comments[0].source == "mcp"
+    finally:
+        db.close()

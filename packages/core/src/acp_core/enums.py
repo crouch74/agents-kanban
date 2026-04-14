@@ -5,11 +5,8 @@ from enum import StrEnum
 
 class WorkflowState(StrEnum):
     BACKLOG = "backlog"
-    READY = "ready"
     IN_PROGRESS = "in_progress"
-    REVIEW = "review"
     DONE = "done"
-    CANCELLED = "cancelled"
 
 
 class TaskKind(StrEnum):

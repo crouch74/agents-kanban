@@ -7,30 +7,25 @@ beforeEach(() => {
   resetUIStore();
 });
 
-test('renders operator workspace heading', async () => {
+test('renders task board heading and simplified nav', async () => {
   renderApp();
 
-  expect(await screen.findByText('Agent Control Plane')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Projects' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Inbox' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Sessions' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Worktrees' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Diagnostics' })).not.toBeInTheDocument();
+  expect(await screen.findByText('Shared Task Board')).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: 'Projects' }).length).toBeGreaterThan(0);
+  expect(screen.getAllByRole('button', { name: 'Search' }).length).toBeGreaterThan(0);
+  expect(screen.getAllByRole('button', { name: 'Activity' }).length).toBeGreaterThan(0);
 });
 
-test('shows workspace search guidance when the operator types a query', async () => {
+test('shows search results when operator types query', async () => {
   renderApp();
 
-  fireEvent.click(screen.getByRole('button', { name: /search/i }));
+  fireEvent.click(screen.getAllByRole('button', { name: /search/i })[0]);
   const searchInput = await screen.findByPlaceholderText('Search workspace');
   fireEvent.change(searchInput, {
-    target: { value: 'calc' },
+    target: { value: 'mock' },
   });
 
   await waitFor(() => {
-    expect(screen.getByRole('option', { name: 'Open search results for “calc”' })).toBeInTheDocument();
+    expect(screen.getByText('Mock task')).toBeInTheDocument();
   });
-
-  expect(searchInput).toHaveValue('calc');
 });

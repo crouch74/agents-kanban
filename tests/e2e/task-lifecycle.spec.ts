@@ -1,35 +1,28 @@
 import { expect, test } from "@playwright/test";
-import { bootstrapProject, installMockApi } from "./support/mockControlPlane";
 
-test.beforeEach(async ({ page }) => {
-  await installMockApi(page);
-});
+test("create project add tasks move across board and comment", async ({ page }, testInfo) => {
+  await page.goto("http://127.0.0.1:5173");
 
-test("task lifecycle to done flow", async ({ page }, testInfo) => {
-  await bootstrapProject(page, "Task Lifecycle Project");
-  await page.getByText("Back to board").click();
+  await page.getByRole("button", { name: /\+ New Project/i }).click();
+  await page.getByPlaceholder("Acme migration program").fill("E2E Project");
+  await page.getByRole("button", { name: "Create project" }).click();
 
-  const lifecycleTask = page.getByRole("button", { name: /Kick off planning and board setup/i }).first();
-  await expect(lifecycleTask).toBeVisible();
+  await expect(page.getByText("E2E Project").first()).toBeVisible();
 
-  const doneColumn = page.getByText("Done").first();
+  await page.getByPlaceholder("Add task title").first().fill("Implement parser");
+  await page.getByRole("button", { name: "+ Add task" }).first().click();
 
-  await lifecycleTask.click();
+  const taskCard = page.getByText("Implement parser").first();
+  await expect(taskCard).toBeVisible();
+
+  await taskCard.click();
   await expect(page.getByText("Back to board")).toBeVisible();
-  await expect(page.getByText("In Progress").first()).toBeVisible();
+  await page.getByPlaceholder("Leave progress comment").fill("Parser implementation started.");
+  await page.getByText("Post comment").first().click();
+  await expect(page.getByText("Parser implementation started.")).toBeVisible();
 
-  await page.evaluate(async () => {
-    await fetch("http://127.0.0.1:8000/api/v1/tasks/task-1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ board_column_id: "col-done" }),
-    });
-  });
-  await page.reload();
-  await page.getByRole("button", { name: "Projects" }).click();
-  await expect(doneColumn).toBeVisible();
-  await lifecycleTask.click();
-  await expect(page.getByText("Done").first()).toBeVisible();
+  await page.getByText("Back to board").click();
+  await expect(page.getByRole("button", { name: /Implement parser/i }).first()).toBeVisible();
 
-  await page.screenshot({ path: testInfo.outputPath("task-lifecycle-to-done-flow.png"), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("task-board-lifecycle.png"), fullPage: true });
 });

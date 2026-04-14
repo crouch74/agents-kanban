@@ -1,353 +1,6 @@
 {
   "components": {
     "schemas": {
-      "AgentProfile": {
-        "enum": [
-          "executor",
-          "reviewer",
-          "verifier",
-          "research",
-          "docs"
-        ],
-        "title": "AgentProfile",
-        "type": "string"
-      },
-      "AgentRunRead": {
-        "properties": {
-          "attempt_number": {
-            "title": "Attempt Number",
-            "type": "integer"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "runtime_metadata": {
-            "additionalProperties": true,
-            "title": "Runtime Metadata",
-            "type": "object"
-          },
-          "session_id": {
-            "title": "Session Id",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "summary": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Summary"
-          }
-        },
-        "required": [
-          "id",
-          "session_id",
-          "attempt_number",
-          "status",
-          "summary",
-          "runtime_metadata",
-          "created_at"
-        ],
-        "title": "AgentRunRead",
-        "type": "object"
-      },
-      "AgentSessionCreate": {
-        "properties": {
-          "agent_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agent Name"
-          },
-          "command": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Command"
-          },
-          "launch_input": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SessionLaunchInputCreate"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "launch_spec": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/RuntimeLaunchSpecCreate"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "profile": {
-            "$ref": "#/components/schemas/AgentProfile",
-            "default": "executor"
-          },
-          "repository_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Repository Id"
-          },
-          "task_id": {
-            "title": "Task Id",
-            "type": "string"
-          },
-          "worktree_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Worktree Id"
-          }
-        },
-        "required": [
-          "task_id"
-        ],
-        "title": "AgentSessionCreate",
-        "type": "object"
-      },
-      "AgentSessionFollowUpCreate": {
-        "properties": {
-          "agent_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agent Name"
-          },
-          "command": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Command"
-          },
-          "follow_up_type": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/FollowUpType"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "launch_input": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SessionLaunchInputCreate"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "launch_spec": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/RuntimeLaunchSpecCreate"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "profile": {
-            "$ref": "#/components/schemas/AgentProfile",
-            "default": "verifier"
-          },
-          "reuse_repository": {
-            "default": true,
-            "title": "Reuse Repository",
-            "type": "boolean"
-          },
-          "reuse_worktree": {
-            "default": true,
-            "title": "Reuse Worktree",
-            "type": "boolean"
-          }
-        },
-        "title": "AgentSessionFollowUpCreate",
-        "type": "object"
-      },
-      "AgentSessionRead": {
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "profile": {
-            "$ref": "#/components/schemas/AgentProfile"
-          },
-          "project_id": {
-            "title": "Project Id",
-            "type": "string"
-          },
-          "repository_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Repository Id"
-          },
-          "runtime_metadata": {
-            "additionalProperties": true,
-            "title": "Runtime Metadata",
-            "type": "object"
-          },
-          "session_name": {
-            "title": "Session Name",
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/SessionStatus"
-          },
-          "task_id": {
-            "title": "Task Id",
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          },
-          "worktree_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Worktree Id"
-          }
-        },
-        "required": [
-          "id",
-          "project_id",
-          "task_id",
-          "repository_id",
-          "worktree_id",
-          "profile",
-          "status",
-          "session_name",
-          "runtime_metadata",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "AgentSessionRead",
-        "type": "object"
-      },
-      "ApiErrorDetail": {
-        "properties": {
-          "code": {
-            "title": "Code",
-            "type": "string"
-          },
-          "details": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Details"
-          },
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "retryable": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Retryable"
-          }
-        },
-        "required": [
-          "code",
-          "message"
-        ],
-        "title": "ApiErrorDetail",
-        "type": "object"
-      },
-      "ApiErrorEnvelope": {
-        "properties": {
-          "error": {
-            "$ref": "#/components/schemas/ApiErrorDetail"
-          }
-        },
-        "required": [
-          "error"
-        ],
-        "title": "ApiErrorEnvelope",
-        "type": "object"
-      },
       "AuthorType": {
         "enum": [
           "human",
@@ -359,39 +12,6 @@
       },
       "BoardColumnRead": {
         "properties": {
-          "done_policy": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Done Policy"
-          },
-          "entry_policy": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Entry Policy"
-          },
-          "exit_policy": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Exit Policy"
-          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -424,10 +44,7 @@
           "key",
           "name",
           "position",
-          "wip_limit",
-          "entry_policy",
-          "exit_policy",
-          "done_policy"
+          "wip_limit"
         ],
         "title": "BoardColumnRead",
         "type": "object"
@@ -471,36 +88,8 @@
         "title": "BoardView",
         "type": "object"
       },
-      "CheckStatus": {
-        "enum": [
-          "pending",
-          "passed",
-          "failed",
-          "warning"
-        ],
-        "title": "CheckStatus",
-        "type": "string"
-      },
       "DashboardRead": {
         "properties": {
-          "active_sessions": {
-            "items": {
-              "$ref": "#/components/schemas/AgentSessionRead"
-            },
-            "title": "Active Sessions",
-            "type": "array"
-          },
-          "blocked_count": {
-            "title": "Blocked Count",
-            "type": "integer"
-          },
-          "blocked_tasks": {
-            "items": {
-              "$ref": "#/components/schemas/TaskRead"
-            },
-            "title": "Blocked Tasks",
-            "type": "array"
-          },
           "projects": {
             "items": {
               "$ref": "#/components/schemas/ProjectSummary"
@@ -515,155 +104,20 @@
             "title": "Recent Events",
             "type": "array"
           },
-          "running_sessions": {
-            "title": "Running Sessions",
-            "type": "integer"
-          },
-          "waiting_count": {
-            "title": "Waiting Count",
-            "type": "integer"
-          },
-          "waiting_questions": {
-            "items": {
-              "$ref": "#/components/schemas/WaitingQuestionRead"
+          "task_counts": {
+            "additionalProperties": {
+              "type": "integer"
             },
-            "title": "Waiting Questions",
-            "type": "array"
+            "title": "Task Counts",
+            "type": "object"
           }
         },
         "required": [
           "projects",
           "recent_events",
-          "waiting_questions",
-          "blocked_tasks",
-          "active_sessions",
-          "waiting_count",
-          "blocked_count",
-          "running_sessions"
+          "task_counts"
         ],
         "title": "DashboardRead",
-        "type": "object"
-      },
-      "DependencyRelationshipType": {
-        "enum": [
-          "blocks",
-          "relates_to"
-        ],
-        "title": "DependencyRelationshipType",
-        "type": "string"
-      },
-      "DiagnosticsRead": {
-        "properties": {
-          "app_name": {
-            "title": "App Name",
-            "type": "string"
-          },
-          "current_event_count": {
-            "title": "Current Event Count",
-            "type": "integer"
-          },
-          "current_open_question_count": {
-            "title": "Current Open Question Count",
-            "type": "integer"
-          },
-          "current_project_count": {
-            "title": "Current Project Count",
-            "type": "integer"
-          },
-          "current_repository_count": {
-            "title": "Current Repository Count",
-            "type": "integer"
-          },
-          "current_session_count": {
-            "title": "Current Session Count",
-            "type": "integer"
-          },
-          "current_task_count": {
-            "title": "Current Task Count",
-            "type": "integer"
-          },
-          "current_worktree_count": {
-            "title": "Current Worktree Count",
-            "type": "integer"
-          },
-          "database_path": {
-            "title": "Database Path",
-            "type": "string"
-          },
-          "environment": {
-            "title": "Environment",
-            "type": "string"
-          },
-          "git_available": {
-            "title": "Git Available",
-            "type": "boolean"
-          },
-          "orphan_runtime_session_count": {
-            "title": "Orphan Runtime Session Count",
-            "type": "integer"
-          },
-          "orphan_runtime_sessions": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Orphan Runtime Sessions",
-            "type": "array"
-          },
-          "reconciled_session_count": {
-            "title": "Reconciled Session Count",
-            "type": "integer"
-          },
-          "runtime_home": {
-            "title": "Runtime Home",
-            "type": "string"
-          },
-          "runtime_managed_session_count": {
-            "title": "Runtime Managed Session Count",
-            "type": "integer"
-          },
-          "stale_worktree_count": {
-            "title": "Stale Worktree Count",
-            "type": "integer"
-          },
-          "stale_worktrees": {
-            "items": {
-              "$ref": "#/components/schemas/WorktreeHygieneIssueRead"
-            },
-            "title": "Stale Worktrees",
-            "type": "array"
-          },
-          "tmux_available": {
-            "title": "Tmux Available",
-            "type": "boolean"
-          },
-          "tmux_server_running": {
-            "title": "Tmux Server Running",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "app_name",
-          "environment",
-          "database_path",
-          "runtime_home",
-          "tmux_available",
-          "tmux_server_running",
-          "runtime_managed_session_count",
-          "orphan_runtime_session_count",
-          "orphan_runtime_sessions",
-          "reconciled_session_count",
-          "stale_worktree_count",
-          "stale_worktrees",
-          "git_available",
-          "current_project_count",
-          "current_repository_count",
-          "current_task_count",
-          "current_worktree_count",
-          "current_session_count",
-          "current_open_question_count",
-          "current_event_count"
-        ],
-        "title": "DiagnosticsRead",
         "type": "object"
       },
       "EventRecord": {
@@ -675,6 +129,17 @@
           "actor_type": {
             "title": "Actor Type",
             "type": "string"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
           },
           "created_at": {
             "format": "date-time",
@@ -710,21 +175,12 @@
           "entity_type",
           "entity_id",
           "event_type",
+          "correlation_id",
           "payload_json",
           "created_at"
         ],
         "title": "EventRecord",
         "type": "object"
-      },
-      "FollowUpType": {
-        "enum": [
-          "retry",
-          "review",
-          "verify",
-          "handoff"
-        ],
-        "title": "FollowUpType",
-        "type": "string"
       },
       "HTTPValidationError": {
         "properties": {
@@ -737,361 +193,6 @@
           }
         },
         "title": "HTTPValidationError",
-        "type": "object"
-      },
-      "HumanReplyCreate": {
-        "properties": {
-          "body": {
-            "minLength": 1,
-            "title": "Body",
-            "type": "string"
-          },
-          "payload_json": {
-            "additionalProperties": true,
-            "title": "Payload Json",
-            "type": "object"
-          },
-          "responder_name": {
-            "maxLength": 255,
-            "minLength": 2,
-            "title": "Responder Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "responder_name",
-          "body"
-        ],
-        "title": "HumanReplyCreate",
-        "type": "object"
-      },
-      "HumanReplyRead": {
-        "properties": {
-          "body": {
-            "title": "Body",
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "payload_json": {
-            "additionalProperties": true,
-            "title": "Payload Json",
-            "type": "object"
-          },
-          "question_id": {
-            "title": "Question Id",
-            "type": "string"
-          },
-          "responder_name": {
-            "title": "Responder Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "question_id",
-          "responder_name",
-          "body",
-          "payload_json",
-          "created_at"
-        ],
-        "title": "HumanReplyRead",
-        "type": "object"
-      },
-      "Permission": {
-        "enum": [
-          "danger-full-access"
-        ],
-        "title": "Permission",
-        "type": "string"
-      },
-      "ProjectBootstrapCreate": {
-        "properties": {
-          "agent_model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agent Model"
-          },
-          "agent_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agent Name"
-          },
-          "agent_output": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agent Output"
-          },
-          "agent_permissions": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agent Permissions"
-          },
-          "confirm_existing_repo": {
-            "default": false,
-            "title": "Confirm Existing Repo",
-            "type": "boolean"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "initial_prompt": {
-            "minLength": 3,
-            "title": "Initial Prompt",
-            "type": "string"
-          },
-          "initialize_repo": {
-            "default": false,
-            "title": "Initialize Repo",
-            "type": "boolean"
-          },
-          "name": {
-            "maxLength": 255,
-            "minLength": 2,
-            "title": "Name",
-            "type": "string"
-          },
-          "repo_path": {
-            "minLength": 1,
-            "title": "Repo Path",
-            "type": "string"
-          },
-          "stack_notes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stack Notes"
-          },
-          "stack_preset": {
-            "$ref": "#/components/schemas/StackPreset"
-          },
-          "use_worktree": {
-            "default": false,
-            "title": "Use Worktree",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "name",
-          "repo_path",
-          "stack_preset",
-          "initial_prompt"
-        ],
-        "title": "ProjectBootstrapCreate",
-        "type": "object"
-      },
-      "ProjectBootstrapPlannedChange": {
-        "properties": {
-          "action": {
-            "$ref": "#/components/schemas/WorktreeAction"
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "action",
-          "description"
-        ],
-        "title": "ProjectBootstrapPlannedChange",
-        "type": "object"
-      },
-      "ProjectBootstrapPreviewRead": {
-        "properties": {
-          "confirmation_required": {
-            "title": "Confirmation Required",
-            "type": "boolean"
-          },
-          "execution_branch": {
-            "title": "Execution Branch",
-            "type": "string"
-          },
-          "execution_path": {
-            "title": "Execution Path",
-            "type": "string"
-          },
-          "has_existing_commits": {
-            "title": "Has Existing Commits",
-            "type": "boolean"
-          },
-          "planned_changes": {
-            "items": {
-              "$ref": "#/components/schemas/ProjectBootstrapPlannedChange"
-            },
-            "title": "Planned Changes",
-            "type": "array"
-          },
-          "repo_initialized_on_confirm": {
-            "title": "Repo Initialized On Confirm",
-            "type": "boolean"
-          },
-          "repo_path": {
-            "title": "Repo Path",
-            "type": "string"
-          },
-          "scaffold_applied_on_confirm": {
-            "title": "Scaffold Applied On Confirm",
-            "type": "boolean"
-          },
-          "stack_notes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stack Notes"
-          },
-          "stack_preset": {
-            "$ref": "#/components/schemas/StackPreset"
-          },
-          "use_worktree": {
-            "title": "Use Worktree",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "repo_path",
-          "stack_preset",
-          "stack_notes",
-          "use_worktree",
-          "repo_initialized_on_confirm",
-          "scaffold_applied_on_confirm",
-          "has_existing_commits",
-          "confirmation_required",
-          "execution_path",
-          "execution_branch",
-          "planned_changes"
-        ],
-        "title": "ProjectBootstrapPreviewRead",
-        "type": "object"
-      },
-      "ProjectBootstrapRead": {
-        "properties": {
-          "execution_branch": {
-            "title": "Execution Branch",
-            "type": "string"
-          },
-          "execution_path": {
-            "title": "Execution Path",
-            "type": "string"
-          },
-          "kickoff_session": {
-            "$ref": "#/components/schemas/AgentSessionRead"
-          },
-          "kickoff_task": {
-            "$ref": "#/components/schemas/TaskRead"
-          },
-          "kickoff_worktree": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/WorktreeRead"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "project": {
-            "$ref": "#/components/schemas/ProjectSummary"
-          },
-          "repo_initialized": {
-            "title": "Repo Initialized",
-            "type": "boolean"
-          },
-          "repository": {
-            "$ref": "#/components/schemas/RepositoryRead"
-          },
-          "scaffold_applied": {
-            "title": "Scaffold Applied",
-            "type": "boolean"
-          },
-          "stack_notes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stack Notes"
-          },
-          "stack_preset": {
-            "$ref": "#/components/schemas/StackPreset"
-          },
-          "use_worktree": {
-            "title": "Use Worktree",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "project",
-          "repository",
-          "kickoff_task",
-          "kickoff_session",
-          "kickoff_worktree",
-          "execution_path",
-          "execution_branch",
-          "stack_preset",
-          "stack_notes",
-          "use_worktree",
-          "repo_initialized",
-          "scaffold_applied"
-        ],
-        "title": "ProjectBootstrapRead",
         "type": "object"
       },
       "ProjectCreate": {
@@ -1127,43 +228,11 @@
           },
           "project": {
             "$ref": "#/components/schemas/ProjectSummary"
-          },
-          "repositories": {
-            "items": {
-              "$ref": "#/components/schemas/RepositoryRead"
-            },
-            "title": "Repositories",
-            "type": "array"
-          },
-          "sessions": {
-            "items": {
-              "$ref": "#/components/schemas/AgentSessionRead"
-            },
-            "title": "Sessions",
-            "type": "array"
-          },
-          "waiting_questions": {
-            "items": {
-              "$ref": "#/components/schemas/WaitingQuestionRead"
-            },
-            "title": "Waiting Questions",
-            "type": "array"
-          },
-          "worktrees": {
-            "items": {
-              "$ref": "#/components/schemas/WorktreeRead"
-            },
-            "title": "Worktrees",
-            "type": "array"
           }
         },
         "required": [
           "project",
-          "board",
-          "repositories",
-          "worktrees",
-          "sessions",
-          "waiting_questions"
+          "board"
         ],
         "title": "ProjectOverview",
         "type": "object"
@@ -1214,152 +283,32 @@
         "title": "ProjectSummary",
         "type": "object"
       },
-      "RepositoryCreate": {
+      "PurgeDatabaseRead": {
         "properties": {
-          "local_path": {
-            "title": "Local Path",
+          "database_path": {
+            "title": "Database Path",
             "type": "string"
           },
-          "name": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "project_id": {
-            "title": "Project Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "project_id",
-          "local_path"
-        ],
-        "title": "RepositoryCreate",
-        "type": "object"
-      },
-      "RepositoryRead": {
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "default_branch": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default Branch"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "local_path": {
-            "title": "Local Path",
-            "type": "string"
-          },
-          "metadata_json": {
-            "additionalProperties": true,
-            "title": "Metadata Json",
-            "type": "object"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "project_id": {
-            "title": "Project Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "project_id",
-          "name",
-          "local_path",
-          "default_branch",
-          "metadata_json",
-          "created_at"
-        ],
-        "title": "RepositoryRead",
-        "type": "object"
-      },
-      "RuntimeLaunchSpecCreate": {
-        "properties": {
-          "argv": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Argv",
-            "type": "array"
-          },
-          "display_command": {
-            "title": "Display Command",
-            "type": "string"
-          },
-          "env": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "title": "Env",
-            "type": "object"
-          },
-          "legacy_shell_command": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Legacy Shell Command"
-          },
-          "working_directory": {
-            "minLength": 1,
-            "title": "Working Directory",
-            "type": "string"
-          }
-        },
-        "required": [
-          "argv",
-          "display_command",
-          "working_directory"
-        ],
-        "title": "RuntimeLaunchSpecCreate",
-        "type": "object"
-      },
-      "RuntimeOrphanCleanupRead": {
-        "properties": {
-          "removed_runtime_session_count": {
-            "title": "Removed Runtime Session Count",
+          "purged_tables": {
+            "title": "Purged Tables",
             "type": "integer"
           },
-          "removed_runtime_sessions": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Removed Runtime Sessions",
-            "type": "array"
+          "rows_deleted": {
+            "title": "Rows Deleted",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
           }
         },
         "required": [
-          "removed_runtime_session_count",
-          "removed_runtime_sessions"
+          "status",
+          "purged_tables",
+          "rows_deleted",
+          "database_path"
         ],
-        "title": "RuntimeOrphanCleanupRead",
+        "title": "PurgeDatabaseRead",
         "type": "object"
       },
       "SearchHit": {
@@ -1411,10 +360,8 @@
         "required": [
           "entity_type",
           "entity_id",
-          "project_id",
           "title",
           "snippet",
-          "secondary",
           "created_at"
         ],
         "title": "SearchHit",
@@ -1441,9 +388,9 @@
         "title": "SearchResults",
         "type": "object"
       },
-      "SessionLaunchInputCreate": {
+      "ServiceStatusRead": {
         "properties": {
-          "agent_name": {
+          "detail": {
             "anyOf": [
               {
                 "type": "string"
@@ -1452,457 +399,59 @@
                 "type": "null"
               }
             ],
-            "title": "Agent Name"
+            "title": "Detail"
           },
-          "allowed_tools": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Allowed Tools",
-            "type": "array"
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ServiceStatusRead",
+        "type": "object"
+      },
+      "SystemDiagnosticsRead": {
+        "properties": {
+          "app_name": {
+            "title": "App Name",
+            "type": "string"
           },
-          "disallowed_tools": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Disallowed Tools",
-            "type": "array"
+          "environment": {
+            "title": "Environment",
+            "type": "string"
           },
-          "extra_env": {
+          "paths": {
             "additionalProperties": {
               "type": "string"
             },
-            "title": "Extra Env",
+            "title": "Paths",
             "type": "object"
           },
-          "follow_up_of_session_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Follow Up Of Session Id"
-          },
-          "max_turns": {
-            "anyOf": [
-              {
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Turns"
-          },
-          "model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model"
-          },
-          "output_mode": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Output Mode"
-          },
-          "permission_mode": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Permission"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "prompt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Prompt"
-          },
-          "repository_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Repository Id"
-          },
-          "resume_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Resume Token"
-          },
-          "session_family_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Family Id"
-          },
-          "task_kind": {
-            "$ref": "#/components/schemas/TaskKind",
-            "default": "execute"
-          },
-          "working_directory": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Working Directory"
-          },
-          "worktree_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Worktree Id"
-          }
-        },
-        "title": "SessionLaunchInputCreate",
-        "type": "object"
-      },
-      "SessionMessageRead": {
-        "properties": {
-          "body": {
-            "title": "Body",
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "message_type": {
-            "title": "Message Type",
-            "type": "string"
-          },
-          "payload_json": {
-            "additionalProperties": true,
-            "title": "Payload Json",
+          "row_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Row Counts",
             "type": "object"
           },
-          "session_id": {
-            "title": "Session Id",
-            "type": "string"
-          },
-          "source": {
-            "title": "Source",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "session_id",
-          "message_type",
-          "source",
-          "body",
-          "payload_json",
-          "created_at"
-        ],
-        "title": "SessionMessageRead",
-        "type": "object"
-      },
-      "SessionStatus": {
-        "enum": [
-          "queued",
-          "running",
-          "waiting_human",
-          "blocked",
-          "done",
-          "failed",
-          "cancelled"
-        ],
-        "title": "SessionStatus",
-        "type": "string"
-      },
-      "SessionTailRead": {
-        "properties": {
-          "lines": {
-            "items": {
-              "type": "string"
+          "services": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ServiceStatusRead"
             },
-            "title": "Lines",
-            "type": "array"
-          },
-          "recent_messages": {
-            "items": {
-              "$ref": "#/components/schemas/SessionMessageRead"
-            },
-            "title": "Recent Messages",
-            "type": "array"
-          },
-          "session": {
-            "$ref": "#/components/schemas/AgentSessionRead"
-          }
-        },
-        "required": [
-          "session",
-          "lines",
-          "recent_messages"
-        ],
-        "title": "SessionTailRead",
-        "type": "object"
-      },
-      "SessionTimelineRead": {
-        "properties": {
-          "events": {
-            "items": {
-              "$ref": "#/components/schemas/EventRecord"
-            },
-            "title": "Events",
-            "type": "array"
-          },
-          "messages": {
-            "items": {
-              "$ref": "#/components/schemas/SessionMessageRead"
-            },
-            "title": "Messages",
-            "type": "array"
-          },
-          "related_sessions": {
-            "items": {
-              "$ref": "#/components/schemas/AgentSessionRead"
-            },
-            "title": "Related Sessions",
-            "type": "array"
-          },
-          "runs": {
-            "items": {
-              "$ref": "#/components/schemas/AgentRunRead"
-            },
-            "title": "Runs",
-            "type": "array"
-          },
-          "session": {
-            "$ref": "#/components/schemas/AgentSessionRead"
-          },
-          "waiting_questions": {
-            "items": {
-              "$ref": "#/components/schemas/WaitingQuestionRead"
-            },
-            "title": "Waiting Questions",
-            "type": "array"
-          }
-        },
-        "required": [
-          "session",
-          "runs",
-          "messages",
-          "waiting_questions",
-          "events",
-          "related_sessions"
-        ],
-        "title": "SessionTimelineRead",
-        "type": "object"
-      },
-      "StackPreset": {
-        "enum": [
-          "node-library",
-          "react-vite",
-          "nextjs",
-          "python-package",
-          "fastapi-service"
-        ],
-        "title": "StackPreset",
-        "type": "string"
-      },
-      "TaskArtifactCreate": {
-        "properties": {
-          "artifact_type": {
-            "maxLength": 64,
-            "minLength": 2,
-            "title": "Artifact Type",
-            "type": "string"
-          },
-          "name": {
-            "maxLength": 255,
-            "minLength": 2,
-            "title": "Name",
-            "type": "string"
-          },
-          "payload_json": {
-            "additionalProperties": true,
-            "title": "Payload Json",
+            "title": "Services",
             "type": "object"
-          },
-          "uri": {
-            "minLength": 1,
-            "title": "Uri",
-            "type": "string"
           }
         },
         "required": [
-          "artifact_type",
-          "name",
-          "uri"
+          "app_name",
+          "environment",
+          "services",
+          "paths",
+          "row_counts"
         ],
-        "title": "TaskArtifactCreate",
-        "type": "object"
-      },
-      "TaskArtifactRead": {
-        "properties": {
-          "artifact_type": {
-            "title": "Artifact Type",
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "payload_json": {
-            "additionalProperties": true,
-            "title": "Payload Json",
-            "type": "object"
-          },
-          "task_id": {
-            "title": "Task Id",
-            "type": "string"
-          },
-          "uri": {
-            "title": "Uri",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "task_id",
-          "artifact_type",
-          "name",
-          "uri",
-          "payload_json",
-          "created_at"
-        ],
-        "title": "TaskArtifactRead",
-        "type": "object"
-      },
-      "TaskCheckCreate": {
-        "properties": {
-          "check_type": {
-            "maxLength": 64,
-            "minLength": 2,
-            "title": "Check Type",
-            "type": "string"
-          },
-          "payload_json": {
-            "additionalProperties": true,
-            "title": "Payload Json",
-            "type": "object"
-          },
-          "status": {
-            "$ref": "#/components/schemas/CheckStatus",
-            "default": "pending"
-          },
-          "summary": {
-            "minLength": 1,
-            "title": "Summary",
-            "type": "string"
-          }
-        },
-        "required": [
-          "check_type",
-          "summary"
-        ],
-        "title": "TaskCheckCreate",
-        "type": "object"
-      },
-      "TaskCheckRead": {
-        "properties": {
-          "check_type": {
-            "title": "Check Type",
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "payload_json": {
-            "additionalProperties": true,
-            "title": "Payload Json",
-            "type": "object"
-          },
-          "status": {
-            "$ref": "#/components/schemas/CheckStatus"
-          },
-          "summary": {
-            "title": "Summary",
-            "type": "string"
-          },
-          "task_id": {
-            "title": "Task Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "task_id",
-          "check_type",
-          "status",
-          "summary",
-          "payload_json",
-          "created_at"
-        ],
-        "title": "TaskCheckRead",
+        "title": "SystemDiagnosticsRead",
         "type": "object"
       },
       "TaskCommentCreate": {
@@ -1926,6 +475,17 @@
             "additionalProperties": true,
             "title": "Metadata Json",
             "type": "object"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           }
         },
         "required": [
@@ -1962,6 +522,17 @@
             "title": "Metadata Json",
             "type": "object"
           },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
           "task_id": {
             "title": "Task Id",
             "type": "string"
@@ -1981,6 +552,17 @@
       },
       "TaskCreate": {
         "properties": {
+          "assignee": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee"
+          },
           "board_column_key": {
             "$ref": "#/components/schemas/WorkflowState",
             "default": "backlog"
@@ -1996,7 +578,15 @@
             ],
             "title": "Description"
           },
-          "parent_task_id": {
+          "priority": {
+            "$ref": "#/components/schemas/TaskPriority",
+            "default": "medium"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "source": {
             "anyOf": [
               {
                 "type": "string"
@@ -2005,15 +595,7 @@
                 "type": "null"
               }
             ],
-            "title": "Parent Task Id"
-          },
-          "priority": {
-            "$ref": "#/components/schemas/TaskPriority",
-            "default": "medium"
-          },
-          "project_id": {
-            "title": "Project Id",
-            "type": "string"
+            "title": "Source"
           },
           "tags": {
             "items": {
@@ -2036,66 +618,9 @@
         "title": "TaskCreate",
         "type": "object"
       },
-      "TaskDependencyCreate": {
-        "properties": {
-          "depends_on_task_id": {
-            "title": "Depends On Task Id",
-            "type": "string"
-          },
-          "relationship_type": {
-            "$ref": "#/components/schemas/DependencyRelationshipType",
-            "default": "blocks"
-          }
-        },
-        "required": [
-          "depends_on_task_id"
-        ],
-        "title": "TaskDependencyCreate",
-        "type": "object"
-      },
-      "TaskDependencyRead": {
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "depends_on_task_id": {
-            "title": "Depends On Task Id",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "relationship_type": {
-            "$ref": "#/components/schemas/DependencyRelationshipType"
-          },
-          "task_id": {
-            "title": "Task Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "task_id",
-          "depends_on_task_id",
-          "relationship_type",
-          "created_at"
-        ],
-        "title": "TaskDependencyRead",
-        "type": "object"
-      },
       "TaskDetail": {
         "properties": {
-          "artifacts": {
-            "items": {
-              "$ref": "#/components/schemas/TaskArtifactRead"
-            },
-            "title": "Artifacts",
-            "type": "array"
-          },
-          "blocked_reason": {
+          "assignee": {
             "anyOf": [
               {
                 "type": "string"
@@ -2104,18 +629,11 @@
                 "type": "null"
               }
             ],
-            "title": "Blocked Reason"
+            "title": "Assignee"
           },
           "board_column_id": {
             "title": "Board Column Id",
             "type": "string"
-          },
-          "checks": {
-            "items": {
-              "$ref": "#/components/schemas/TaskCheckRead"
-            },
-            "title": "Checks",
-            "type": "array"
           },
           "comments": {
             "items": {
@@ -2128,13 +646,6 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
-          },
-          "dependencies": {
-            "items": {
-              "$ref": "#/components/schemas/TaskDependencyRead"
-            },
-            "title": "Dependencies",
-            "type": "array"
           },
           "description": {
             "anyOf": [
@@ -2151,7 +662,14 @@
             "title": "Id",
             "type": "string"
           },
-          "parent_task_id": {
+          "priority": {
+            "$ref": "#/components/schemas/TaskPriority"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "source": {
             "anyOf": [
               {
                 "type": "string"
@@ -2160,14 +678,7 @@
                 "type": "null"
               }
             ],
-            "title": "Parent Task Id"
-          },
-          "priority": {
-            "$ref": "#/components/schemas/TaskPriority"
-          },
-          "project_id": {
-            "title": "Project Id",
-            "type": "string"
+            "title": "Source"
           },
           "tags": {
             "items": {
@@ -2185,17 +696,6 @@
             "title": "Updated At",
             "type": "string"
           },
-          "waiting_for_human": {
-            "title": "Waiting For Human",
-            "type": "boolean"
-          },
-          "waiting_questions": {
-            "items": {
-              "$ref": "#/components/schemas/WaitingQuestionRead"
-            },
-            "title": "Waiting Questions",
-            "type": "array"
-          },
           "workflow_state": {
             "$ref": "#/components/schemas/WorkflowState"
           }
@@ -2204,40 +704,21 @@
           "id",
           "project_id",
           "board_column_id",
-          "parent_task_id",
           "title",
           "description",
           "workflow_state",
           "priority",
           "tags",
-          "blocked_reason",
-          "waiting_for_human",
           "created_at",
           "updated_at",
-          "dependencies",
-          "comments",
-          "checks",
-          "artifacts",
-          "waiting_questions"
+          "comments"
         ],
         "title": "TaskDetail",
         "type": "object"
       },
-      "TaskKind": {
-        "enum": [
-          "kickoff",
-          "execute",
-          "review",
-          "verify",
-          "research",
-          "docs"
-        ],
-        "title": "TaskKind",
-        "type": "string"
-      },
       "TaskPatch": {
         "properties": {
-          "blocked_reason": {
+          "assignee": {
             "anyOf": [
               {
                 "type": "string"
@@ -2246,7 +727,7 @@
                 "type": "null"
               }
             ],
-            "title": "Blocked Reason"
+            "title": "Assignee"
           },
           "board_column_id": {
             "anyOf": [
@@ -2270,6 +751,30 @@
             ],
             "title": "Description"
           },
+          "priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskPriority"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
           "title": {
             "anyOf": [
               {
@@ -2282,17 +787,6 @@
               }
             ],
             "title": "Title"
-          },
-          "waiting_for_human": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Waiting For Human"
           },
           "workflow_state": {
             "anyOf": [
@@ -2320,7 +814,7 @@
       },
       "TaskRead": {
         "properties": {
-          "blocked_reason": {
+          "assignee": {
             "anyOf": [
               {
                 "type": "string"
@@ -2329,7 +823,7 @@
                 "type": "null"
               }
             ],
-            "title": "Blocked Reason"
+            "title": "Assignee"
           },
           "board_column_id": {
             "title": "Board Column Id",
@@ -2355,7 +849,14 @@
             "title": "Id",
             "type": "string"
           },
-          "parent_task_id": {
+          "priority": {
+            "$ref": "#/components/schemas/TaskPriority"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "source": {
             "anyOf": [
               {
                 "type": "string"
@@ -2364,14 +865,7 @@
                 "type": "null"
               }
             ],
-            "title": "Parent Task Id"
-          },
-          "priority": {
-            "$ref": "#/components/schemas/TaskPriority"
-          },
-          "project_id": {
-            "title": "Project Id",
-            "type": "string"
+            "title": "Source"
           },
           "tags": {
             "items": {
@@ -2389,10 +883,6 @@
             "title": "Updated At",
             "type": "string"
           },
-          "waiting_for_human": {
-            "title": "Waiting For Human",
-            "type": "boolean"
-          },
           "workflow_state": {
             "$ref": "#/components/schemas/WorkflowState"
           }
@@ -2401,29 +891,16 @@
           "id",
           "project_id",
           "board_column_id",
-          "parent_task_id",
           "title",
           "description",
           "workflow_state",
           "priority",
           "tags",
-          "blocked_reason",
-          "waiting_for_human",
           "created_at",
           "updated_at"
         ],
         "title": "TaskRead",
         "type": "object"
-      },
-      "Urgency": {
-        "enum": [
-          "low",
-          "medium",
-          "high",
-          "urgent"
-        ],
-        "title": "Urgency",
-        "type": "string"
       },
       "ValidationError": {
         "properties": {
@@ -2458,533 +935,25 @@
         "title": "ValidationError",
         "type": "object"
       },
-      "WaitingQuestionCreate": {
-        "properties": {
-          "blocked_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Blocked Reason"
-          },
-          "options_json": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Options Json",
-            "type": "array"
-          },
-          "prompt": {
-            "minLength": 3,
-            "title": "Prompt",
-            "type": "string"
-          },
-          "session_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Id"
-          },
-          "task_id": {
-            "title": "Task Id",
-            "type": "string"
-          },
-          "urgency": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Urgency"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "task_id",
-          "prompt"
-        ],
-        "title": "WaitingQuestionCreate",
-        "type": "object"
-      },
-      "WaitingQuestionDetail": {
-        "properties": {
-          "blocked_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Blocked Reason"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "options_json": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Options Json",
-            "type": "array"
-          },
-          "project_id": {
-            "title": "Project Id",
-            "type": "string"
-          },
-          "prompt": {
-            "title": "Prompt",
-            "type": "string"
-          },
-          "replies": {
-            "items": {
-              "$ref": "#/components/schemas/HumanReplyRead"
-            },
-            "title": "Replies",
-            "type": "array"
-          },
-          "session_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Id"
-          },
-          "status": {
-            "$ref": "#/components/schemas/WaitingQuestionStatus"
-          },
-          "task_id": {
-            "title": "Task Id",
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          },
-          "urgency": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Urgency"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "project_id",
-          "task_id",
-          "session_id",
-          "status",
-          "prompt",
-          "blocked_reason",
-          "urgency",
-          "options_json",
-          "created_at",
-          "updated_at",
-          "replies"
-        ],
-        "title": "WaitingQuestionDetail",
-        "type": "object"
-      },
-      "WaitingQuestionRead": {
-        "properties": {
-          "blocked_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Blocked Reason"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "options_json": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Options Json",
-            "type": "array"
-          },
-          "project_id": {
-            "title": "Project Id",
-            "type": "string"
-          },
-          "prompt": {
-            "title": "Prompt",
-            "type": "string"
-          },
-          "session_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Id"
-          },
-          "status": {
-            "$ref": "#/components/schemas/WaitingQuestionStatus"
-          },
-          "task_id": {
-            "title": "Task Id",
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          },
-          "urgency": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Urgency"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "project_id",
-          "task_id",
-          "session_id",
-          "status",
-          "prompt",
-          "blocked_reason",
-          "urgency",
-          "options_json",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "WaitingQuestionRead",
-        "type": "object"
-      },
-      "WaitingQuestionStatus": {
-        "enum": [
-          "open",
-          "closed"
-        ],
-        "title": "WaitingQuestionStatus",
-        "type": "string"
-      },
       "WorkflowState": {
         "enum": [
           "backlog",
-          "ready",
           "in_progress",
-          "review",
-          "done",
-          "cancelled"
+          "done"
         ],
         "title": "WorkflowState",
-        "type": "string"
-      },
-      "WorktreeAction": {
-        "enum": [
-          "create",
-          "create_or_update",
-          "append_line",
-          "scaffold"
-        ],
-        "title": "WorktreeAction",
-        "type": "string"
-      },
-      "WorktreeCreate": {
-        "properties": {
-          "label": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label"
-          },
-          "repository_id": {
-            "title": "Repository Id",
-            "type": "string"
-          },
-          "task_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Task Id"
-          }
-        },
-        "required": [
-          "repository_id"
-        ],
-        "title": "WorktreeCreate",
-        "type": "object"
-      },
-      "WorktreeHygieneIssueRead": {
-        "properties": {
-          "branch_name": {
-            "title": "Branch Name",
-            "type": "string"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
-          "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Project Id"
-          },
-          "reasons": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Reasons",
-            "type": "array"
-          },
-          "recommendation": {
-            "$ref": "#/components/schemas/WorktreeRecommendation"
-          },
-          "session_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Id"
-          },
-          "status": {
-            "$ref": "#/components/schemas/WorktreeStatus"
-          },
-          "task_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Task Id"
-          },
-          "worktree_id": {
-            "title": "Worktree Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "worktree_id",
-          "project_id",
-          "task_id",
-          "session_id",
-          "branch_name",
-          "path",
-          "status",
-          "recommendation",
-          "reasons"
-        ],
-        "title": "WorktreeHygieneIssueRead",
-        "type": "object"
-      },
-      "WorktreePatch": {
-        "properties": {
-          "lock_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Lock Reason"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/WorktreeStatus"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "title": "WorktreePatch",
-        "type": "object"
-      },
-      "WorktreeRead": {
-        "properties": {
-          "branch_name": {
-            "title": "Branch Name",
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "lock_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Lock Reason"
-          },
-          "metadata_json": {
-            "additionalProperties": true,
-            "title": "Metadata Json",
-            "type": "object"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
-          "repository_id": {
-            "title": "Repository Id",
-            "type": "string"
-          },
-          "session_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Id"
-          },
-          "status": {
-            "$ref": "#/components/schemas/WorktreeStatus"
-          },
-          "task_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Task Id"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "repository_id",
-          "task_id",
-          "session_id",
-          "branch_name",
-          "path",
-          "status",
-          "lock_reason",
-          "metadata_json",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "WorktreeRead",
-        "type": "object"
-      },
-      "WorktreeRecommendation": {
-        "enum": [
-          "archive",
-          "prune",
-          "inspect"
-        ],
-        "title": "WorktreeRecommendation",
-        "type": "string"
-      },
-      "WorktreeStatus": {
-        "enum": [
-          "active",
-          "locked",
-          "archived",
-          "pruned"
-        ],
-        "title": "WorktreeStatus",
         "type": "string"
       }
     }
   },
   "info": {
-    "title": "Agent Control Plane API",
-    "version": "0.1.0"
+    "title": "Shared Task Board API",
+    "version": "0.2.0"
   },
   "openapi": "3.1.0",
   "paths": {
     "/api/v1/dashboard": {
       "get": {
-        "description": "Handle dashboard requests.\n\nArgs:\n    service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
         "operationId": "dashboard_api_v1_dashboard_get",
         "responses": {
           "200": {
@@ -3000,87 +969,12 @@
         },
         "summary": "Dashboard",
         "tags": [
-          "diagnostics"
-        ]
-      }
-    },
-    "/api/v1/diagnostics": {
-      "get": {
-        "description": "Handle diagnostics requests.\n\nArgs:\n    service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "diagnostics_api_v1_diagnostics_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DiagnosticsRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Diagnostics",
-        "tags": [
-          "diagnostics"
-        ]
-      }
-    },
-    "/api/v1/diagnostics/runtime-orphans/cleanup": {
-      "post": {
-        "description": "Handle runtime orphan cleanup requests.\n\nArgs:\n    service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "cleanup_runtime_orphans_api_v1_diagnostics_runtime_orphans_cleanup_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RuntimeOrphanCleanupRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter failure."
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime subsystem unavailable."
-          },
-          "504": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter timeout."
-          }
-        },
-        "summary": "Cleanup Runtime Orphans",
-        "tags": [
-          "diagnostics"
+          "system"
         ]
       }
     },
     "/api/v1/events": {
       "get": {
-        "description": "Handle list events requests.\n\nArgs:\n    project_id: from request/signature.; task_id: from request/signature.; session_id: from request/signature.; limit: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
         "operationId": "list_events_api_v1_events_get",
         "parameters": [
           {
@@ -3113,22 +1007,6 @@
                 }
               ],
               "title": "Task Id"
-            }
-          },
-          {
-            "in": "query",
-            "name": "session_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Session Id"
             }
           },
           {
@@ -3178,7 +1056,6 @@
     },
     "/api/v1/health": {
       "get": {
-        "description": "Handle health requests.\n\nArgs:\n    None.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
         "operationId": "health_api_v1_health_get",
         "responses": {
           "200": {
@@ -3198,13 +1075,12 @@
         },
         "summary": "Health",
         "tags": [
-          "diagnostics"
+          "system"
         ]
       }
     },
     "/api/v1/projects": {
       "get": {
-        "description": "Handle list projects requests.\n\nArgs:\n    service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
         "operationId": "list_projects_api_v1_projects_get",
         "responses": {
           "200": {
@@ -3228,7 +1104,6 @@
         ]
       },
       "post": {
-        "description": "Handle create project requests.\n\nArgs:\n    payload: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
         "operationId": "create_project_api_v1_projects_post",
         "requestBody": {
           "content": {
@@ -3268,122 +1143,8 @@
         ]
       }
     },
-    "/api/v1/projects/bootstrap": {
-      "post": {
-        "description": "Handle bootstrap project requests.\n\nArgs:\n    payload: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.\nWHY:\n    Keeps workflow/event semantics centralized in services before broadcasting UI invalidation.",
-        "operationId": "bootstrap_project_api_v1_projects_bootstrap_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ProjectBootstrapCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProjectBootstrapRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter failure."
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime subsystem unavailable."
-          },
-          "504": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter timeout."
-          }
-        },
-        "summary": "Bootstrap Project",
-        "tags": [
-          "projects"
-        ]
-      }
-    },
-    "/api/v1/projects/bootstrap/preview": {
-      "post": {
-        "operationId": "preview_bootstrap_project_api_v1_projects_bootstrap_preview_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ProjectBootstrapCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProjectBootstrapPreviewRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Preview Bootstrap Project",
-        "tags": [
-          "projects"
-        ]
-      }
-    },
     "/api/v1/projects/{project_id}": {
       "get": {
-        "description": "Handle get project requests.\n\nArgs:\n    project_id: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
         "operationId": "get_project_api_v1_projects__project_id__get",
         "parameters": [
           {
@@ -3426,7 +1187,6 @@
     },
     "/api/v1/projects/{project_id}/archive": {
       "post": {
-        "description": "Handle archive project requests.\n\nArgs:\n    project_id: Input parameter.\n    request: from request/signature.\n    service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
         "operationId": "archive_project_api_v1_projects__project_id__archive_post",
         "parameters": [
           {
@@ -3469,7 +1229,6 @@
     },
     "/api/v1/projects/{project_id}/board": {
       "get": {
-        "description": "Handle get project board requests.\n\nArgs:\n    project_id: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
         "operationId": "get_project_board_api_v1_projects__project_id__board_get",
         "parameters": [
           {
@@ -3510,11 +1269,20 @@
         ]
       }
     },
-    "/api/v1/questions": {
+    "/api/v1/search": {
       "get": {
-        "description": "Handle list questions requests.\n\nArgs:\n    project_id: from request/signature.; status: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "list_questions_api_v1_questions_get",
+        "operationId": "search_api_v1_search_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
           {
             "in": "query",
             "name": "project_id",
@@ -3545,373 +1313,6 @@
                 }
               ],
               "title": "Status"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/WaitingQuestionRead"
-                  },
-                  "title": "Response List Questions Api V1 Questions Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Questions",
-        "tags": [
-          "questions"
-        ]
-      },
-      "post": {
-        "description": "Handle open question requests.\n\nArgs:\n    payload: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "open_question_api_v1_questions_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WaitingQuestionCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WaitingQuestionRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Open Question",
-        "tags": [
-          "questions"
-        ]
-      }
-    },
-    "/api/v1/questions/{question_id}": {
-      "get": {
-        "description": "Handle get question requests.\n\nArgs:\n    question_id: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "get_question_api_v1_questions__question_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "question_id",
-            "required": true,
-            "schema": {
-              "title": "Question Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WaitingQuestionDetail"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Question",
-        "tags": [
-          "questions"
-        ]
-      }
-    },
-    "/api/v1/questions/{question_id}/replies": {
-      "post": {
-        "description": "Handle answer question requests.\n\nArgs:\n    question_id: from request/signature.; payload: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.\nWHY:\n    Keeps workflow/event semantics centralized in services before broadcasting UI invalidation.",
-        "operationId": "answer_question_api_v1_questions__question_id__replies_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "question_id",
-            "required": true,
-            "schema": {
-              "title": "Question Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/HumanReplyCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WaitingQuestionDetail"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter failure."
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime subsystem unavailable."
-          },
-          "504": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter timeout."
-          }
-        },
-        "summary": "Answer Question",
-        "tags": [
-          "questions"
-        ]
-      }
-    },
-    "/api/v1/repositories": {
-      "get": {
-        "description": "Handle list repositories requests.\n\nArgs:\n    project_id: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "list_repositories_api_v1_repositories_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "project_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Project Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/RepositoryRead"
-                  },
-                  "title": "Response List Repositories Api V1 Repositories Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Repositories",
-        "tags": [
-          "repositories"
-        ]
-      },
-      "post": {
-        "description": "Handle create repository requests.\n\nArgs:\n    payload: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "create_repository_api_v1_repositories_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RepositoryCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RepositoryRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Create Repository",
-        "tags": [
-          "repositories"
-        ]
-      }
-    },
-    "/api/v1/repositories/{repository_id}": {
-      "get": {
-        "description": "Handle get repository requests.\n\nArgs:\n    repository_id: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "get_repository_api_v1_repositories__repository_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "repository_id",
-            "required": true,
-            "schema": {
-              "title": "Repository Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RepositoryRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Repository",
-        "tags": [
-          "repositories"
-        ]
-      }
-    },
-    "/api/v1/search": {
-      "get": {
-        "description": "Handle search requests.\n\nArgs:\n    q: from request/signature.; project_id: from request/signature.; limit: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "search_api_v1_search_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "q",
-            "required": true,
-            "schema": {
-              "minLength": 1,
-              "title": "Q",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "project_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Project Id"
             }
           },
           {
@@ -3955,536 +1356,50 @@
         ]
       }
     },
-    "/api/v1/sessions": {
+    "/api/v1/settings/diagnostics": {
       "get": {
-        "description": "Handle list sessions requests.\n\nArgs:\n    project_id: from request/signature.; task_id: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "list_sessions_api_v1_sessions_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "project_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Project Id"
-            }
-          },
-          {
-            "in": "query",
-            "name": "task_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Task Id"
-            }
-          }
-        ],
+        "operationId": "settings_diagnostics_api_v1_settings_diagnostics_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AgentSessionRead"
-                  },
-                  "title": "Response List Sessions Api V1 Sessions Get",
-                  "type": "array"
+                  "$ref": "#/components/schemas/SystemDiagnosticsRead"
                 }
               }
             },
             "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
           }
         },
-        "summary": "List Sessions",
+        "summary": "Settings Diagnostics",
         "tags": [
-          "sessions"
+          "system"
         ]
-      },
+      }
+    },
+    "/api/v1/settings/purge-db": {
       "post": {
-        "description": "Handle spawn session requests.\n\nArgs:\n    payload: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "spawn_session_api_v1_sessions_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AgentSessionCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentSessionRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter failure."
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime subsystem unavailable."
-          },
-          "504": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter timeout."
-          }
-        },
-        "summary": "Spawn Session",
-        "tags": [
-          "sessions"
-        ]
-      }
-    },
-    "/api/v1/sessions/{session_id}": {
-      "get": {
-        "description": "Handle get session requests.\n\nArgs:\n    session_id: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "get_session_api_v1_sessions__session_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          }
-        ],
+        "operationId": "purge_database_api_v1_settings_purge_db_post",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AgentSessionRead"
+                  "$ref": "#/components/schemas/PurgeDatabaseRead"
                 }
               }
             },
             "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter failure."
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime subsystem unavailable."
-          },
-          "504": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter timeout."
           }
         },
-        "summary": "Get Session",
+        "summary": "Purge Database",
         "tags": [
-          "sessions"
-        ]
-      }
-    },
-    "/api/v1/sessions/{session_id}/cancel": {
-      "post": {
-        "description": "Handle cancel session requests.\n\nArgs:\n    session_id: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "cancel_session_api_v1_sessions__session_id__cancel_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentSessionRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter failure."
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime subsystem unavailable."
-          },
-          "504": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter timeout."
-          }
-        },
-        "summary": "Cancel Session",
-        "tags": [
-          "sessions"
-        ]
-      }
-    },
-    "/api/v1/sessions/{session_id}/follow-up": {
-      "post": {
-        "description": "Handle spawn follow up session requests.\n\nArgs:\n    session_id: from request/signature.; payload: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.\nWHY:\n    Keeps workflow/event semantics centralized in services before broadcasting UI invalidation.",
-        "operationId": "spawn_follow_up_session_api_v1_sessions__session_id__follow_up_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AgentSessionFollowUpCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentSessionRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter failure."
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime subsystem unavailable."
-          },
-          "504": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter timeout."
-          }
-        },
-        "summary": "Spawn Follow Up Session",
-        "tags": [
-          "sessions"
-        ]
-      }
-    },
-    "/api/v1/sessions/{session_id}/tail": {
-      "get": {
-        "description": "Handle tail session requests.\n\nArgs:\n    session_id: from request/signature.; lines: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "tail_session_api_v1_sessions__session_id__tail_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "lines",
-            "required": false,
-            "schema": {
-              "default": 80,
-              "maximum": 400,
-              "minimum": 1,
-              "title": "Lines",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionTailRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter failure."
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime subsystem unavailable."
-          },
-          "504": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter timeout."
-          }
-        },
-        "summary": "Tail Session",
-        "tags": [
-          "sessions"
-        ]
-      }
-    },
-    "/api/v1/sessions/{session_id}/timeline": {
-      "get": {
-        "description": "Handle session timeline requests.\n\nArgs:\n    session_id: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "session_timeline_api_v1_sessions__session_id__timeline_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionTimelineRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter failure."
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime subsystem unavailable."
-          },
-          "504": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorEnvelope"
-                }
-              }
-            },
-            "description": "Runtime adapter timeout."
-          }
-        },
-        "summary": "Session Timeline",
-        "tags": [
-          "sessions"
+          "system"
         ]
       }
     },
     "/api/v1/tasks": {
       "get": {
-        "description": "Handle list tasks requests.\n\nArgs:\n    project_id: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
         "operationId": "list_tasks_api_v1_tasks_get",
         "parameters": [
           {
@@ -4501,6 +1416,38 @@
                 }
               ],
               "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
             }
           }
         ],
@@ -4536,7 +1483,6 @@
         ]
       },
       "post": {
-        "description": "Handle create task requests.\n\nArgs:\n    payload: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
         "operationId": "create_task_api_v1_tasks_post",
         "requestBody": {
           "content": {
@@ -4578,7 +1524,6 @@
     },
     "/api/v1/tasks/{task_id}": {
       "get": {
-        "description": "Handle get task requests.\n\nArgs:\n    task_id: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
         "operationId": "get_task_api_v1_tasks__task_id__get",
         "parameters": [
           {
@@ -4619,7 +1564,6 @@
         ]
       },
       "patch": {
-        "description": "Handle patch task requests.\n\nArgs:\n    task_id: from request/signature.; payload: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.\nWHY:\n    Keeps workflow/event semantics centralized in services before broadcasting UI invalidation.",
         "operationId": "patch_task_api_v1_tasks__task_id__patch",
         "parameters": [
           {
@@ -4670,115 +1614,52 @@
         ]
       }
     },
-    "/api/v1/tasks/{task_id}/artifacts": {
-      "post": {
-        "description": "Handle add artifact requests.\n\nArgs:\n    task_id: from request/signature.; payload: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "add_artifact_api_v1_tasks__task_id__artifacts_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "task_id",
-            "required": true,
-            "schema": {
-              "title": "Task Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TaskArtifactCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskArtifactRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Add Artifact",
-        "tags": [
-          "tasks"
-        ]
-      }
-    },
-    "/api/v1/tasks/{task_id}/checks": {
-      "post": {
-        "description": "Handle add check requests.\n\nArgs:\n    task_id: from request/signature.; payload: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "add_check_api_v1_tasks__task_id__checks_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "task_id",
-            "required": true,
-            "schema": {
-              "title": "Task Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TaskCheckCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskCheckRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Add Check",
-        "tags": [
-          "tasks"
-        ]
-      }
-    },
     "/api/v1/tasks/{task_id}/comments": {
+      "get": {
+        "operationId": "list_comments_api_v1_tasks__task_id__comments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TaskCommentRead"
+                  },
+                  "title": "Response List Comments Api V1 Tasks  Task Id  Comments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Comments",
+        "tags": [
+          "tasks"
+        ]
+      },
       "post": {
-        "description": "Handle add comment requests.\n\nArgs:\n    task_id: from request/signature.; payload: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
         "operationId": "add_comment_api_v1_tasks__task_id__comments_post",
         "parameters": [
           {
@@ -4829,107 +1710,8 @@
         ]
       }
     },
-    "/api/v1/tasks/{task_id}/dependencies": {
-      "get": {
-        "description": "Handle list dependencies requests.\n\nArgs:\n    task_id: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "list_dependencies_api_v1_tasks__task_id__dependencies_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "task_id",
-            "required": true,
-            "schema": {
-              "title": "Task Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/TaskDependencyRead"
-                  },
-                  "title": "Response List Dependencies Api V1 Tasks  Task Id  Dependencies Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Dependencies",
-        "tags": [
-          "tasks"
-        ]
-      },
-      "post": {
-        "description": "Handle add dependency requests.\n\nArgs:\n    task_id: from request/signature.; payload: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "add_dependency_api_v1_tasks__task_id__dependencies_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "task_id",
-            "required": true,
-            "schema": {
-              "title": "Task Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TaskDependencyCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskDependencyRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Add Dependency",
-        "tags": [
-          "tasks"
-        ]
-      }
-    },
     "/api/v1/tasks/{task_id}/detail": {
       "get": {
-        "description": "Handle get task detail requests.\n\nArgs:\n    task_id: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
         "operationId": "get_task_detail_api_v1_tasks__task_id__detail_get",
         "parameters": [
           {
@@ -4967,194 +1749,6 @@
         "summary": "Get Task Detail",
         "tags": [
           "tasks"
-        ]
-      }
-    },
-    "/api/v1/worktrees": {
-      "get": {
-        "description": "Handle list worktrees requests.\n\nArgs:\n    project_id: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "list_worktrees_api_v1_worktrees_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "project_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Project Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/WorktreeRead"
-                  },
-                  "title": "Response List Worktrees Api V1 Worktrees Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Worktrees",
-        "tags": [
-          "worktrees"
-        ]
-      },
-      "post": {
-        "description": "Handle create worktree requests.\n\nArgs:\n    payload: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "create_worktree_api_v1_worktrees_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WorktreeCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorktreeRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Create Worktree",
-        "tags": [
-          "worktrees"
-        ]
-      }
-    },
-    "/api/v1/worktrees/{worktree_id}": {
-      "get": {
-        "description": "Handle get worktree requests.\n\nArgs:\n    worktree_id: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.",
-        "operationId": "get_worktree_api_v1_worktrees__worktree_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "worktree_id",
-            "required": true,
-            "schema": {
-              "title": "Worktree Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorktreeRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Worktree",
-        "tags": [
-          "worktrees"
-        ]
-      },
-      "patch": {
-        "description": "Handle patch worktree requests.\n\nArgs:\n    worktree_id: from request/signature.; payload: from request/signature.; request: from request/signature.; service: from request/signature.\n\nReturns:\n    Response model declared by the route decorator.\n\nRaises:\n    HTTPException: Mirrors service-layer ValueError as 4xx responses.\nWHY:\n    Keeps workflow/event semantics centralized in services before broadcasting UI invalidation.",
-        "operationId": "patch_worktree_api_v1_worktrees__worktree_id__patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "worktree_id",
-            "required": true,
-            "schema": {
-              "title": "Worktree Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WorktreePatch"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorktreeRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Patch Worktree",
-        "tags": [
-          "worktrees"
         ]
       }
     }

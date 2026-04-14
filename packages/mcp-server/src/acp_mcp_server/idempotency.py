@@ -4,101 +4,38 @@ from typing import Any, Callable
 
 from sqlalchemy import select
 
-from acp_core.models import (
-    AgentSession,
-    Event,
-    TaskArtifact,
-    TaskCheck,
-    TaskComment,
-    TaskDependency,
-)
-from acp_core.schemas import (
-    AgentSessionRead,
-    ProjectSummary,
-    TaskRead,
-    WaitingQuestionRead,
-    WorktreeRead,
-)
+from acp_core.models import Event, Project, Task, TaskComment
+from acp_core.schemas import ProjectSummary, TaskCommentRead, TaskRead
 from acp_core.services.base_service import ServiceContext
-from acp_core.services.project_service import ProjectService
-from acp_core.services.task_service import TaskService
-from acp_core.services.waiting_service import WaitingService
-from acp_core.services.worktree_service import WorktreeService
+from acp_core.services.task_service import comment_to_read, task_to_read
 
 from acp_mcp_server.runtime_context import service_context
-from acp_mcp_server.serializers import (
-    _serialize_bootstrap_result,
-    _serialize_task_artifact,
-    _serialize_task_check,
-    _serialize_task_comment,
-    _serialize_task_dependency,
-)
 
 IDEMPOTENT_EVENT_TYPES: dict[str, str] = {
     "project_create": "project.created",
-    "project_bootstrap": "project.bootstrapped",
     "task_create": "task.created",
-    "subtask_create": "task.created",
     "task_update": "task.updated",
-    "task_claim": "task.claimed",
     "task_comment_add": "task.comment_added",
-    "task_check_add": "task.check_added",
-    "task_artifact_add": "task.artifact_added",
-    "task_dependency_add": "task.dependency_added",
-    "session_spawn": "session.spawned",
-    "session_follow_up": "session.follow_up_spawned",
-    "question_open": "waiting_question.opened",
-    "worktree_create": "worktree.created",
 }
 
 
 def _load_idempotent_result(context: ServiceContext, event: Event) -> dict[str, Any]:
-    event_type = event.event_type
-    entity_id = event.entity_id
-    if event_type == "project.created":
-        return ProjectSummary.model_validate(
-            ProjectService(context).get_project(entity_id)
-        ).model_dump()
-    if event_type == "project.bootstrapped":
-        return _serialize_bootstrap_result(context, event)
-    if event_type in {"task.created", "task.updated", "task.claimed"}:
-        return TaskRead.model_validate(
-            TaskService(context).get_task(entity_id)
-        ).model_dump()
-    if event_type == "task.comment_added":
-        comment = context.db.get(TaskComment, entity_id)
+    if event.event_type == "project.created":
+        project = context.db.get(Project, event.entity_id)
+        if project is None:
+            raise ValueError("Project not found")
+        return ProjectSummary.model_validate(project).model_dump()
+    if event.event_type in {"task.created", "task.updated"}:
+        task = context.db.get(Task, event.entity_id)
+        if task is None:
+            raise ValueError("Task not found")
+        return TaskRead(**task_to_read(task)).model_dump()
+    if event.event_type == "task.comment_added":
+        comment = context.db.get(TaskComment, event.entity_id)
         if comment is None:
             raise ValueError("Task comment not found")
-        return _serialize_task_comment(comment)
-    if event_type == "task.check_added":
-        check = context.db.get(TaskCheck, entity_id)
-        if check is None:
-            raise ValueError("Task check not found")
-        return _serialize_task_check(check)
-    if event_type == "task.artifact_added":
-        artifact = context.db.get(TaskArtifact, entity_id)
-        if artifact is None:
-            raise ValueError("Task artifact not found")
-        return _serialize_task_artifact(artifact)
-    if event_type == "task.dependency_added":
-        dependency = context.db.get(TaskDependency, entity_id)
-        if dependency is None:
-            raise ValueError("Task dependency not found")
-        return _serialize_task_dependency(dependency)
-    if event_type in {"session.spawned", "session.follow_up_spawned"}:
-        session = context.db.get(AgentSession, entity_id)
-        if session is None:
-            raise ValueError("Session not found")
-        return AgentSessionRead.model_validate(session).model_dump()
-    if event_type == "waiting_question.opened":
-        return WaitingQuestionRead.model_validate(
-            WaitingService(context).get_question(entity_id)
-        ).model_dump()
-    if event_type == "worktree.created":
-        return WorktreeRead.model_validate(
-            WorktreeService(context).get_worktree(entity_id)
-        ).model_dump()
-    raise ValueError(f"Unsupported idempotent event type: {event_type}")
+        return TaskCommentRead.model_validate(comment_to_read(comment)).model_dump()
+    raise ValueError(f"Unsupported idempotent event type: {event.event_type}")
 
 
 def replay_if_exists(

@@ -1,33 +1,74 @@
----
-name: agent-control-plane-api
-description: Use this skill when working with Agent Control Plane tasks, sessions, questions, worktrees, diagnostics, or bootstrap flows through the REST API instead of MCP.
-metadata:
-  short-description: ACP REST API usage
----
+# SKILL: Shared Task Board API
 
-# Agent Control Plane API
+Use this skill when acting as an external coding agent that coordinates work through the Shared Task Board.
 
-Use the REST API as the source of truth for ACP operations.
+## Purpose
 
-## Workflow
+Use the board as the source of truth for work tracking.
 
-1. Read `.acp/project.local.json`.
-2. Resolve `api_base_url` from that file.
-3. If `api_base_url` is missing, derive it from the active ACP runtime or environment instead of hardcoding host or port.
-4. Fetch `${api_base_url}/openapi.json` and use it to confirm request/response shapes before writing.
-5. Use `/api/v1` endpoints for ACP actions.
+Do not attempt to launch agent runtimes from this app.
 
-## Core Endpoints
+## Agent Compatibility
 
-- Projects and boards: `GET /projects`, `POST /projects`, `POST /projects/bootstrap`, `GET /projects/{project_id}`, `GET /projects/{project_id}/board`
-- Tasks: `GET /tasks`, `POST /tasks`, `GET /tasks/{task_id}`, `PATCH /tasks/{task_id}`, `POST /tasks/{task_id}/comments`, `POST /tasks/{task_id}/checks`, `POST /tasks/{task_id}/artifacts`, `GET /tasks/{task_id}/dependencies`, `POST /tasks/{task_id}/dependencies`
-- Sessions: `GET /sessions`, `POST /sessions`, `GET /sessions/{session_id}`, `GET /sessions/{session_id}/tail`, `GET /sessions/{session_id}/timeline`, `POST /sessions/{session_id}/follow-up`, `POST /sessions/{session_id}/cancel`
-- Questions: `GET /questions`, `POST /questions`, `GET /questions/{question_id}`, `POST /questions/{question_id}/replies`
-- Worktrees and diagnostics: `GET /worktrees`, `POST /worktrees`, `GET /worktrees/{worktree_id}`, `PATCH /worktrees/{worktree_id}`, `GET /diagnostics`, `GET /search`, `GET /events`
+This skill works with:
 
-## Rules
+- Codex
+- Claude Code / Claude Desktop
+- Aider (via REST API)
+- Other MCP-compatible clients (Cursor, Continue, custom MCP agents)
 
-- Never hardcode `127.0.0.1:8000` or any other fixed port when the active ACP runtime can tell you the API base URL.
-- Prefer the live OpenAPI document over memory when request fields or response shapes matter.
-- Keep writes aligned with the canonical workflow and completion-readiness rules enforced by the API.
-- Use the API for ACP state; do not rely on MCP tools for kickoff or routine control-plane updates.
+For MCP-capable clients, register the task-board MCP server and use these task flows.
+For non-MCP clients like Aider, call the REST API directly.
+
+## Core Rules
+
+1. Read board/task context before writing updates.
+2. Create tasks for new work items.
+3. Move tasks by updating `workflow_state` or `board_column_id`.
+4. Leave progress comments with `author_name`, `author_type`, and `source`.
+5. Keep comments concise and outcome-focused.
+
+## API Paths
+
+- `GET /api/v1/projects`
+- `GET /api/v1/projects/{project_id}`
+- `GET /api/v1/projects/{project_id}/board`
+- `GET /api/v1/tasks?project_id=...`
+- `POST /api/v1/tasks`
+- `PATCH /api/v1/tasks/{task_id}`
+- `GET /api/v1/tasks/{task_id}/detail`
+- `POST /api/v1/tasks/{task_id}/comments`
+- `GET /api/v1/search?q=...`
+- `GET /api/v1/events?project_id=...`
+
+## Quickstart by Agent
+
+1. Codex / Claude / Cursor / Continue (MCP):
+  - list projects
+  - read project board
+  - create/update tasks
+  - post task comments
+2. Aider (REST):
+  - call `GET /projects`
+  - call `POST /tasks`
+  - call `PATCH /tasks/{task_id}`
+  - call `POST /tasks/{task_id}/comments`
+
+## Comment Payload Example
+
+```json
+{
+  "author_type": "agent",
+  "author_name": "codex",
+  "source": "mcp",
+  "body": "Implemented parser module and pushed tests update."
+}
+```
+
+## Status Update Example
+
+```json
+{
+  "workflow_state": "in_progress"
+}
+```

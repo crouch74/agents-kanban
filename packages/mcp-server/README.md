@@ -1,39 +1,29 @@
 # `packages/mcp-server` Module Guide
 
 ## Purpose
-`packages/mcp-server` provides the MCP-native surface for Agent Control Plane, exposing tools/resources for agents while reusing shared domain logic from `packages/core`.
 
-## Shared Glossary
-- Canonical domain/runtime terms used by MCP tool semantics (such as `workflow_state`, waiting questions, completion readiness, and audit events) are defined in [`docs/glossary.md`](../../docs/glossary.md).
+`packages/mcp-server` exposes the task-board MCP surface for external agents.
 
-## Key Inputs / Outputs
-- **Inputs**
-  - MCP tool/resource requests from connected MCP clients.
-  - Optional idempotency tokens (`client_request_id`) for write operations.
-  - Shared settings/runtime configuration and database state.
-- **Outputs**
-  - Structured MCP tool results for reads/writes over the control-plane domain.
-  - Error responses aligned with backend validation semantics.
-  - Side effects persisted via shared services (including events).
+## Scope
 
-## Dependencies
-- Python 3.12+
-- `mcp` Python SDK
-- Local package dependency: `acp-core`
+MCP tools/resources support:
 
-## Local Run Command(s)
-- Start full stack including MCP:
-  - `bash scripts/dev-stack.sh`
-- MCP only:
-  - `bash scripts/dev-stack.sh --mcp-only`
+- project and board reads
+- task list/get/create/update
+- task comments
+- search and dashboard reads
+- event resources
 
-## Test Command(s)
-- Integration tests including MCP handler behavior:
-  - `bash scripts/test_integration.sh`
-- Focused MCP integration test file:
-  - `.venv/bin/python -m pytest tests/integration/test_mcp_handlers.py -q`
+MCP does not launch or supervise agent runtimes.
 
-## Known Limitations
-- MCP surface parity with REST is strong but still evolving; new behavior should continue to land in shared services first.
-- Transport/runtime behavior depends on local environment configuration (host/port/transport env vars).
-- End-to-end verification typically occurs through integration tests instead of an isolated package-level test harness.
+## Local Run
+
+```bash
+bash scripts/dev-stack.sh --mcp-only
+```
+
+## Tests
+
+```bash
+.venv/bin/python -m pytest tests/integration -q
+```

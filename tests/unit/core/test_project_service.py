@@ -1,136 +1,23 @@
 from __future__ import annotations
 
-import pytest
-from types import SimpleNamespace
-from unittest.mock import MagicMock
-
-from sqlalchemy.sql.elements import BinaryExpression, BooleanClauseList
-
+from acp_core.db import SessionLocal
+from acp_core.schemas import ProjectCreate
 from acp_core.services.base_service import ServiceContext
 from acp_core.services.project_service import ProjectService
 
 
-def test_get_board_view_excludes_cancelled_tasks() -> None:
-    db = MagicMock()
-    db.scalars = MagicMock(return_value=[])
-    context = ServiceContext(db=db, actor_type="human", actor_name="tester")
+def test_project_service_creates_project_with_default_board() -> None:
+    db = SessionLocal()
+    try:
+        service = ProjectService(ServiceContext(db=db, actor_type="test", actor_name="pytest"))
+        project = service.create_project(ProjectCreate(name="Unit Project", description="Unit test project"))
 
-    board = SimpleNamespace(id="board-1", name="Board", columns=[])
-    project = SimpleNamespace(id="proj-1", board=board)
-    service = ProjectService(context)
-    service.get_project = MagicMock(return_value=project)
-    service._repair_board_columns = MagicMock()
-
-    captured = {}
-
-    def _capture(stmt):
-        captured["stmt"] = stmt
-        return []
-
-    context.db.scalars.side_effect = _capture
-
-    result = service.get_board_view("proj-1")
-
-    assert result.tasks == []
-    where_clause = captured["stmt"].whereclause
-    assert isinstance(where_clause, BooleanClauseList)
-    clauses = tuple(where_clause.clauses)
-    assert any(
-        isinstance(clause, BinaryExpression)
-        and getattr(getattr(clause, "left", None), "name", None) == "workflow_state"
-        and getattr(getattr(clause, "right", None), "value", None) == "cancelled"
-        for clause in clauses
-    )
-
-
-def test_archive_project_marks_project_archived_and_records_event() -> None:
-    db = MagicMock()
-    context = ServiceContext(db=db, actor_type="system", actor_name="unit-tests")
-    context.record_event = MagicMock()
-
-    project = SimpleNamespace(id="proj-archive", archived=False)
-    service = ProjectService(context)
-    service.get_project = MagicMock(return_value=project)
-
-    archived = service.archive_project("proj-archive")
-
-    assert archived is project
-    assert project.archived is True
-    context.record_event.assert_called_once_with(
-        entity_type="project",
-        entity_id="proj-archive",
-        event_type="project.archived",
-        payload_json={"archived": True},
-    )
-    db.commit.assert_called_once()
-    db.refresh.assert_called_once_with(project)
-
-
-def test_archive_project_is_idempotent_when_already_archived() -> None:
-    db = MagicMock()
-    context = ServiceContext(db=db, actor_type="system", actor_name="unit-tests")
-    context.record_event = MagicMock()
-
-    project = SimpleNamespace(id="proj-archive", archived=True)
-    service = ProjectService(context)
-    service.get_project = MagicMock(return_value=project)
-
-    archived = service.archive_project("proj-archive")
-
-    assert archived is project
-    assert project.archived is True
-    context.record_event.assert_not_called()
-    db.commit.assert_not_called()
-    db.refresh.assert_not_called()
-
-
-def test_archive_project_cancels_active_project_sessions(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    db = MagicMock()
-    context = ServiceContext(db=db, actor_type="system", actor_name="unit-tests")
-    context.record_event = MagicMock()
-
-    project = SimpleNamespace(id="proj-archive", archived=False)
-    active_session = SimpleNamespace(id="session-1")
-    completed_session = SimpleNamespace(id="session-2")
-    sessions = [active_session, completed_session]
-
-    captured = {}
-
-    def _scalars(statement):
-        captured["statement"] = statement
-        return sessions
-
-    db.scalars = MagicMock(side_effect=_scalars)
-
-    cancelled = []
-
-    class FakeSessionService:
-        def __init__(self, inner_context: ServiceContext) -> None:
-            self.context = inner_context
-
-        def cancel_session(self, session_id: str) -> SimpleNamespace:
-            cancelled.append(session_id)
-            return SimpleNamespace(id=session_id, status="cancelled")
-
-    monkeypatch.setattr("acp_core.services.project_service.SessionService", FakeSessionService)
-
-    service = ProjectService(context)
-    service.get_project = MagicMock(return_value=project)
-
-    service.archive_project("proj-archive")
-
-    assert cancelled == ["session-1", "session-2"]
-    assert project.archived is True
-    context.record_event.assert_called_once_with(
-        entity_type="project",
-        entity_id="proj-archive",
-        event_type="project.archived",
-        payload_json={"archived": True},
-    )
-    assert captured["statement"].whereclause is not None
-    where_clause = captured["statement"].whereclause
-    where_clause_sql = str(where_clause.compile(compile_kwargs={"literal_binds": True}))
-    assert "agent_sessions.project_id = 'proj-archive'" in where_clause_sql
-    assert "agent_sessions.status NOT IN ('done', 'failed', 'cancelled')" in where_clause_sql
+        overview = service.get_project_overview(project.id)
+        assert overview.project.name == "Unit Project"
+        assert [column.key for column in overview.board.columns] == [
+            "backlog",
+            "in_progress",
+            "done",
+        ]
+    finally:
+        db.close()

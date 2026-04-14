@@ -1,16 +1,8 @@
-import { FolderGit2, Home, Inbox, Settings, type LucideIcon } from "lucide-react";
+import { Activity, BookOpen, ClipboardList, FolderKanban, Search, Settings, type LucideIcon } from "lucide-react";
 
-export type NavSection =
-  | "home"
-  | "projects"
-  | "waiting"
-  | "sessions"
-  | "worktrees"
-  | "search"
-  | "activity"
-  | "diagnostics";
+export type NavSection = "home" | "projects" | "search" | "activity" | "settings" | "howto";
 
-export type DetailEntityType = "task" | "session" | "worktree" | "question";
+export type DetailEntityType = "task";
 
 export type DetailSelection = {
   type: DetailEntityType;
@@ -20,32 +12,30 @@ export type DetailSelection = {
 export const validSections = new Set<NavSection>([
   "home",
   "projects",
-  "waiting",
-  "sessions",
-  "worktrees",
   "search",
   "activity",
-  "diagnostics",
+  "settings",
+  "howto",
 ]);
 
 export function isDetailEntityType(value: string | null): value is DetailEntityType {
-  return value === "task" || value === "session" || value === "worktree" || value === "question";
+  return value === "task";
 }
 
 export const navItems: Array<{ key: NavSection; label: string; icon: LucideIcon }> = [
-  { key: "home", label: "Home", icon: Home },
-  { key: "projects", label: "Projects", icon: FolderGit2 },
-  { key: "waiting", label: "Inbox", icon: Inbox },
-  { key: "diagnostics", label: "Settings", icon: Settings },
+  { key: "home", label: "Home", icon: ClipboardList },
+  { key: "projects", label: "Projects", icon: FolderKanban },
+  { key: "search", label: "Search", icon: Search },
+  { key: "activity", label: "Activity", icon: Activity },
+  { key: "settings", label: "Settings", icon: Settings },
+  { key: "howto", label: "How-To", icon: BookOpen },
 ];
 
 export const sectionTitleByKey: Record<NavSection, string> = {
   home: "Home",
   projects: "Projects",
-  waiting: "Inbox",
-  sessions: "Sessions",
-  worktrees: "Worktrees",
   search: "Search",
   activity: "Activity",
-  diagnostics: "Settings",
+  settings: "Settings",
+  howto: "How-To",
 };

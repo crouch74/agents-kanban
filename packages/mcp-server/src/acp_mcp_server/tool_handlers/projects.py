@@ -2,13 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from acp_core.schemas import (
-    ProjectBootstrapCreate,
-    ProjectCreate,
-    ProjectSummary,
-    StackPreset,
-)
-from acp_core.services.bootstrap_service import BootstrapService
+from acp_core.schemas import ProjectCreate, ProjectSummary
 from acp_core.services.project_service import ProjectService
 
 from acp_mcp_server.idempotency import (
@@ -18,10 +12,10 @@ from acp_mcp_server.idempotency import (
 )
 
 
-def project_list() -> list[ProjectSummary]:
+def project_list() -> list[dict[str, Any]]:
     return run_read_operation(
         lambda context: [
-            ProjectSummary.model_validate(item)
+            ProjectSummary.model_validate(item).model_dump()
             for item in ProjectService(context).list_projects()
         ]
     )
@@ -41,40 +35,6 @@ def project_create(
         serialize_fn=lambda _context, project: ProjectSummary.model_validate(
             project
         ).model_dump(),
-    )
-
-
-def project_bootstrap(
-    name: str,
-    repo_path: str,
-    stack_preset: str,
-    initial_prompt: str,
-    description: str | None = None,
-    initialize_repo: bool = False,
-    stack_notes: str | None = None,
-    agent_name: str | None = None,
-    use_worktree: bool = False,
-    confirm_existing_repo: bool = False,
-    client_request_id: str | None = None,
-) -> dict[str, Any]:
-    return run_idempotent_write(
-        event_type=IDEMPOTENT_EVENT_TYPES["project_bootstrap"],
-        client_request_id=client_request_id,
-        write_fn=lambda context: BootstrapService(context).bootstrap_project(
-            ProjectBootstrapCreate(
-                name=name,
-                description=description,
-                repo_path=repo_path,
-                initialize_repo=initialize_repo,
-                stack_preset=StackPreset(stack_preset),
-                stack_notes=stack_notes,
-                initial_prompt=initial_prompt,
-                agent_name=agent_name,
-                use_worktree=use_worktree,
-                confirm_existing_repo=confirm_existing_repo,
-            )
-        ),
-        serialize_fn=lambda _context, result: result.model_dump(),
     )
 
 
