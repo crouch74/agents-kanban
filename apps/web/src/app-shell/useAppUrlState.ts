@@ -16,7 +16,7 @@ type Params = {
   setInspectedTaskId: (taskId: string | null) => void;
   setSelectedSessionId?: (sessionId: string | null) => void;
   setSelectedQuestionId?: (questionId: string | null) => void;
-  setDrawerSelection: (selection: DetailSelection | null) => void;
+  setDrawerSelection?: (selection: DetailSelection | null) => void;
 };
 
 const APP_URL_STATE_STORAGE_KEY = "acp.app-url-state";
@@ -58,6 +58,12 @@ function parsePath(pathname: string): ParsedState {
   if (section === "home") {
     return { ...defaultState, activeSection: "home" };
   }
+  if (section === "settings") {
+    return { ...defaultState, activeSection: "settings" };
+  }
+  if (section === "howto") {
+    return { ...defaultState, activeSection: "howto" };
+  }
   return defaultState;
 }
 
@@ -65,6 +71,8 @@ function buildPath(activeSection: NavSection, selectedProjectId: string | null, 
   if (activeSection === "home") return "/home";
   if (activeSection === "search") return "/search";
   if (activeSection === "activity") return "/activity";
+  if (activeSection === "settings") return "/settings";
+  if (activeSection === "howto") return "/howto";
   if (selectedProjectId && inspectedTaskId) {
     return `/projects/${encodeURIComponent(selectedProjectId)}/tasks/${encodeURIComponent(inspectedTaskId)}`;
   }
@@ -99,7 +107,7 @@ export function useAppUrlState({
     }
     setSelectedProjectId(parsed.selectedProjectId);
     setInspectedTaskId(parsed.inspectedTaskId);
-    setDrawerSelection(parsed.inspectedTaskId ? { type: "task", id: parsed.inspectedTaskId } : null);
+    setDrawerSelection?.(parsed.inspectedTaskId ? { type: "task", id: parsed.inspectedTaskId } : null);
 
     const raw = window.localStorage.getItem(APP_URL_STATE_STORAGE_KEY);
     if (raw) {
@@ -116,6 +124,9 @@ export function useAppUrlState({
 
   useEffect(() => {
     if (typeof window === "undefined") {
+      return;
+    }
+    if (!hydratedRef.current) {
       return;
     }
     const nextPath = buildPath(activeSection, selectedProjectId, inspectedTaskId);

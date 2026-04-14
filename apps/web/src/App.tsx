@@ -38,6 +38,7 @@ import {
   DroppableBoardColumn,
 } from "@/screens/ProjectBoardScreen";
 import { TaskDetailScreen } from "@/screens/TaskDetailScreen";
+import { useAppUrlState } from "@/app-shell/useAppUrlState";
 
 function sectionTitle(section: "home" | "projects" | "search" | "activity" | "settings" | "howto"): string {
   if (section === "home") return "Home";
@@ -69,6 +70,18 @@ export function App() {
   const [draftCommentBody, setDraftCommentBody] = useState("");
   const deferredSearch = useDeferredValue(search);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  useAppUrlState({
+    activeSection,
+    selectedProjectId,
+    inspectedTaskId,
+    setActiveSection,
+    setSelectedProjectId,
+    setInspectedTaskId,
+    setDrawerSelection: (selection) => {
+      setInspectedTaskId(selection?.type === "task" ? selection.id : null);
+    },
+  });
 
   const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: getProjects });
   const dashboardQuery = useQuery({ queryKey: ["dashboard"], queryFn: getDashboard });
@@ -331,15 +344,22 @@ export function App() {
       return (
         <div className="page-frame p-4 space-y-4">
           <h2 className="text-lg font-semibold">How-To</h2>
-          <div className="grid gap-4 xl:grid-cols-2">
-            <div className="space-y-4">
-              <div className="rounded border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-4 rounded border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
+              <div>
+                <div className="text-base font-semibold">Pane 1: MCP Integration</div>
+                <div className="text-xs text-[color:var(--text-muted)]">
+                  Connect directly to the local MCP server for project, task, and workflow tooling.
+                </div>
+              </div>
+              <div className="rounded border border-[color:var(--border)] bg-[color:var(--panel)] p-4">
                 <div className="text-sm font-medium">Codex</div>
-                <pre className="mt-2 overflow-auto rounded bg-zinc-950 p-3 text-xs text-zinc-100">{`[mcp_servers.kanban_task_board]
+                <pre className="mt-2 overflow-auto rounded bg-zinc-950 p-3 text-xs text-zinc-100">{`# ~/.codex/config.toml
+[mcp_servers.kanban_task_board]
 command = "bash"
 args = ["-lc", "cd /Users/aeid/git_tree/kanban && export PYTHONPATH=/Users/aeid/git_tree/kanban/packages/core/src:/Users/aeid/git_tree/kanban/packages/mcp-server/src:\${PYTHONPATH:-} && /Users/aeid/git_tree/kanban/.venv/bin/python -c 'from acp_mcp_server.server import mcp; mcp.run()'"]`}</pre>
               </div>
-              <div className="rounded border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
+              <div className="rounded border border-[color:var(--border)] bg-[color:var(--panel)] p-4">
                 <div className="text-sm font-medium">Claude Code / Claude Desktop</div>
                 <pre className="mt-2 overflow-auto rounded bg-zinc-950 p-3 text-xs text-zinc-100">{`{
   "mcpServers": {
@@ -353,38 +373,67 @@ args = ["-lc", "cd /Users/aeid/git_tree/kanban && export PYTHONPATH=/Users/aeid/
   }
 }`}</pre>
               </div>
-              <div className="rounded border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
-                <div className="text-sm font-medium">Any MCP-compatible agent (Cursor, Continue, etc.)</div>
-                <div className="mt-2 text-sm text-[color:var(--text-muted)]">
-                  Register the same stdio MCP command above under a server name like{" "}
-                  <span className="font-mono">kanban_task_board</span>.
+              <div className="rounded border border-[color:var(--border)] bg-[color:var(--panel)] p-4">
+                <div className="text-sm font-medium">Cursor</div>
+                <pre className="mt-2 overflow-auto rounded bg-zinc-950 p-3 text-xs text-zinc-100">{`{
+  "mcpServers": {
+    "kanban_task_board": {
+      "command": "bash",
+      "args": [
+        "-lc",
+        "cd /Users/aeid/git_tree/kanban && export PYTHONPATH=/Users/aeid/git_tree/kanban/packages/core/src:/Users/aeid/git_tree/kanban/packages/mcp-server/src:\${PYTHONPATH:-} && /Users/aeid/git_tree/kanban/.venv/bin/python -c 'from acp_mcp_server.server import mcp; mcp.run()'"
+      ]
+    }
+  }
+}`}</pre>
+              </div>
+              <div className="rounded border border-[color:var(--border)] bg-[color:var(--panel)] p-4 text-sm">
+                <div className="font-medium">Generic MCP-capable Agent</div>
+                <div className="mt-2 text-[color:var(--text-muted)]">
+                  Register a stdio MCP server named <span className="font-mono">kanban_task_board</span> using:
+                  <span className="mt-1 block rounded bg-zinc-950 p-2 font-mono text-xs text-zinc-100">
+                    bash -lc "cd /Users/aeid/git_tree/kanban && export
+                    PYTHONPATH=/Users/aeid/git_tree/kanban/packages/core/src:/Users/aeid/git_tree/kanban/packages/mcp-server/src:$PYTHONPATH
+                    && /Users/aeid/git_tree/kanban/.venv/bin/python -c 'from acp_mcp_server.server import mcp; mcp.run()'"
+                  </span>
                 </div>
               </div>
             </div>
-            <div className="space-y-4">
-              <div className="rounded border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
-                <div className="text-sm font-medium">Aider (REST API)</div>
-                <pre className="mt-2 overflow-auto rounded bg-zinc-950 p-3 text-xs text-zinc-100">{`# list projects
-curl http://127.0.0.1:8000/api/v1/projects
-
-# create task
-curl -X POST http://127.0.0.1:8000/api/v1/tasks \\
-  -H "Content-Type: application/json" \\
-  -d '{"project_id":"<project-id>","title":"Implement parser","board_column_key":"backlog","source":"aider"}'
-
-# add progress comment
-curl -X POST http://127.0.0.1:8000/api/v1/tasks/<task-id>/comments \\
-  -H "Content-Type: application/json" \\
-  -d '{"author_type":"agent","author_name":"aider","source":"aider","body":"Work in progress"}'`}</pre>
+            <div className="space-y-4 rounded border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
+              <div>
+                <div className="text-base font-semibold">Pane 2: Skill Integration</div>
+                <div className="text-xs text-[color:var(--text-muted)]">
+                  Use a local skill file so prompts can call this board API consistently.
+                </div>
               </div>
-              <div className="rounded border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
-                <div className="text-sm font-medium">Codex skill enablement</div>
-                <pre className="mt-2 overflow-auto rounded bg-zinc-950 p-3 text-xs text-zinc-100">{`[[skills.config]]
+              <div className="rounded border border-[color:var(--border)] bg-[color:var(--panel)] p-4">
+                <div className="text-sm font-medium">Codex</div>
+                <pre className="mt-2 overflow-auto rounded bg-zinc-950 p-3 text-xs text-zinc-100">{`# ~/.codex/config.toml
+[[skills.config]]
 path = "/Users/aeid/git_tree/kanban/skills/agent-control-plane-api/SKILL.md"
 enabled = true`}</pre>
               </div>
-              <div className="rounded border border-[color:var(--border)] bg-[color:var(--surface)] p-4 text-sm">
-                Restart your agent client after MCP or skill config changes.
+              <div className="rounded border border-[color:var(--border)] bg-[color:var(--panel)] p-4">
+                <div className="text-sm font-medium">Claude Code</div>
+                <pre className="mt-2 overflow-auto rounded bg-zinc-950 p-3 text-xs text-zinc-100">{`# Use this skill in system prompt or project instructions:
+- Read and follow /Users/aeid/git_tree/kanban/skills/agent-control-plane-api/SKILL.md
+- Prefer board writes through MCP/API tools exposed by that skill
+- Keep task status + comments synchronized on each major step`}</pre>
+              </div>
+              <div className="rounded border border-[color:var(--border)] bg-[color:var(--panel)] p-4">
+                <div className="text-sm font-medium">Aider</div>
+                <pre className="mt-2 overflow-auto rounded bg-zinc-950 p-3 text-xs text-zinc-100">{`# Add to your Aider instructions file:
+- Follow the ACP skill contract at /Users/aeid/git_tree/kanban/skills/agent-control-plane-api/SKILL.md
+- Start work by reading current board tasks
+- Post progress comments to the linked task after code edits`}</pre>
+              </div>
+              <div className="rounded border border-[color:var(--border)] bg-[color:var(--panel)] p-4 text-sm">
+                <div className="font-medium">Generic Agent With Prompt/Memory Support</div>
+                <div className="mt-2 text-[color:var(--text-muted)]">
+                  Add this instruction to your agent profile: "Always follow
+                  <span className="font-mono"> /Users/aeid/git_tree/kanban/skills/agent-control-plane-api/SKILL.md</span>
+                  , use board tools first, and keep tasks/comments updated while implementing."
+                </div>
               </div>
             </div>
           </div>

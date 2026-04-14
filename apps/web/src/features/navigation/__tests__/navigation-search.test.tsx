@@ -29,3 +29,17 @@ test('shows search results when operator types query', async () => {
     expect(screen.getByText('Mock task')).toBeInTheDocument();
   });
 });
+
+test('preserves activity route on refresh hydration', async () => {
+  renderApp({ route: '/activity' });
+
+  expect(await screen.findByRole('heading', { name: 'Activity' })).toBeInTheDocument();
+  expect(window.location.pathname).toBe('/activity');
+});
+
+test('preserves settings route on refresh hydration', async () => {
+  renderApp({ route: '/settings' });
+
+  expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+  expect(window.location.pathname).toBe('/settings');
+});
