@@ -15,7 +15,7 @@
     "lint:web": "npm --workspace @acp/web run lint"
   },
   "devDependencies": {
-    "@playwright/test": "^1.53.2",
+    "@playwright/test": "^1.60.0",
     "openapi-typescript": "^7.9.1"
   }
 }
